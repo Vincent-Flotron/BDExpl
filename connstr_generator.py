@@ -37,6 +37,63 @@ PWD={pwd}"
     return connString
 
 
+def save_in_win_cred(name: str, value: str):
+    """Save credential to Windows Credential Manager"""
+    try:
+        credential = {
+            "TargetName": name,
+            "Type": win32cred.CRED_TYPE_GENERIC,
+            "CredentialBlob": value,  # <-- MUST be str, not bytes
+            "Persist": win32cred.CRED_PERSIST_LOCAL_MACHINE,
+        }
+
+        win32cred.CredWrite(credential, 0)
+
+    except Exception as e:
+        raise Exception(f"Failed to save credential '{name}': {str(e)}")
+
+def save_sqlite_connection(connection_name: str, db_path: str, use_root_name: bool = True):
+    """Save SQLite connection to Windows Credential Manager"""
+    if "_" in connection_name:
+        raise ValueError("Underscores are not allowed in connection names")
+
+
+    if use_root_name:
+        root_name = f"{ROOT_NAME}_"
+    else:
+        root_name = ""
+
+    # Save SQLite connection parameters
+    save_in_win_cred(f"{root_name}{connection_name}_DBTYPE", "SQLite")
+    save_in_win_cred(f"{root_name}{connection_name}_DBPATH", db_path)
+
+def get_sqlite_conn_string(connection_name: str, use_root_name: bool = True):
+    """Get SQLite database path from Windows Credential Manager"""
+    if not type(connection_name) == str:
+        raise ValueError(f"connection_name '{connection_name}' is not of type str")
+
+    def get_cred(name: str) -> str:
+        try:
+            cred = win32cred.CredRead(name, win32cred.CRED_TYPE_GENERIC, 0)
+        except Exception as e:
+            print(f"Error with name '{name}': {str(e)}")
+            return None
+        return cred["CredentialBlob"].decode("utf-16")
+
+    if use_root_name:
+        root_name = f"{ROOT_NAME}_"
+    else:
+        root_name = ""
+
+    db_type = get_cred(f"{root_name}{connection_name}_DBTYPE")
+    db_path = get_cred(f"{root_name}{connection_name}_DBPATH")
+
+    if db_type != "SQLite":
+        raise ValueError("Not a SQLite connection")
+
+    return db_path
+
+
 def save_odbc_user_credentials(connection_name: str, host: str ,user: str, password: str, use_root_name: bool = True):
     save_odbc_connection_credentials(driver          = "{Oracle dans OraClient19Home1}",
                                      connection_name = connection_name,
@@ -50,21 +107,6 @@ def save_odbc_connection_credentials(driver: str, connection_name: str, host: st
     """Save connection credentials to Windows Credential Manager"""
     if "_" in connection_name:
         raise ValueError("Underscores are not allowed in connection names")
-
-    def save_in_win_cred(name: str, value: str):
-        """Save credential to Windows Credential Manager"""
-        try:
-            credential = {
-                "TargetName": name,
-                "Type": win32cred.CRED_TYPE_GENERIC,
-                "CredentialBlob": value,  # <-- MUST be str, not bytes
-                "Persist": win32cred.CRED_PERSIST_LOCAL_MACHINE,
-            }
-
-            win32cred.CredWrite(credential, 0)
-
-        except Exception as e:
-            raise Exception(f"Failed to save credential '{name}': {str(e)}")
 
     if use_root_name:
         root_name = f"{ROOT_NAME}_"
@@ -147,3 +189,34 @@ def delete_connection_credentials(connection_name: str):
     delete_cred(f"{ROOT_NAME}_{connection_name}_DBQ")
     delete_cred(f"{ROOT_NAME}_{connection_name}_UID")
     delete_cred(f"{ROOT_NAME}_{connection_name}_PWD")    
+
+
+def get_connection_type(connection_name: str, use_root_name: bool = True):
+    """Get the type of connection (Oracle or SQLite)"""
+    if not type(connection_name) == str:
+        raise ValueError(f"connection_name '{connection_name}' is not of type str")
+
+    def get_cred(name: str) -> str:
+        try:
+            cred = win32cred.CredRead(name, win32cred.CRED_TYPE_GENERIC, 0)
+        except Exception as e:
+            print(f"Error with name '{name}': {str(e)}")
+            return None
+        return cred["CredentialBlob"].decode("utf-16")
+
+    if use_root_name:
+        root_name = f"{ROOT_NAME}_"
+    else:
+        root_name = ""
+
+    # Try to get DBTYPE first
+    db_type = get_cred(f"{root_name}{connection_name}_DBTYPE")
+    if db_type:
+        return db_type
+
+    # If no DBTYPE, check if it's an Oracle connection by looking for DRIVER
+    driver = get_cred(f"{root_name}{connection_name}_DRIVER")
+    if driver:
+        return "Oracle"
+
+    return None

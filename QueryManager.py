@@ -1,15 +1,135 @@
 from typing import Dict, Any, List, Tuple
+from abc import ABC, abstractmethod
 
+# ======================================================================
+# QUERY INTERFACE
+# ======================================================================
 
-class Queries:
-    """
-    Centralized Oracle SQL dictionary queries.
-    All queries here reflect how Oracle *actually* stores source code.
-    """
+class Queries(ABC):
+    """Abstract base class for database queries"""
 
-    # ------------------------------------------------------------------
-    # TABLES / BASIC OBJECTS
-    # ------------------------------------------------------------------
+    @abstractmethod
+    def get_first_x_rows(self, schema, table, limit):
+        pass
+
+    @abstractmethod
+    def get_all_schemas_with_their_table_count(self):
+        pass
+
+    @abstractmethod
+    def get_all_table_names_in_schema(self, schema):
+        pass
+
+    @abstractmethod
+    def get_table_primary_keys(self, schema, table):
+        pass
+
+    @abstractmethod
+    def get_table_foreign_keys(self, schema, table):
+        pass
+
+    @abstractmethod
+    def get_table_structure(self, schema, table):
+        pass
+
+    @abstractmethod
+    def get_table_indexes(self, schema, table):
+        pass
+
+    @abstractmethod
+    def count_table_indexes(self, schema, table):
+        pass
+
+    @abstractmethod
+    def count_table_prim_and_foreign_keys(self, schema, table):
+        pass
+
+    @abstractmethod
+    def get_table_triggers(self, schema, table):
+        pass
+
+    @abstractmethod
+    def get_all_procedures_in_schema(self, schema):
+        pass
+
+    @abstractmethod
+    def get_all_functions_in_schema(self, schema):
+        pass
+
+    @abstractmethod
+    def count_procedures_in_schema(self, schema):
+        pass
+
+    @abstractmethod
+    def count_functions_in_schema(self, schema):
+        pass
+
+    @abstractmethod
+    def get_procedure_body(self, schema, procedure_name):
+        pass
+
+    @abstractmethod
+    def get_function_body(self, schema, function_name):
+        pass
+
+    @abstractmethod
+    def get_all_packages_in_schema(self, schema):
+        pass
+
+    @abstractmethod
+    def count_packages_in_schema(self, schema):
+        pass
+
+    @abstractmethod
+    def get_package_spec(self, schema, package_name):
+        pass
+
+    @abstractmethod
+    def get_package_body(self, schema, package_name):
+        pass
+
+    @abstractmethod
+    def get_package_functions_and_procedures(self, schema, package_name):
+        pass
+
+    @abstractmethod
+    def extract_packaged_routine(self, source_lines, routine_name):
+        pass
+
+    @abstractmethod
+    def get_all_views_in_schema(self, schema):
+        pass
+
+    @abstractmethod
+    def count_views_in_schema(self, schema):
+        pass
+
+    @abstractmethod
+    def get_view_body(self, schema, view_name):
+        pass
+
+    @abstractmethod
+    def get_view_query(self, schema, view_name):
+        pass
+
+    @abstractmethod
+    def get_view_structure(self, schema, view_name):
+        pass
+
+    @abstractmethod
+    def get_view_dependencies(self, schema, view_name):
+        pass
+
+    @abstractmethod
+    def get_view_comment(self, schema, view_name):
+        pass
+
+# ======================================================================
+# ORACLE QUERIES
+# ======================================================================
+
+class QueriesOracle(Queries):
+    """Oracle-specific SQL queries"""
 
     @staticmethod
     def get_first_x_rows(schema, table, limit):
@@ -86,7 +206,7 @@ class Queries:
                 WHERE owner = '{schema}' AND table_name = '{table}'
                 ORDER BY column_id
             """
-            
+
     @staticmethod
     def get_table_indexes(schema, table):
         return f"""
@@ -127,7 +247,7 @@ class Queries:
                     AND table_name = '{table}'
                     AND constraint_type IN ('P', 'R')
             """
-            
+
     @staticmethod
     def get_table_triggers(schema, table):
         return f"""
@@ -136,10 +256,6 @@ class Queries:
                 WHERE owner = '{schema}' AND table_name = '{table}'
                 ORDER BY trigger_name
             """
-
-    # ------------------------------------------------------------------
-    # PROCEDURES / FUNCTIONS (STANDALONE)
-    # ------------------------------------------------------------------
 
     @staticmethod
     def get_all_procedures_in_schema(schema):
@@ -200,10 +316,6 @@ class Queries:
               AND type = 'FUNCTION'
             ORDER BY line
         """
-
-    # ------------------------------------------------------------------
-    # PACKAGES
-    # ------------------------------------------------------------------
 
     @staticmethod
     def get_all_packages_in_schema(schema):
@@ -267,18 +379,10 @@ class Queries:
             ORDER BY procedure_name, overload
         """
 
-    # ------------------------------------------------------------------
-    # PACKAGE SOURCE EXTRACTION (IMPORTANT)
-    # ------------------------------------------------------------------
-
     @staticmethod
-    def extract_packaged_routine(
-        source_lines: List[Tuple[int, str]],
-        routine_name: str
-    ) -> str:
+    def extract_packaged_routine(source_lines, routine_name):
         """
         Extracts a single FUNCTION or PROCEDURE body from a PACKAGE BODY.
-
         Oracle does NOT store this separately.
         This is how SQL Developer does it internally.
         """
@@ -301,10 +405,6 @@ class Queries:
                     break
 
         return "".join(buffer)
-
-    # ------------------------------------------------------------------
-    # VIEWS
-    # ------------------------------------------------------------------
 
     @staticmethod
     def get_all_views_in_schema(schema):
@@ -344,7 +444,7 @@ class Queries:
             WHERE owner = '{schema}'
               AND view_name = '{view_name}'
         """
-    
+
     @staticmethod
     def get_view_structure(schema, view_name):
         return f"""
@@ -385,6 +485,252 @@ class Queries:
                     AND comments IS NOT NULL
                 """
 
+# ======================================================================
+# SQLITE QUERIES
+# ======================================================================
+
+class QueriesSQLite(Queries):
+    """SQLite-specific SQL queries"""
+
+    @staticmethod
+    def get_first_x_rows(schema, table, limit):
+        # SQLite doesn't have schemas, so we ignore the schema parameter
+        return f"SELECT * FROM {table} LIMIT {limit}"
+
+    @staticmethod
+    def get_all_schemas_with_their_table_count():
+        # SQLite doesn't have schemas, so we return a single entry
+        return """
+            SELECT 'main' AS name, COUNT(*) AS table_count
+            FROM sqlite_master
+            WHERE type='table'
+        """
+
+    @staticmethod
+    def get_all_table_names_in_schema(schema):
+        # SQLite doesn't have schemas, so we ignore the schema parameter
+        return """
+            SELECT name
+            FROM sqlite_master
+            WHERE type='table'
+            ORDER BY name
+        """
+
+    @staticmethod
+    def get_table_primary_keys(schema, table):
+        return f"""
+            SELECT
+                m.name AS column_name,
+                'P' AS constraint_type
+            FROM pragma_table_info('{table}') m
+            JOIN pragma_table_info('{table}') pk
+                ON m.pk = 1
+            WHERE m.pk = 1
+            ORDER BY m.cid
+        """
+
+    @staticmethod
+    def get_table_foreign_keys(schema, table):
+        return f"""
+            SELECT
+                f.from AS column_name,
+                'R' AS constraint_type,
+                NULL AS r_owner,
+                f.id AS r_constraint_name,
+                f.table AS referenced_table
+            FROM pragma_foreign_keys('{table}') f
+            ORDER BY f.id
+        """
+
+    @staticmethod
+    def get_table_structure(schema, table):
+        return f"""
+            SELECT
+                name AS fieldname,
+                type AS type,
+                NULL AS data_length,
+                NULL AS data_precision,
+                NULL AS data_scale,
+                CASE WHEN notnull = 1 THEN 'N' ELSE 'Y' END AS nullable
+            FROM pragma_table_info('{table}')
+            ORDER BY cid
+        """
+
+    @staticmethod
+    def get_table_indexes(schema, table):
+        return f"""
+            SELECT
+                name AS index_name,
+                CASE WHEN unique = 1 THEN 'UNIQUE' ELSE 'NORMAL' END AS index_type,
+                CASE WHEN unique = 1 THEN 'UNIQUE' ELSE 'NONUNIQUE' END AS uniqueness,
+                COUNT(*) AS column_count,
+                GROUP_CONCAT(name) AS columns
+            FROM pragma_index_list('{table}')
+            JOIN pragma_index_info(name) ON seqno >= 0
+            GROUP BY name
+            ORDER BY name
+        """
+
+    @staticmethod
+    def count_table_indexes(schema, table):
+        return f"""
+            SELECT COUNT(*)
+            FROM pragma_index_list('{table}')
+        """
+
+    @staticmethod
+    def count_table_prim_and_foreign_keys(schema, table):
+        return f"""
+            SELECT
+                (SELECT COUNT(*) FROM pragma_table_info('{table}') WHERE pk = 1) +
+                (SELECT COUNT(*) FROM pragma_foreign_keys('{table}'))
+        """
+
+    @staticmethod
+    def get_table_triggers(schema, table):
+        return f"""
+            SELECT name
+            FROM sqlite_master
+            WHERE type='trigger' AND tbl_name='{table}'
+            ORDER BY name
+        """
+
+    @staticmethod
+    def get_all_procedures_in_schema(schema):
+        # Example implementation for SQLite
+        # This is a placeholder implementation; actual implementation may vary
+        query = f"SELECT name FROM sqlite_master WHERE type='table' AND name LIKE '{schema}%'"
+        return query
+
+    @staticmethod
+    def get_all_functions_in_schema(schema):
+        # SQLite doesn't have functions in the same way as Oracle
+        return "SELECT NULL AS object_name WHERE 0=1"
+
+    @staticmethod
+    def count_procedures_in_schema(schema):
+        # Example implementation for SQLite
+        # This is a placeholder implementation; actual implementation may vary
+        query = f"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name LIKE '{schema}%'"
+        return query
+
+    @staticmethod
+    def count_functions_in_schema(schema):
+        # SQLite doesn't have functions in the same way as Oracle
+        return "SELECT 0"
+
+    @staticmethod
+    def get_procedure_body(schema, procedure_name):
+        # SQLite doesn't have stored procedures
+        return "SELECT NULL AS line, NULL AS text WHERE 0=1"
+
+    @staticmethod
+    def get_function_body(schema, function_name):
+        # SQLite doesn't have functions in the same way as Oracle
+        return "SELECT NULL AS line, NULL AS text WHERE 0=1"
+
+    @staticmethod
+    def get_all_packages_in_schema(schema):
+        # SQLite doesn't have packages
+        return "SELECT NULL AS object_name WHERE 0=1"
+
+    @staticmethod
+    def count_packages_in_schema(schema):
+        # SQLite doesn't have packages
+        return "SELECT 0"
+
+    @staticmethod
+    def get_package_spec(schema, package_name):
+        # SQLite doesn't have packages
+        return "SELECT NULL AS line, NULL AS text WHERE 0=1"
+
+    @staticmethod
+    def get_package_body(schema, package_name):
+        # SQLite doesn't have packages
+        return "SELECT NULL AS line, NULL AS text WHERE 0=1"
+
+    @staticmethod
+    def get_package_functions_and_procedures(schema, package_name):
+        # SQLite doesn't have packages
+        return "SELECT NULL AS procedure_name, NULL AS object_type, NULL AS overload WHERE 0=1"
+
+    @staticmethod
+    def extract_packaged_routine(source_lines, routine_name):
+        # SQLite doesn't have packages, so this is not applicable
+        return ""
+
+    @staticmethod
+    def get_all_views_in_schema(schema):
+        return """
+            SELECT name
+            FROM sqlite_master
+            WHERE type='view'
+            ORDER BY name
+        """
+
+    @staticmethod
+    def count_views_in_schema(schema):
+        return """
+            SELECT COUNT(*)
+            FROM sqlite_master
+            WHERE type='view'
+        """
+
+    @staticmethod
+    def get_view_body(schema, view_name):
+        return f"""
+            SELECT sql AS text
+            FROM sqlite_master
+            WHERE type='view' AND name='{view_name}'
+        """
+
+    @staticmethod
+    def get_view_query(schema, view_name):
+        return f"""
+            SELECT sql AS text
+            FROM sqlite_master
+            WHERE type='view' AND name='{view_name}'
+        """
+
+    @staticmethod
+    def get_view_structure(schema, view_name):
+        return f"""
+            SELECT
+                name AS column_name,
+                type AS data_type,
+                NULL AS data_length,
+                NULL AS data_precision,
+                NULL AS data_scale,
+                CASE WHEN notnull = 1 THEN 'N' ELSE 'Y' END AS nullable
+            FROM pragma_table_info('{view_name}')
+            ORDER BY cid
+        """
+
+    @staticmethod
+    def get_view_dependencies(schema, view_name):
+        return f"""
+            SELECT
+                NULL AS schema_name,
+                tbl_name AS table_name,
+                'TABLE' AS referenced_type
+            FROM sqlite_master
+            WHERE type='table' AND sql LIKE '%{view_name}%'
+            UNION ALL
+            SELECT
+                NULL AS schema_name,
+                name AS table_name,
+                'VIEW' AS referenced_type
+            FROM sqlite_master
+            WHERE type='view' AND name != '{view_name}' AND sql LIKE '%{view_name}%'
+            ORDER BY table_name
+        """
+
+    @staticmethod
+    def get_view_comment(schema, view_name):
+        # SQLite doesn't have view comments in the same way as Oracle
+        return "SELECT NULL AS comments WHERE 0=1"
+
+       
 
 # ======================================================================
 # QUERY MANAGER

@@ -147,8 +147,6 @@ class Theme:
         }
 
 
-
-
 class DBExp:
     """Database Explorer - Scalable multi-database GUI tool"""
 
@@ -350,11 +348,12 @@ class DBExp:
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load existing connections: {str(e)}")
 
+
     def show_new_connection_dialog(self):
         """Show dialog for creating a new connection"""
         dialog = tk.Toplevel(self.root)
         dialog.title("New Connection")
-        dialog.geometry("400x400")
+        dialog.geometry("400x450")  # Increased height for new field
         dialog.transient(self.root)
         dialog.grab_set()
 
@@ -364,55 +363,141 @@ class DBExp:
         conn_name_entry = tk.Entry(dialog, textvariable=conn_name_var)
         conn_name_entry.pack(fill=tk.X, padx=20, pady=5)
 
+        # Database type selection
+        tk.Label(dialog, text="Database Type:").pack(pady=(10, 0))
+        db_type_var = tk.StringVar(value="Oracle")
+        db_type_frame = tk.Frame(dialog)
+        db_type_frame.pack(fill=tk.X, padx=20, pady=5)
+
+        oracle_radio = ttk.Radiobutton(
+            db_type_frame,
+            text="Oracle",
+            variable=db_type_var,
+            value="Oracle"
+        )
+        oracle_radio.pack(side=tk.LEFT, padx=10)
+
+        sqlite_radio = ttk.Radiobutton(
+            db_type_frame,
+            text="SQLite",
+            variable=db_type_var,
+            value="SQLite"
+        )
+        sqlite_radio.pack(side=tk.LEFT, padx=10)
+
+        # Oracle-specific fields
+        oracle_frame = tk.Frame(dialog)
+        oracle_frame.pack(fill=tk.X, padx=20, pady=5)
+
         # Host
-        tk.Label(dialog, text="Host or Server name:").pack(pady=(10, 0))
+        tk.Label(oracle_frame, text="Host or Server name:").pack(pady=(10, 0))
         host_var = tk.StringVar()
-        host_entry = tk.Entry(dialog, textvariable=host_var)
-        host_entry.pack(fill=tk.X, padx=20, pady=5)
+        host_entry = tk.Entry(oracle_frame, textvariable=host_var)
+        host_entry.pack(fill=tk.X, pady=5)
 
         # Username
-        tk.Label(dialog, text="Username:").pack(pady=(10, 0))
+        tk.Label(oracle_frame, text="Username:").pack(pady=(10, 0))
         user_var = tk.StringVar()
-        user_entry = tk.Entry(dialog, textvariable=user_var)
-        user_entry.pack(fill=tk.X, padx=20, pady=5)
+        user_entry = tk.Entry(oracle_frame, textvariable=user_var)
+        user_entry.pack(fill=tk.X, pady=5)
 
         # Password
-        tk.Label(dialog, text="Password:").pack(pady=(10, 0))
+        tk.Label(oracle_frame, text="Password:").pack(pady=(10, 0))
         pwd_var = tk.StringVar()
-        pwd_entry = tk.Entry(dialog, textvariable=pwd_var, show="*")
-        pwd_entry.pack(fill=tk.X, padx=20, pady=5)
+        pwd_entry = tk.Entry(oracle_frame, textvariable=pwd_var, show="*")
+        pwd_entry.pack(fill=tk.X, pady=5)
+
+        # SQLite-specific fields
+        sqlite_frame = tk.Frame(dialog)
+        sqlite_frame.pack(fill=tk.X, padx=20, pady=5)
+
+        # Database file path
+        tk.Label(sqlite_frame, text="Database File Path:").pack(pady=(10, 0))
+        db_path_var = tk.StringVar()
+        db_path_entry = tk.Entry(sqlite_frame, textvariable=db_path_var)
+        db_path_entry.pack(fill=tk.X, pady=5)
+
+        # Browse button for SQLite
+        def browse_db_file():
+            from tkinter import filedialog
+            file_path = filedialog.askopenfilename(
+                title="Select SQLite Database File",
+                filetypes=[("SQLite Database Files", "*.db *.sqlite *.sqlite3")]
+            )
+            if file_path:
+                db_path_var.set(file_path)
+
+        browse_btn = ttk.Button(sqlite_frame, text="Browse...", command=browse_db_file)
+        browse_btn.pack(pady=5)
+
+        # Toggle visibility based on database type
+        def toggle_db_fields(*args):
+            db_type = db_type_var.get()
+            if db_type == "Oracle":
+                oracle_frame.pack(fill=tk.X, padx=20, pady=5)
+                sqlite_frame.pack_forget()
+            else:
+                sqlite_frame.pack(fill=tk.X, padx=20, pady=5)
+                oracle_frame.pack_forget()
+
+        db_type_var.trace_add("write", toggle_db_fields)
+        toggle_db_fields()  # Initialize
 
         # Save button
         def save_connection():
             conn_name = conn_name_var.get().strip()
-            host = host_var.get().strip()
-            user = user_var.get().strip()
-            password = pwd_var.get().strip()
+            db_type = db_type_var.get()
 
             if not conn_name:
                 messagebox.showerror("Error", "Connection name is required")
                 return
-            if not user:
-                messagebox.showerror("Error", "Username is required")
-                return
-            if not password:
-                messagebox.showerror("Error", "Password is required")
-                return
 
-            try:
-                from connstr_generator import save_odbc_user_credentials
-                save_odbc_user_credentials(conn_name, host, user, password)
-                messagebox.showinfo("Success", f"Connection '{conn_name}' saved successfully")
+            if db_type == "Oracle":
+                host = host_var.get().strip()
+                user = user_var.get().strip()
+                password = pwd_var.get().strip()
 
-                # Refresh the connections menu
-                self.populate_existing_connections_menu()
+                if not user:
+                    messagebox.showerror("Error", "Username is required")
+                    return
+                if not password:
+                    messagebox.showerror("Error", "Password is required")
+                    return
 
-                # Connect with the new credentials
-                self.connection_manager.connect_with_credman(conn_name)
+                try:
+                    from connstr_generator import save_odbc_user_credentials
+                    save_odbc_user_credentials(conn_name, host, user, password)
+                    messagebox.showinfo("Success", f"Connection '{conn_name}' saved successfully")
 
-                dialog.destroy()
-            except Exception as e:
-                messagebox.showerror("Error", f"Failed to save connection: {str(e)}")
+                    # Refresh the connections menu
+                    self.populate_existing_connections_menu()
+
+                    # Connect with the new credentials
+                    self.connection_manager.connect_with_credman(conn_name)
+
+                    dialog.destroy()
+                except Exception as e:
+                    messagebox.showerror("Error", f"Failed to save connection: {str(e)}")
+            else:  # SQLite
+                db_path = db_path_var.get().strip()
+                if not db_path:
+                    messagebox.showerror("Error", "Database file path is required")
+                    return
+
+                try:
+                    from connstr_generator import save_sqlite_connection
+                    save_sqlite_connection(conn_name, db_path)
+                    messagebox.showinfo("Success", f"Connection '{conn_name}' saved successfully")
+
+                    # Refresh the connections menu
+                    self.populate_existing_connections_menu()
+
+                    # Connect with the new credentials
+                    self.connection_manager.connect_with_credman(conn_name)
+
+                    dialog.destroy()
+                except Exception as e:
+                    messagebox.showerror("Error", f"Failed to save connection: {str(e)}")
 
         save_btn = ttk.Button(dialog, text="Save & Connect", command=save_connection)
         save_btn.pack(pady=20)
@@ -420,6 +505,7 @@ class DBExp:
         # Cancel button
         cancel_btn = ttk.Button(dialog, text="Cancel", command=dialog.destroy)
         cancel_btn.pack(pady=5)
+
 
     def close_keys_tab(self, frame):
         print("close_keys_tab")

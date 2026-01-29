@@ -6,7 +6,7 @@ from SQLText import SQLText
 from typing import List, Tuple
 import csv
 import os
-from QueryManager import QueryManager, Queries
+from QueryManager import QueryManager, QueriesSQLite, QueriesOracle
 import re
 
 def create_treeview_with_scrollbars(container, columns=None, show='tree'):
@@ -45,6 +45,7 @@ class DatabaseTreePanel:
         self.parent = parent
         self.db_connection = db_connection
         self.sql_query_editor_panel = sql_query_editor_panel
+        self.queries = None  # Will be set based on connection type
 
     def setup(self):
         """Panel 1: Database object tree"""
@@ -98,7 +99,6 @@ class DatabaseTreePanel:
         self.db_tree.bind("<Double-1>", lambda e: self.view_table_data(100))
         self.db_tree.bind("<<TreeviewOpen>>", self.on_tree_expand)
 
-
     def on_tree_expand(self, event):
         """Handle tree expansion - lazy load table children (indexes, keys, triggers), schema children (procedures, functions, packages, views), and package children (functions, procedures)"""
         item = self.db_tree.focus()
@@ -108,6 +108,8 @@ class DatabaseTreePanel:
         values = self.db_tree.item(item)['values']
         if not values or len(values) < 2:
             return
+
+        queries = self.get_queries_instance()
 
         if values[1] == 'table':
             children = self.db_tree.get_children(item)
@@ -136,7 +138,8 @@ class DatabaseTreePanel:
         if len(values) >= 3 and (values[1] == 'table' or values[1] == 'view'):
             schema = values[0]
             table_or_view = values[2]
-            sql = Queries.get_first_x_rows(schema, table_or_view, limit)
+            queries = self.get_queries_instance()
+            sql = queries.get_first_x_rows(schema, table_or_view, limit)
 
             tab_id = self.sql_query_editor_panel.new_sql_tab()
             self.sql_query_editor_panel.set_text_without_undo(
@@ -156,8 +159,9 @@ class DatabaseTreePanel:
         """Load indexes, keys, and triggers for a table"""
         try:
             cursor = self.db_connection.current_connection.cursor()
+            queries = self.get_queries_instance()
 
-            cursor.execute(Queries.count_table_indexes(schema, table))
+            cursor.execute(queries.count_table_indexes(schema, table))
             index_count = cursor.fetchone()[0]
             if index_count > 0:
                 self.db_tree.insert(
@@ -166,7 +170,7 @@ class DatabaseTreePanel:
                     values=(schema, 'indexes_summary', table)
                 )
 
-            cursor.execute(Queries.count_table_prim_and_foreign_keys(schema, table))
+            cursor.execute(queries.count_table_prim_and_foreign_keys(schema, table))
             key_count = cursor.fetchone()[0]
             if key_count > 0:
                 self.db_tree.insert(
@@ -175,7 +179,7 @@ class DatabaseTreePanel:
                     values=(schema, 'keys_summary', table)
                 )
 
-            cursor.execute(Queries.get_table_triggers(schema, table))
+            cursor.execute(queries.get_table_triggers(schema, table))
             triggers = cursor.fetchall()
             if triggers:
                 triggers_node = self.db_tree.insert(
@@ -194,14 +198,14 @@ class DatabaseTreePanel:
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load table children: {str(e)}")
 
-
     def load_schema_children(self, schema_node, schema):
         """Load stored procedures, functions, packages, and views for a schema"""
         try:
             cursor = self.db_connection.current_connection.cursor()
+            queries = self.get_queries_instance()
 
             # Load procedures
-            cursor.execute(Queries.count_procedures_in_schema(schema))
+            cursor.execute(queries.count_procedures_in_schema(schema))
             procedure_count = cursor.fetchone()[0]
             if procedure_count > 0:
                 procedures_node = self.db_tree.insert(
@@ -210,7 +214,7 @@ class DatabaseTreePanel:
                     values=(schema, 'procedures_folder')
                 )
 
-                cursor.execute(Queries.get_all_procedures_in_schema(schema))
+                cursor.execute(queries.get_all_procedures_in_schema(schema))
                 procedures = cursor.fetchall()
                 for (procedure_name,) in procedures:
                     self.db_tree.insert(
@@ -220,7 +224,7 @@ class DatabaseTreePanel:
                     )
 
             # Load functions
-            cursor.execute(Queries.count_functions_in_schema(schema))
+            cursor.execute(queries.count_functions_in_schema(schema))
             function_count = cursor.fetchone()[0]
             if function_count > 0:
                 functions_node = self.db_tree.insert(
@@ -229,7 +233,7 @@ class DatabaseTreePanel:
                     values=(schema, 'functions_folder')
                 )
 
-                cursor.execute(Queries.get_all_functions_in_schema(schema))
+                cursor.execute(queries.get_all_functions_in_schema(schema))
                 functions = cursor.fetchall()
                 for (function_name,) in functions:
                     self.db_tree.insert(
@@ -239,7 +243,7 @@ class DatabaseTreePanel:
                     )
 
             # Load packages
-            cursor.execute(Queries.count_packages_in_schema(schema))
+            cursor.execute(queries.count_packages_in_schema(schema))
             package_count = cursor.fetchone()[0]
             if package_count > 0:
                 packages_node = self.db_tree.insert(
@@ -248,7 +252,7 @@ class DatabaseTreePanel:
                     values=(schema, 'packages_folder')
                 )
 
-                cursor.execute(Queries.get_all_packages_in_schema(schema))
+                cursor.execute(queries.get_all_packages_in_schema(schema))
                 packages = cursor.fetchall()
                 for (package_name,) in packages:
                     package_node = self.db_tree.insert(
@@ -260,7 +264,7 @@ class DatabaseTreePanel:
                     self.db_tree.insert(package_node, 'end', text='Loading...', values=(schema, 'loading'))
 
             # Load views
-            cursor.execute(Queries.count_views_in_schema(schema))
+            cursor.execute(queries.count_views_in_schema(schema))
             view_count = cursor.fetchone()[0]
             if view_count > 0:
                 views_node = self.db_tree.insert(
@@ -269,7 +273,7 @@ class DatabaseTreePanel:
                     values=(schema, 'views_folder')
                 )
 
-                cursor.execute(Queries.get_all_views_in_schema(schema))
+                cursor.execute(queries.get_all_views_in_schema(schema))
                 views = cursor.fetchall()
                 for (view_name,) in views:
                     self.db_tree.insert(
@@ -282,12 +286,12 @@ class DatabaseTreePanel:
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load schema children: {str(e)}")
 
-
     def show_view_dependencies(self, schema: str, view: str):
         """Fetch and display view dependencies in a new tab."""
         try:
             cursor = self.db_connection.current_connection.cursor()
-            cursor.execute(Queries.get_view_dependencies(schema, view))
+            queries = self.get_queries_instance()
+            cursor.execute(queries.get_view_dependencies(schema, view))
             columns = [desc[0] for desc in cursor.description]
             rows = cursor.fetchall()
 
@@ -312,7 +316,8 @@ class DatabaseTreePanel:
         """View content of selected view in Query Editor"""
         try:
             cursor = self.db_connection.current_connection.cursor()
-            cursor.execute(Queries.get_view_body(schema, view_name))
+            queries = self.get_queries_instance()
+            cursor.execute(queries.get_view_body(schema, view_name))
             result = cursor.fetchall()
             cursor.close()
 
@@ -339,7 +344,8 @@ class DatabaseTreePanel:
         """Fetch and display view structure in a new tab."""
         try:
             cursor = self.db_connection.current_connection.cursor()
-            cursor.execute(Queries.get_view_structure(schema, view))
+            queries = self.get_queries_instance()
+            cursor.execute(queries.get_view_structure(schema, view))
             columns = [desc[0] for desc in cursor.description]
             rows = cursor.fetchall()
 
@@ -355,6 +361,7 @@ class DatabaseTreePanel:
             cursor.close()
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load view structure: {str(e)}")
+
 
     def show_tree_context_menu(self, event):
         item = self.db_tree.identify_row(event.y)
@@ -422,7 +429,8 @@ class DatabaseTreePanel:
         """Fetch and display view comment in a new tab."""
         try:
             cursor = self.db_connection.current_connection.cursor()
-            cursor.execute(Queries.get_view_comment(schema, view))
+            queries = self.get_queries_instance()
+            cursor.execute(queries.get_view_comment(schema, view))
             result = cursor.fetchone()
             cursor.close()
 
@@ -444,11 +452,13 @@ class DatabaseTreePanel:
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load view comment: {str(e)}")
 
+
     def view_view_query(self, schema: str, view: str):
         """View the SQL query of selected view in Query Editor"""
         try:
             cursor = self.db_connection.current_connection.cursor()
-            cursor.execute(Queries.get_view_query(schema, view))
+            queries = self.get_queries_instance()
+            cursor.execute(queries.get_view_query(schema, view))
             result = cursor.fetchall()
             cursor.close()
 
@@ -473,14 +483,16 @@ class DatabaseTreePanel:
             # Passer l'erreur brute au panneau de résultats
             self.sql_query_editor_panel.display_message(str(e))
 
+
     def load_package_children(self, package_node, schema, package_name):
         """Load functions and procedures within a package"""
         try:
             cursor = self.db_connection.current_connection.cursor()
+            queries = self.get_queries_instance()
 
-            cursor.execute(Queries.get_package_functions_and_procedures(schema, package_name))
+            cursor.execute(queries.get_package_functions_and_procedures(schema, package_name))
             procedures = cursor.fetchall()
-            
+
             if procedures:
                 # Group by procedure name to handle overloads
                 procedure_groups = {}
@@ -488,7 +500,7 @@ class DatabaseTreePanel:
                     if procedure_name not in procedure_groups:
                         procedure_groups[procedure_name] = []
                     procedure_groups[procedure_name].append((procedure_name, object_type, overload))
-                
+
                 for procedure_name, procedure_list in procedure_groups.items():
                     if len(procedure_list) == 1:
                         # Single procedure/function
@@ -513,17 +525,24 @@ class DatabaseTreePanel:
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load package children: {str(e)}")
 
+    def get_queries_instance(self):
+        return self.db_connection.get_queries_instance(self.db_connection.current_connection)
+
+
     def load_database_objects(self):
-        """Load Oracle database objects into tree with basic queries"""
+        """Load database objects into tree with basic queries"""
         if not self.db_connection.current_connection:
+            messagebox.showwarning("Not Connected", "Please connect to a database first")
             return
 
         self.db_tree.delete(*self.db_tree.get_children())
 
         try:
             cursor = self.db_connection.current_connection.cursor()
+            queries = self.get_queries_instance()
 
-            cursor.execute(Queries.get_all_schemas_with_their_table_count())
+            # Rest of the method remains the same...
+            cursor.execute(queries.get_all_schemas_with_their_table_count())
             schemas = cursor.fetchall()
 
             for schema, table_count in schemas:
@@ -535,14 +554,14 @@ class DatabaseTreePanel:
                 # Add loading placeholder for schema children (procedures, functions, and packages) after tables
                 loading_placeholder = self.db_tree.insert(schema_node, 'end', text='Loading...', values=(schema, 'loading'))
 
-                cursor.execute(Queries.get_all_table_names_in_schema(schema))
+                cursor.execute(queries.get_all_table_names_in_schema(schema))
                 table_results = cursor.fetchall()
                 for (table,) in table_results:
                     table_node = self.db_tree.insert(tables_node, 'end', text=table, values=(schema, 'table', table))
                     self.db_tree.insert(table_node, 'end', text='Loading...', values=(schema, 'loading'))
 
                 try:
-                    cursor.execute(Queries.get_current_session_roles())
+                    cursor.execute(queries.get_current_session_roles())
                     roles = cursor.fetchall()
                     roles_node = self.db_tree.insert(schema_node, 'end', text=f'Roles ({len(roles)})', values=(schema, 'roles_folder'))
                     for (role,) in roles:
@@ -551,7 +570,7 @@ class DatabaseTreePanel:
                     roles_node = self.db_tree.insert(schema_node, 'end', text='Roles (0)', values=(schema, 'roles_folder'))
 
                 try:
-                    cursor.execute(Queries.get_current_session_privileges())
+                    cursor.execute(queries.get_current_session_privileges())
                     privileges = cursor.fetchall()
                     privs_node = self.db_tree.insert(schema_node, 'end', text=f'Privileges ({len(privileges)})', values=(schema, 'privileges_folder'))
                     for (privilege,) in privileges:
@@ -573,7 +592,8 @@ class DatabaseTreePanel:
         if len(values) >= 3 and values[1] == 'view':
             schema = values[0]
             view = values[2]
-            sql = Queries.get_first_x_rows(schema, view, limit)
+            queries = self.get_queries_instance()
+            sql = queries.get_first_x_rows(schema, view, limit)
 
             tab_id = self.sql_query_editor_panel.new_sql_tab()
             self.sql_query_editor_panel.set_text_without_undo(
@@ -589,11 +609,13 @@ class DatabaseTreePanel:
             )
             self.sql_query_editor_panel.run_query(sql)
 
+
     def view_trigger_content(self, schema: str, trigger_name: str):
         """View content of selected trigger in Query Editor"""
         try:
             cursor = self.db_connection.current_connection.cursor()
-            cursor.execute(Queries.get_trigger_body(schema, trigger_name))
+            queries = self.get_queries_instance()
+            cursor.execute(queries.get_trigger_body(schema, trigger_name))
             result = cursor.fetchone()
             cursor.close()
 
@@ -612,18 +634,21 @@ class DatabaseTreePanel:
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load trigger content: {str(e)}")
 
+
+
     def view_procedure_content(self, schema: str, procedure_name: str):
         """View content of selected stored procedure in Query Editor"""
         try:
             cursor = self.db_connection.current_connection.cursor()
-            cursor.execute(Queries.get_procedure_body(schema, procedure_name))
+            queries = self.get_queries_instance()
+            cursor.execute(queries.get_procedure_body(schema, procedure_name))
             result = cursor.fetchall()
             cursor.close()
 
             if result:
                 # Combine all lines of the procedure
                 procedure_body = ''.join(row[1] for row in result if row[1])
-                
+
                 tab_id = self.sql_query_editor_panel.new_sql_tab()
                 self.sql_query_editor_panel.set_text_without_undo(
                     self.sql_query_editor_panel.sql_files[tab_id]["widget"],
@@ -642,14 +667,15 @@ class DatabaseTreePanel:
         """View content of selected stored function in Query Editor"""
         try:
             cursor = self.db_connection.current_connection.cursor()
-            cursor.execute(Queries.get_function_body(schema, function_name))
+            queries = self.get_queries_instance()
+            cursor.execute(queries.get_function_body(schema, function_name))
             result = cursor.fetchall()
             cursor.close()
 
             if result:
                 # Combine all lines of the function
                 function_body = ''.join(row[1] for row in result if row[1])
-                
+
                 tab_id = self.sql_query_editor_panel.new_sql_tab()
                 self.sql_query_editor_panel.set_text_without_undo(
                     self.sql_query_editor_panel.sql_files[tab_id]["widget"],
@@ -664,18 +690,18 @@ class DatabaseTreePanel:
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load function content: {str(e)}")
 
-
     def view_package_content(self, schema: str, package_name: str):
         try:
             cursor = self.db_connection.current_connection.cursor()
+            queries = self.get_queries_instance()
 
             # 1️⃣ Try PACKAGE BODY first
-            cursor.execute(Queries.get_package_body(schema, package_name))
+            cursor.execute(queries.get_package_body(schema, package_name))
             rows = cursor.fetchall()
 
             # 2️⃣ Fallback to PACKAGE SPEC if BODY not visible
             if not rows:
-                cursor.execute(Queries.get_package_spec(schema, package_name))
+                cursor.execute(queries.get_package_spec(schema, package_name))
                 rows = cursor.fetchall()
                 title_suffix = " (Spec)"
             else:
@@ -711,20 +737,20 @@ class DatabaseTreePanel:
                 f"Failed to load package content: {str(e)}"
             )
 
-
     def view_package_function_or_procedure_content(
         self, schema: str, package_name: str,
         procedure_name: str, overload: int = None
     ):
         try:
             cursor = self.db_connection.current_connection.cursor()
+            queries = self.get_queries_instance()
 
             # 1️⃣ Load FULL package body
-            cursor.execute(Queries.get_package_body(schema, package_name))
+            cursor.execute(queries.get_package_body(schema, package_name))
             source = cursor.fetchall()
 
             if not source:
-                cursor.execute(Queries.get_package_spec(schema, package_name))
+                cursor.execute(queries.get_package_spec(schema, package_name))
                 source = cursor.fetchall()
 
             cursor.close()
@@ -737,7 +763,7 @@ class DatabaseTreePanel:
                 return
 
             # 2️⃣ Extract only the selected procedure/function
-            procedure_body = Queries.extract_packaged_routine(
+            procedure_body = queries.extract_packaged_routine(
                 source,
                 procedure_name
             )
@@ -777,7 +803,8 @@ class DatabaseTreePanel:
         """View parameters of selected function/procedure within a package"""
         try:
             cursor = self.db_connection.current_connection.cursor()
-            cursor.execute(Queries.get_package_function_or_procedure_parameters(schema, package_name, procedure_name, overload))
+            queries = self.get_queries_instance()
+            cursor.execute(queries.get_package_function_or_procedure_parameters(schema, package_name, procedure_name, overload))
             columns = [desc[0] for desc in cursor.description]
             rows = cursor.fetchall()
             cursor.close()
@@ -787,8 +814,8 @@ class DatabaseTreePanel:
                 return
 
             tree = self.sql_query_editor_panel._create_result_tab(
-                f"{package_name}.{procedure_name} (Parameters)", 
-                columns, 
+                f"{package_name}.{procedure_name} (Parameters)",
+                columns,
                 rows
             )
 
@@ -801,6 +828,7 @@ class DatabaseTreePanel:
 
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load package function/procedure parameters: {str(e)}")
+
 
     def clear_tree(self):
         self.db_tree.delete(*self.db_tree.get_children())
@@ -847,6 +875,7 @@ class SQLQueryEditorPanel:
         self.root.bind('<F5>', lambda e: self.execute_query())
 
         self.sql_notebook.bind('<Button-2>', self.close_current_tab)
+
 
     def display_error(self, error: str):
         """Display error in result panel"""
@@ -949,12 +978,13 @@ class SQLQueryEditorPanel:
         """Fetch and display table or view keys (primary and foreign) in a new tab."""
         try:
             cursor = self.db_connection.current_connection.cursor()
+            queries = self.get_queries_instance()
 
             # Vérifier si c'est une table ou une vue
-            cursor.execute(Queries.get_table_primary_keys(schema, table))
+            cursor.execute(queries.get_table_primary_keys(schema, table))
             primary_keys = cursor.fetchall()
 
-            cursor.execute(Queries.get_table_foreign_keys(schema, table))
+            cursor.execute(queries.get_table_foreign_keys(schema, table))
             foreign_keys = cursor.fetchall()
 
             columns = ["Column Name", "Key Type", "Referenced Schema", "Referenced Constraint", "Referenced Table"]
@@ -981,12 +1011,13 @@ class SQLQueryEditorPanel:
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load table keys: {str(e)}")
 
-    # Modifiez la méthode show_table_structure pour gérer les vues
+    # Update the show_table_structure method in SQLQueryEditorPanel
     def show_table_structure(self, schema: str, table: str):
         """Fetch and display table or view structure in a new tab."""
         try:
             cursor = self.db_connection.current_connection.cursor()
-            cursor.execute(Queries.get_table_structure(schema, table))
+            queries = self.get_queries_instance()
+            cursor.execute(queries.get_table_structure(schema, table))
             columns = [desc[0] for desc in cursor.description]
             rows = cursor.fetchall()
 
@@ -1003,11 +1034,16 @@ class SQLQueryEditorPanel:
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load table structure: {str(e)}")
 
+    def get_queries_instance(self):
+        return self.db_connection.get_queries_instance(self.db_connection.current_connection)
+
+    # Update the show_table_indexes method in SQLQueryEditorPanel
     def show_table_indexes(self, schema: str, table: str, index_name: str | None = None):
         """Fetch and display table indexes in a new tab."""
         try:
             cursor = self.db_connection.current_connection.cursor()
-            cursor.execute(Queries.get_table_indexes(schema, table))
+            queries = self.get_queries_instance()
+            cursor.execute(queries.get_table_indexes(schema, table))
             columns = [desc[0] for desc in cursor.description]
             rows = cursor.fetchall()
             cursor.close()
@@ -1027,7 +1063,6 @@ class SQLQueryEditorPanel:
 
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load table indexes: {str(e)}")
-
 
     def new_sql_tab(self):
         """Create new SQL editor tab with close button"""
