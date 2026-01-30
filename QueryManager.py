@@ -699,7 +699,7 @@ class QueriesSQLite(Queries):
                 NULL AS data_length,
                 NULL AS data_precision,
                 NULL AS data_scale,
-                CASE WHEN notnull = 1 THEN 'N' ELSE 'Y' END AS nullable
+                CASE WHEN "notnull" = 1 THEN 'N' ELSE 'Y' END AS nullable
             FROM pragma_table_info('{view_name}')
             ORDER BY cid
         """

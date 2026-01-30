@@ -9,36 +9,38 @@ import os
 from QueryManager import QueryManager, QueriesSQLite, QueriesOracle
 import re
 
-def create_treeview_with_scrollbars(container, columns=None, show='tree'):
-    """Helper: Create a treeview with scrollbars."""
-    tree_scroll_y = ttk.Scrollbar(container, style='TScrollbar')
-    tree_scroll_y.pack(side=tk.RIGHT, fill=tk.Y)
 
-    tree_scroll_x = ttk.Scrollbar(container, orient=tk.HORIZONTAL, style='TScrollbar')
-    tree_scroll_x.pack(side=tk.BOTTOM, fill=tk.X)
+class Helper:
+    def create_treeview_with_scrollbars(container, columns=None, show='tree'):
+        """Helper: Create a treeview with scrollbars."""
+        tree_scroll_y = ttk.Scrollbar(container, style='TScrollbar')
+        tree_scroll_y.pack(side=tk.RIGHT, fill=tk.Y)
 
-    tree = ttk.Treeview(
-        container,
-        yscrollcommand=tree_scroll_y.set,
-        xscrollcommand=tree_scroll_x.set,
-        style='Treeview'
-    )
-    if columns:
-        tree['columns'] = columns
-        tree['show'] = show
-    tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        tree_scroll_x = ttk.Scrollbar(container, orient=tk.HORIZONTAL, style='TScrollbar')
+        tree_scroll_x.pack(side=tk.BOTTOM, fill=tk.X)
 
-    tree_scroll_y.config(command=tree.yview)
-    tree_scroll_x.config(command=tree.xview)
+        tree = ttk.Treeview(
+            container,
+            yscrollcommand=tree_scroll_y.set,
+            xscrollcommand=tree_scroll_x.set,
+            style='Treeview'
+        )
+        if columns:
+            tree['columns'] = columns
+            tree['show'] = show
+        tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-    return tree
+        tree_scroll_y.config(command=tree.yview)
+        tree_scroll_x.config(command=tree.xview)
 
-def create_context_menu(widget, commands):
-    """Helper: Create a context menu for a widget."""
-    menu = tk.Menu(widget, tearoff=0)
-    for label, command in commands:
-        menu.add_command(label=label, command=command)
-    return menu
+        return tree
+
+    def create_context_menu(widget, commands):
+        """Helper: Create a context menu for a widget."""
+        menu = tk.Menu(widget, tearoff=0)
+        for label, command in commands:
+            menu.add_command(label=label, command=command)
+        return menu
 
 class DatabaseTreePanel:
     def __init__(self, parent, db_connection, sql_query_editor_panel):
@@ -58,7 +60,7 @@ class DatabaseTreePanel:
         tree_container = ttk.Frame(left_frame, style='TFrame')
         tree_container.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
 
-        self.db_tree = create_treeview_with_scrollbars(tree_container)
+        self.db_tree = Helper.create_treeview_with_scrollbars(tree_container)
 
         # Context menu for tables
         table_commands = [
@@ -74,7 +76,7 @@ class DatabaseTreePanel:
                 *self.db_tree.item(self.db_tree.selection()[0])['values'][0:3:2]
             ))
         ]
-        self.table_context_menu = create_context_menu(self.db_tree, table_commands)
+        self.table_context_menu = Helper.create_context_menu(self.db_tree, table_commands)
 
         # Context menu for views
         view_commands = [
@@ -93,7 +95,7 @@ class DatabaseTreePanel:
                 *self.db_tree.item(self.db_tree.selection()[0])['values'][0:3:2]
             ))
         ]
-        self.view_context_menu = create_context_menu(self.db_tree, view_commands)
+        self.view_context_menu = Helper.create_context_menu(self.db_tree, view_commands)
 
         self.db_tree.bind("<Button-3>", self.show_tree_context_menu)
         self.db_tree.bind("<Double-1>", lambda e: self.view_table_data(100))
@@ -887,7 +889,7 @@ class SQLQueryEditorPanel:
         tree_container = ttk.Frame(frame, style='TFrame')
         tree_container.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
-        tree = create_treeview_with_scrollbars(tree_container, columns, 'tree headings')
+        tree = Helper.create_treeview_with_scrollbars(tree_container, columns, 'tree headings')
 
         tree.column('#0', width=0, stretch=tk.NO)
         for col in columns:
@@ -936,7 +938,7 @@ class SQLQueryEditorPanel:
             ("Copy Selected", copy_command),
             ("Export to CSV", export_command)
         ]
-        context_menu = create_context_menu(tree, commands)
+        context_menu = Helper.create_context_menu(tree, commands)
         return context_menu
 
     def _export_to_csv(self, tree, default_name):
@@ -1345,7 +1347,7 @@ class QueryResultPanel:
         grid_container = ttk.Frame(result_frame, style='TFrame')
         grid_container.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
-        self.result_tree = create_treeview_with_scrollbars(grid_container, show='tree headings')
+        self.result_tree = Helper.create_treeview_with_scrollbars(grid_container, show='tree headings')
         self.result_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         self.result_tree.bind("<Shift-MouseWheel>", self.on_shift_mousewheel)
@@ -1358,7 +1360,7 @@ class QueryResultPanel:
             ("Export to CSV", self.export_to_csv),
             ("Reset Column Widths", self.reset_column_widths)
         ]
-        self.result_context_menu = create_context_menu(self.result_tree, commands)
+        self.result_context_menu = Helper.create_context_menu(self.result_tree, commands)
 
         self.result_tree.bind("<Button-3>", self.show_result_context_menu)
         self.result_tree.bind("<Configure>", self.on_tree_configure)
