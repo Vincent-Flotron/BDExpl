@@ -523,8 +523,6 @@ class QueriesSQLite(Queries):
                 m.name AS column_name,
                 'P' AS constraint_type
             FROM pragma_table_info('{table}') m
-            JOIN pragma_table_info('{table}') pk
-                ON m.pk = 1
             WHERE m.pk = 1
             ORDER BY m.cid
         """
@@ -533,12 +531,12 @@ class QueriesSQLite(Queries):
     def get_table_foreign_keys(schema, table):
         return f"""
             SELECT
-                f.from AS column_name,
+                f."from" AS column_name,
                 'R' AS constraint_type,
                 NULL AS r_owner,
                 f.id AS r_constraint_name,
-                f.table AS referenced_table
-            FROM pragma_foreign_keys('{table}') f
+                f."table" AS referenced_table
+            FROM pragma_foreign_key_list('{table}') f
             ORDER BY f.id
         """
 
@@ -551,7 +549,7 @@ class QueriesSQLite(Queries):
                 NULL AS data_length,
                 NULL AS data_precision,
                 NULL AS data_scale,
-                CASE WHEN notnull = 1 THEN 'N' ELSE 'Y' END AS nullable
+                CASE WHEN "notnull" = 1 THEN 'N' ELSE 'Y' END AS nullable
             FROM pragma_table_info('{table}')
             ORDER BY cid
         """
@@ -560,15 +558,15 @@ class QueriesSQLite(Queries):
     def get_table_indexes(schema, table):
         return f"""
             SELECT
-                name AS index_name,
-                CASE WHEN unique = 1 THEN 'UNIQUE' ELSE 'NORMAL' END AS index_type,
-                CASE WHEN unique = 1 THEN 'UNIQUE' ELSE 'NONUNIQUE' END AS uniqueness,
+                idx.name AS index_name,
+                CASE WHEN idx."unique" = 1 THEN 'UNIQUE' ELSE 'NORMAL' END AS index_type,
+                CASE WHEN idx."unique" = 1 THEN 'UNIQUE' ELSE 'NONUNIQUE' END AS uniqueness,
                 COUNT(*) AS column_count,
-                GROUP_CONCAT(name) AS columns
-            FROM pragma_index_list('{table}')
-            JOIN pragma_index_info(name) ON seqno >= 0
-            GROUP BY name
-            ORDER BY name
+                GROUP_CONCAT(ii.name) AS columns
+            FROM pragma_index_list('{table}') idx
+            JOIN pragma_index_info(idx.name) ii ON ii.seqno >= 0
+            GROUP BY idx.name
+            ORDER BY idx.name
         """
 
     @staticmethod
@@ -583,7 +581,7 @@ class QueriesSQLite(Queries):
         return f"""
             SELECT
                 (SELECT COUNT(*) FROM pragma_table_info('{table}') WHERE pk = 1) +
-                (SELECT COUNT(*) FROM pragma_foreign_keys('{table}'))
+                (SELECT COUNT(*) FROM pragma_foreign_key_list('{table}'))
         """
 
     @staticmethod

@@ -114,6 +114,7 @@ def save_odbc_connection_credentials(driver: str, connection_name: str, host: st
         root_name = ""
 
     # Save all connection parameters
+    save_in_win_cred(f"{root_name}{connection_name}_DBTYPE", "Oracle")  # Add this line
     save_in_win_cred(f"{root_name}{connection_name}_DRIVER", driver)
     save_in_win_cred(f"{root_name}{connection_name}_SERVER", host)
     save_in_win_cred(f"{root_name}{connection_name}_Database", host)  # For Oracle, database is often the same as server
@@ -200,7 +201,7 @@ def get_connection_type(connection_name: str, use_root_name: bool = True):
         try:
             cred = win32cred.CredRead(name, win32cred.CRED_TYPE_GENERIC, 0)
         except Exception as e:
-            print(f"Error with name '{name}': {str(e)}")
+            print("WARNING", f"Error with name '{name}': {str(e)}")
             return None
         return cred["CredentialBlob"].decode("utf-16")
 
@@ -209,14 +210,19 @@ def get_connection_type(connection_name: str, use_root_name: bool = True):
     else:
         root_name = ""
 
-    # Try to get DBTYPE first
+    # First try to get DBTYPE (most reliable method)
     db_type = get_cred(f"{root_name}{connection_name}_DBTYPE")
     if db_type:
         return db_type
 
-    # If no DBTYPE, check if it's an Oracle connection by looking for DRIVER
+    # Fallback: Check for Oracle-specific credentials
     driver = get_cred(f"{root_name}{connection_name}_DRIVER")
-    if driver:
+    if driver and "Oracle" in driver:
         return "Oracle"
+
+    # Fallback: Check for SQLite-specific credentials
+    db_path = get_cred(f"{root_name}{connection_name}_DBPATH")
+    if db_path:
+        return "SQLite"
 
     return None
