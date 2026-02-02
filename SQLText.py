@@ -16,24 +16,36 @@ class SQLText(Text):
         self.bind("<Shift-Tab>", self.indent_selection_left)
 
         # Define regex patterns for SQL syntax
-        self.sql_keywords = r"\b(SELECT|FROM|WHERE|INSERT|UPDATE|DELETE|JOIN|INNER|LEFT|RIGHT|OUTER|"\
-            + r"GROUP\s+BY|ORDER\s+BY|HAVING|CREATE|TABLE|DROP|ALTER|"\
-            + r"AND|OR|NOT|IS|NULL|AS|IN|LIKE|BETWEEN|EXISTS|UNION|ALL|DISTINCT|"\
-            + r"CASE|WHEN|THEN|ELSE|END|COUNT|SUM|AVG|MIN|MAX|VALUES|INTO|"\
-            + r"SET|DEFAULT|PRIMARY\s+KEY|FOREIGN\s+KEY|UNIQUE|CHECK|INDEX|VIEW|"\
-            + r"TRIGGER|PROCEDURE|FUNCTION|GRANT|REVOKE|"\
-            + r"COMMIT|ROLLBACK|BEGIN|TRANSACTION|DECLARE|EXEC|EXECUTE|WITH|"\
-            + r"ROWNUM)\b"
+        self.sql_keywords = r"\b(ALL|ALTER|ALTER\s+SESSION|ALTER\s+SYSTEM|ANALYZE|AND|ANY|AS|AUDIT|AUTONOMOUS\s+TRANSACTION|BEGIN|"\
+            + r"BETWEEN|BULK\s+COLLECT|CALL|CASE|CHECK|CLOSE|CLUSTER|COMMENT|COMMIT|COMMITTED|"\
+            + r"CONNECT|CONNECT\s+BY|CONSTRAINT|CONTINUE|CREATE|CROSS\s+JOIN|CURSOR|DECLARE|DECODE|DEFAULT|"\
+            + r"DELETE|DISCONNECT|DISTINCT|DROP|DUAL|DYNAMIC|ELSE|ELSIF|END|EXCEPTION|"\
+            + r"EXECUTE|EXISTS|EXIT|EXPLAIN|FETCH|FOR|FOR\s+UPDATE|FORALL|FOREIGN\s+KEY|FROM|"\
+            + r"FULL\s+JOIN|FULL\s+OUTER\s+JOIN|FUNCTION|GOTO|GRANT|GROUP\s+BY|HAVING|HINT|IF|IMMEDIATE|"\
+            + r"IN|INDEX|INNER\s+JOIN|INSERT|INTERSECT|IS\s+NOT\s+NULL|IS\s+NULL|ISOLATION\s+LEVEL|JOIN|LEFT\s+JOIN|"\
+            + r"LEFT\s+OUTER\s+JOIN|LEVEL|LIKE|LOCK|LOOP|MERGE|MINUS|NATURAL\s+JOIN|NOAUDIT|NOT\s+EXISTS|"\
+            + r"NOT\s+IN|NOT\s+NULL|NULL|NVL|OPEN|OPTIMIZER|OR|ORDER\s+BY|PACKAGE|PARTITION|PASSWORD|"\
+            + r"PLAN|PRIMARY\s+KEY|PRIOR|PROCEDURE|PROFILE|RAISE|READ\s+ONLY|RECORD|RENAME|RESOURCE|"\
+            + r"RETURN|REVOKE|RIGHT\s+JOIN|RIGHT\s+OUTER\s+JOIN|ROLE|ROLLBACK|ROWID|ROWNUM|SAVEPOINT|SELECT|"\
+            + r"SET\s+ROLE|SET\s+TRANSACTION|SHUTDOWN|SOME|START\s+WITH|STARTUP|SUBPARTITION|SYSDATE|SYSTIMESTAMP|THEN|"\
+            + r"TRUNCATE|TYPE|UNION|UNION\s+ALL|UNIQUE|UNLIMITED|UPDATE|USER|USING|WHEN|"\
+            + r"WHERE|WHILE|WITH)\b"
 
         self.sql_operators = r"=|!=|<>|<=|>=|<|>|\+|-|\*|/|%"
 
-        self.sql_functions = r"\b(COUNT|SUM|AVG|MIN|MAX|"\
-            + r"UPPER|LOWER|SUBSTRING|CONCAT|LENGTH|"\
-            + r"ROUND|CAST|COALESCE|"\
-            + r"NOW|CURRENT_DATE|CURRENT_TIMESTAMP|"\
-            + r"NVL|SUBSTR)\b"
+        self.sql_functions = r"\b(ABS|ACOS|ADD_MONTHS|ASCII|ASIN|ATAN|ATAN2|AVG|AVG|AVG|"\
+            + r"CASE\s+WHEN|CAST|CEIL|CHR|COALESCE|CONCAT|COS|COUNT|CURRENT_DATE|CURRENT_TIMESTAMP|"\
+            + r"DECODE|DENSE_RANK|DENSE_RANK|END|EXP|EXTRACT|FIRST_VALUE|FIRST_VALUE|FLOOR|GROUPING|"\
+            + r"HEXTORAW|INITCAP|INSTR|LAG|LAG|LAST_DAY|LAST_VALUE|LAST_VALUE|LEAD|LEAD|"\
+            + r"LENGTH|LISTAGG|LN|LOCALTIMESTAMP|LOG|LOWER|LPAD|LTRIM|MAX|MIN|"\
+            + r"MOD|MONTHS_BETWEEN|NEXT_DAY|NULLIF|NUMTODSINTERVAL|NUMTOYMINTERVAL|NVL|NVL2|POWER|RANK|"\
+            + r"RANK|RAWTOHEX|REGEXP_INSTR|REGEXP_REPLACE|REGEXP_SUBSTR|REPLACE|ROUND|ROW_NUMBER|ROW_NUMBER|RPAD|"\
+            + r"RTRIM|SIN|SOUNDEX|SQRT|STDDEV|SUBSTR|SUM|SUM|SUM|SYSDATE|"\
+            + r"TAN|THEN|TO_CHAR|TO_CHAR|TO_DATE|TO_DATE|TO_NUMBER|TO_TIMESTAMP|TO_TIMESTAMP|TRIM|"\
+            + r"TRUNC|UID|UPPER|USER|VARIANCE|VSIZE)\b"
 
-        self.sql_string_pattern = r"'[^']*'"
+        self.sql_string_pattern  = r"'[^']*'"
+        self.sql_string_pattern2 = r'"[^"]*"'
         self.sql_comment_pattern = r"--.*?$|/\*.*?\*/"
 
         # Define colors for syntax highlighting
@@ -42,6 +54,7 @@ class SQLText(Text):
             'operator': 'purple',
             'function': 'darkorange',
             'string': 'green',
+            'string2': 'green',
             'comment': 'gray'
         }
 
@@ -56,6 +69,7 @@ class SQLText(Text):
         self.tag_remove("operator", "1.0", "end")
         self.tag_remove("function", "1.0", "end")
         self.tag_remove("string", "1.0", "end")
+        self.tag_remove("string2", "1.0", "end")
         self.tag_remove("comment", "1.0", "end")
 
         text = self.get("1.0", "end-1c")
@@ -72,6 +86,7 @@ class SQLText(Text):
 
             # Highlight strings
             self.highlight_pattern(self.sql_string_pattern, "string", self.colors["string"])
+            self.highlight_pattern(self.sql_string_pattern2, "string2", self.colors["string2"])
 
             # Highlight comments
             self.highlight_pattern(self.sql_comment_pattern, "comment", self.colors["comment"], regex=True)
