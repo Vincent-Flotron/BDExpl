@@ -15,12 +15,15 @@ class SQLText(Text):
         self.bind("<Tab>", self.indent_selection_right)
         self.bind("<Shift-Tab>", self.indent_selection_left)
 
+        # Bind Enter key to align with previous line
+        self.bind("<Return>", self.align_with_previous_line)
+
         # Track if CTRL+K was pressed before CTRL+C or CTRL+U
         self.ctrl_k_pressed = False
         self.bind("<Control-k>", self.set_ctrl_k_flag)
         self.bind("<Control-c>", self.handle_ctrl_c_comment)
         self.bind("<Control-u>", self.handle_ctrl_u_uncomment)
-        
+
         # Reset the flag on any other key press
         self.bind("<Key>", self.reset_ctrl_k_flag, add="+")
 
@@ -66,6 +69,48 @@ class SQLText(Text):
             'string2': 'green',
             'comment': 'gray'
         }
+
+    def align_with_previous_line(self, event=None):
+        """Align cursor with the start of the previous line when pressing Enter."""
+        try:
+            # Get current cursor position
+            current_pos = self.index("insert")
+
+            # Get the line number of the current position
+            current_line = int(current_pos.split('.')[0])
+
+            # If we're not on the first line, get the previous line
+            if current_line > 1:
+                prev_line = current_line
+                prev_line_start = f"{current_line}.0"
+
+                # Get the text of the previous line
+                prev_line_text = self.get(prev_line_start, f"{prev_line}.end")
+
+                # Find the first non-whitespace character in the previous line
+                first_char_pos = 0
+                
+                # Count spaces for lines containing only spaces
+                if re.search("^( |\t)+$", prev_line_text):
+                    first_char_pos = len(prev_line_text)
+                # Count spaces at beginning of line 
+                else:
+                    for i, char in enumerate(prev_line_text):
+                        if not char.isspace():
+                            first_char_pos = i
+                            break
+
+                # Calculate the column position to align with
+                align_column = first_char_pos
+
+                # Insert a newline and move cursor to the aligned position
+                self.insert("insert", "\n")
+                self.insert("insert", " "*align_column)
+
+                return "break"  # Prevent default Enter behavior
+        except tk.TclError:
+            pass
+        return None  # Allow default Enter behavior if something goes wrong
 
     def set_ctrl_k_flag(self, event=None):
         """Set flag when CTRL+K is pressed."""

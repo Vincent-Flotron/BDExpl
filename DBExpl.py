@@ -211,9 +211,6 @@ class DBExp:
             self.status_bar_panel
         )
 
-
-    
-
     def load_config(self) -> dict:
         """Load persistent configuration"""
         if os.path.exists(self.CONFIG_FILE):
