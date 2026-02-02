@@ -15,10 +15,11 @@ class SQLText(Text):
         self.bind("<Tab>", self.indent_selection_right)
         self.bind("<Shift-Tab>", self.indent_selection_left)
 
-        # Track if CTRL+K was pressed before CTRL+C
+        # Track if CTRL+K was pressed before CTRL+C or CTRL+U
         self.ctrl_k_pressed = False
         self.bind("<Control-k>", self.set_ctrl_k_flag)
         self.bind("<Control-c>", self.handle_ctrl_c_comment)
+        self.bind("<Control-u>", self.handle_ctrl_u_uncomment)
         
         # Reset the flag on any other key press
         self.bind("<Key>", self.reset_ctrl_k_flag, add="+")
@@ -69,29 +70,68 @@ class SQLText(Text):
     def set_ctrl_k_flag(self, event=None):
         """Set flag when CTRL+K is pressed."""
         self.ctrl_k_pressed = True
-        print("set_ctrl_k_flag")
         return "break"
 
     def reset_ctrl_k_flag(self, event=None):
-        """Reset flag on any key press that's not CTRL+C."""
-        # Only reset if it's not the 'c' key with Control modifier
-        if event.keysym != 'c' or not (event.state & 0x4):
+        """Reset flag on any key press that's not CTRL+C or CTRL+U."""
+        # Only reset if it's not the 'c' or 'u' key with Control modifier
+        if not ((event.keysym in ('c', 'u')) and (event.state & 0x4)):
             self.ctrl_k_pressed = False
-        print("reset_ctrl_k_flag")
 
     def handle_ctrl_c_comment(self, event=None):
-        """Handle CTRL+C when CTRL+K was pressed before."""
+        """Handle CTRL+C when CTRL+K was pressed before - adds SQL comments."""
         if self.ctrl_k_pressed:
             self.ctrl_k_pressed = False
-            self.comment_selection_with_block()
+            self.comment_selection()
             return "break"
         # If CTRL+K wasn't pressed, allow normal CTRL+C (copy) behavior
-        print("handle_ctrl_c_comment")
         return None
 
-    def comment_selection_with_block(self, event=None):
-        """Comment or uncomment selected text using /* */ block comments."""
-        print("comment_selection_with_block")
+    def handle_ctrl_u_uncomment(self, event=None):
+        """Handle CTRL+U when CTRL+K was pressed before - removes SQL comments."""
+        if self.ctrl_k_pressed:
+            self.ctrl_k_pressed = False
+            self.uncomment_selection()
+            return "break"
+        # If CTRL+K wasn't pressed, do nothing special
+        return None
+
+    def comment_selection(self, event=None):
+        """Add SQL line comments (--) to selected lines."""
+        try:
+            # Check if there's a selection
+            if self.tag_ranges("sel"):
+                # Get the selection range - convert Tcl_Obj to strings
+                sel_range = [str(self.index(pos)) for pos in self.tag_ranges("sel")]
+                start_pos = sel_range[0]
+                end_pos = sel_range[1]
+
+                # Get the selected text
+                selected_text = self.get(start_pos, end_pos)
+
+                # Add -- to the beginning of each line
+                lines = selected_text.split('\n')
+                new_lines = []
+                for line in lines:
+                    new_lines.append('-- ' + line)
+                new_text = '\n'.join(new_lines)
+
+                # Replace the selected text with the modified version
+                self.delete(start_pos, end_pos)
+                self.insert(start_pos, new_text)
+
+                # Restore the selection
+                new_end_pos = self.index(f"{start_pos}+{len(new_text)} chars")
+                self.tag_add("sel", start_pos, new_end_pos)
+                self.tag_raise("sel")
+
+                return "break"
+        except tk.TclError:
+            pass
+        return "break"
+
+    def uncomment_selection(self, event=None):
+        """Remove SQL line comments (--) from selected lines."""
         try:
             # Check if there's a selection
             if self.tag_ranges("sel"):
@@ -103,17 +143,18 @@ class SQLText(Text):
                 # Get the selected text
                 selected_text = self.get(start_pos, end_pos)
 
-                # Check if text is already block commented
+                # Remove -- from the beginning of each line
                 lines = selected_text.split('\n')
-                is_block_commented = (selected_text.strip().startswith('/*') and
-                                     selected_text.strip().endswith('*/'))
-
-                if is_block_commented:
-                    # Uncomment: remove /* and */
-                    new_text = selected_text.strip()[2:-2].strip()
-                else:
-                    # Comment: add /* at beginning and */ at end
-                    new_text = "/*\n" + selected_text + "\n*/"
+                new_lines = []
+                for line in lines:
+                    # Remove "-- " or "--" from the start of the line
+                    if line.startswith('-- '):
+                        new_lines.append(line[3:])
+                    elif line.startswith('--'):
+                        new_lines.append(line[2:])
+                    else:
+                        new_lines.append(line)
+                new_text = '\n'.join(new_lines)
 
                 # Replace the selected text with the modified version
                 self.delete(start_pos, end_pos)
