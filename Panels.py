@@ -1098,8 +1098,8 @@ class SQLQueryEditorPanel:
         # Focus the new text widget
         text_widget.focus_set()
 
-        close_button = ttk.Button(frame, text='×', command=lambda: self.close_tab(tab_id), style='Close.TButton')
-        close_button.pack(side=tk.RIGHT, padx=2, pady=2)
+        # close_button = ttk.Button(frame, text='×', command=lambda: self.close_tab(tab_id), style='Close.TButton')
+        # close_button.pack(side=tk.RIGHT, padx=2, pady=2)
 
         self.sql_notebook.add(frame, text=f"Untitled {self.tab_counter}")
         self.sql_notebook.select(frame)

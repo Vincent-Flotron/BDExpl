@@ -6,3 +6,4 @@ Fonctionalities:
 - Free sql edition
 - Exploration of **tables**, **views**, **stored procedure**, **stored functions**, **packages**
 - Stores credentials on **Windows Credential Manager**
+- Support SQLite db

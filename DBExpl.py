@@ -4,8 +4,8 @@ import pyodbc
 import json
 import os
 from typing import Optional
-from connection import DBConnection
 import signal
+from connection import DBConnection
 from Panels import DatabaseTreePanel, SQLQueryEditorPanel, QueryResultPanel, StatusBarPanel
 from ConnectionManager import ConnectionManager
 
