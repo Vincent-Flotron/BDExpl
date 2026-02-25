@@ -36,7 +36,7 @@ class SQLText(Text):
             + r"FULL\s+JOIN|FULL\s+OUTER\s+JOIN|FUNCTION|GOTO|GRANT|GROUP\s+BY|HAVING|HINT|IF|IMMEDIATE|"\
             + r"IN|INDEX|INNER\s+JOIN|INSERT|INTERSECT|IS\s+NOT\s+NULL|IS\s+NULL|ISOLATION\s+LEVEL|JOIN|LEFT\s+JOIN|"\
             + r"LEFT\s+OUTER\s+JOIN|LEVEL|LIKE|LOCK|LOOP|MERGE|MINUS|NATURAL\s+JOIN|NOAUDIT|NOT\s+EXISTS|"\
-            + r"NOT\s+IN|NOT\s+NULL|NULL|NVL|OPEN|OPTIMIZER|OR|ORDER\s+BY|PACKAGE|PARTITION|PASSWORD|"\
+            + r"NOT\s+IN|NOT\s+NULL|NULL|NVL|OPEN|OPTIMIZER|OR|ORDER\s+BY|PACKAGE|PARTITION|PASSWORD|DESC|FIRST|ROWS|ONLY|"\
             + r"PLAN|PRIMARY\s+KEY|PRIOR|PROCEDURE|PROFILE|RAISE|READ\s+ONLY|RECORD|RENAME|RESOURCE|"\
             + r"RETURN|REVOKE|RIGHT\s+JOIN|RIGHT\s+OUTER\s+JOIN|ROLE|ROLLBACK|ROWID|ROWNUM|SAVEPOINT|SELECT|"\
             + r"SET\s+ROLE|SET\s+TRANSACTION|SHUTDOWN|SOME|START\s+WITH|STARTUP|SUBPARTITION|SYSDATE|SYSTIMESTAMP|THEN|"\
@@ -59,6 +59,7 @@ class SQLText(Text):
         self.sql_string_pattern  = r"'[^']*'"
         self.sql_string_pattern2 = r'"[^"]*"'
         self.sql_comment_pattern = r"--.*?$|/\*.*?\*/"
+        self.sql_number_pattern  = r"\b\d+\b"
 
         # Define colors for syntax highlighting
         self.colors = {
@@ -67,7 +68,8 @@ class SQLText(Text):
             'function': 'darkorange',
             'string': 'green',
             'string2': 'green',
-            'comment': 'gray'
+            'comment': 'gray',
+            'number': '#098658'
         }
 
     def align_with_previous_line(self, event=None):
@@ -247,6 +249,9 @@ class SQLText(Text):
 
             # Highlight comments
             self.highlight_pattern(self.sql_comment_pattern, "comment", self.colors["comment"], regex=True)
+
+            # Highlight numbers
+            self.highlight_pattern(self.sql_number_pattern, "number", self.colors["number"], regex=True)
 
     def highlight_pattern(self, pattern, tag, color, regex=True):
         """Highlight a specific pattern in the text."""
