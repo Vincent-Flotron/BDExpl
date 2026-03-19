@@ -2,3 +2,5 @@ __pycache__
 venv
 flat_list.txt
 cars.db
+build
+DBExpl.spec

@@ -2,6 +2,8 @@ from tkinter import messagebox
 from typing import Optional
 import pyodbc
 import sqlite3
+import psycopg2
+from connstr_generator import get_conn_string, get_sqlite_conn_string, get_postgresql_conn_params, get_connection_type, delete_connection_credentials
 
 class ConnectionManager:
     """Manages database connections and related UI operations"""
@@ -19,7 +21,7 @@ class ConnectionManager:
         self.disconnect()
 
         try:
-            from connstr_generator import get_conn_string, get_sqlite_conn_string, get_connection_type
+
             conn_type = get_connection_type(connection_name)
 
             if conn_type == "Oracle":
@@ -34,6 +36,22 @@ class ConnectionManager:
                 self.connection_name = connection_name
                 self.status_bar_panel.set_status(f"Connected via: {connection_name} (SQLite)")
                 self.database_tree_panel.load_database_objects()
+            elif conn_type == "PostgreSQL":
+                params = get_postgresql_conn_params(connection_name)
+                ssl_args = {"sslmode": params["sslmode"]}
+                if params.get("sslrootcert"):
+                    ssl_args["sslrootcert"] = params["sslrootcert"]
+                self.db_connection.current_connection = psycopg2.connect(
+                    host=params["host"],
+                    port=int(params["port"]),
+                    dbname=params["database"],
+                    user=params["user"],
+                    password=params["password"],
+                    **ssl_args,
+                )
+                self.connection_name = connection_name
+                self.status_bar_panel.set_status(f"Connected via: {connection_name} (PostgreSQL)")
+                self.database_tree_panel.load_database_objects()
             else:
                 messagebox.showerror("Connection Error", f"Unknown connection type: {conn_type}")
 
@@ -41,6 +59,8 @@ class ConnectionManager:
             messagebox.showerror("Error", f"connstr_generator module not found: {str(e)}")
         except sqlite3.Error as e:
             messagebox.showerror("Connection Error", f"SQLite connection failed: {str(e)}")
+        except psycopg2.Error as e:
+            messagebox.showerror("Connection Error", f"PostgreSQL connection failed: {str(e)}")
         except pyodbc.Error as e:
             messagebox.showerror("Connection Error", f"Oracle connection failed: {str(e)}")
         except Exception as e:
@@ -61,7 +81,6 @@ class ConnectionManager:
     def delete_connection(self, connection_name: str):
         """Delete a connection from Windows Credential Manager"""
         try:
-            from connstr_generator import delete_connection_credentials
             delete_connection_credentials(connection_name)
 
             # If the deleted connection is the currently active one, disconnect

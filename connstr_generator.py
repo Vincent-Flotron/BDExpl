@@ -67,6 +67,92 @@ def save_sqlite_connection(connection_name: str, db_path: str, use_root_name: bo
     save_in_win_cred(f"{root_name}{connection_name}_DBTYPE", "SQLite")
     save_in_win_cred(f"{root_name}{connection_name}_DBPATH", db_path)
 
+def save_postgresql_connection(connection_name: str, host: str, port: int, database: str,
+                               user: str, password: str, sslmode: str = "require",
+                               sslrootcert: str = "", use_root_name: bool = True):
+    """Save PostgreSQL connection to Windows Credential Manager"""
+    if "_" in connection_name:
+        raise ValueError("Underscores are not allowed in connection names")
+
+    if use_root_name:
+        root_name = f"{ROOT_NAME}_"
+    else:
+        root_name = ""
+
+    save_in_win_cred(f"{root_name}{connection_name}_DBTYPE",      "PostgreSQL")
+    save_in_win_cred(f"{root_name}{connection_name}_HOST",        host)
+    save_in_win_cred(f"{root_name}{connection_name}_PORT",        str(port))
+    save_in_win_cred(f"{root_name}{connection_name}_DATABASE",    database)
+    save_in_win_cred(f"{root_name}{connection_name}_UID",         user)
+    save_in_win_cred(f"{root_name}{connection_name}_PWD",         password)
+    save_in_win_cred(f"{root_name}{connection_name}_SSLMODE",     sslmode or "require")
+    save_in_win_cred(f"{root_name}{connection_name}_SSLROOTCERT", sslrootcert or "")
+
+def get_postgresql_conn_params(connection_name: str, use_root_name: bool = True) -> dict:
+    """Get PostgreSQL connection parameters from Windows Credential Manager"""
+    if not type(connection_name) == str:
+        raise ValueError(f"connection_name '{connection_name}' is not of type str")
+
+    def get_cred(name: str) -> str:
+        try:
+            cred = win32cred.CredRead(name, win32cred.CRED_TYPE_GENERIC, 0)
+        except Exception as e:
+            print(f"Error with name '{name}': {str(e)}")
+            return None
+        return cred["CredentialBlob"].decode("utf-16")
+
+    if use_root_name:
+        root_name = f"{ROOT_NAME}_"
+    else:
+        root_name = ""
+
+    db_type = get_cred(f"{root_name}{connection_name}_DBTYPE")
+    if db_type != "PostgreSQL":
+        raise ValueError(f"Not a PostgreSQL connection (DBTYPE={db_type})")
+
+    return {
+        "host":        get_cred(f"{root_name}{connection_name}_HOST"),
+        "port":        get_cred(f"{root_name}{connection_name}_PORT") or "5432",
+        "database":    get_cred(f"{root_name}{connection_name}_DATABASE"),
+        "user":        get_cred(f"{root_name}{connection_name}_UID"),
+        "password":    get_cred(f"{root_name}{connection_name}_PWD"),
+        "sslmode":     get_cred(f"{root_name}{connection_name}_SSLMODE") or "require",
+        "sslrootcert": get_cred(f"{root_name}{connection_name}_SSLROOTCERT") or "",
+    }
+
+
+def get_postgresql_conn_params(connection_name: str, use_root_name: bool = True) -> dict:
+    """Get PostgreSQL connection parameters from Windows Credential Manager"""
+    if not type(connection_name) == str:
+        raise ValueError(f"connection_name '{connection_name}' is not of type str")
+
+    def get_cred(name: str) -> str:
+        try:
+            cred = win32cred.CredRead(name, win32cred.CRED_TYPE_GENERIC, 0)
+        except Exception as e:
+            print(f"Error with name '{name}': {str(e)}")
+            return None
+        return cred["CredentialBlob"].decode("utf-16")
+
+    if use_root_name:
+        root_name = f"{ROOT_NAME}_"
+    else:
+        root_name = ""
+
+    db_type = get_cred(f"{root_name}{connection_name}_DBTYPE")
+    if db_type != "PostgreSQL":
+        raise ValueError(f"Not a PostgreSQL connection (DBTYPE={db_type})")
+
+    return {
+        "host":        get_cred(f"{root_name}{connection_name}_HOST"),
+        "port":        get_cred(f"{root_name}{connection_name}_PORT") or "5432",
+        "database":    get_cred(f"{root_name}{connection_name}_DATABASE"),
+        "user":        get_cred(f"{root_name}{connection_name}_UID"),
+        "password":    get_cred(f"{root_name}{connection_name}_PWD"),
+        "sslmode":     get_cred(f"{root_name}{connection_name}_SSLMODE") or "require",
+        "sslrootcert": get_cred(f"{root_name}{connection_name}_SSLROOTCERT") or "",
+    }
+
 def get_sqlite_conn_string(connection_name: str, use_root_name: bool = True):
     """Get SQLite database path from Windows Credential Manager"""
     if not type(connection_name) == str:
@@ -181,15 +267,31 @@ def delete_connection_credentials(connection_name: str):
         except Exception as e:
             # If credential doesn't exist, that's fine
             if "not found" not in str(e).lower():
-                raise Exception(f"Failed to delete credential '{name}': {str(e)}")
+                pass
+                # raise Exception(f"Failed to delete credential '{name}': {str(e)}")
 
-    # Delete all connection parameters
-    delete_cred(f"{ROOT_NAME}_{connection_name}_DRIVER")
-    delete_cred(f"{ROOT_NAME}_{connection_name}_SERVER")
-    delete_cred(f"{ROOT_NAME}_{connection_name}_Database")
-    delete_cred(f"{ROOT_NAME}_{connection_name}_DBQ")
-    delete_cred(f"{ROOT_NAME}_{connection_name}_UID")
-    delete_cred(f"{ROOT_NAME}_{connection_name}_PWD")    
+    prefix = f"{ROOT_NAME}_{connection_name}"
+
+    # Oracle credentials
+    delete_cred(f"{prefix}_DRIVER")
+    delete_cred(f"{prefix}_SERVER")
+    delete_cred(f"{prefix}_Database")
+    delete_cred(f"{prefix}_DBQ")
+
+    # SQLite credentials
+    delete_cred(f"{prefix}_DBPATH")
+
+    # PostgreSQL credentials
+    delete_cred(f"{prefix}_HOST")
+    delete_cred(f"{prefix}_PORT")
+    delete_cred(f"{prefix}_DATABASE")
+    delete_cred(f"{prefix}_SSLMODE")
+    delete_cred(f"{prefix}_SSLROOTCERT")
+
+    # Shared credentials (all types)
+    delete_cred(f"{prefix}_DBTYPE")
+    delete_cred(f"{prefix}_UID")
+    delete_cred(f"{prefix}_PWD")
 
 
 def get_connection_type(connection_name: str, use_root_name: bool = True):
@@ -224,5 +326,10 @@ def get_connection_type(connection_name: str, use_root_name: bool = True):
     db_path = get_cred(f"{root_name}{connection_name}_DBPATH")
     if db_path:
         return "SQLite"
+
+    # Fallback: Check for PostgreSQL-specific credentials
+    pg_host = get_cred(f"{root_name}{connection_name}_HOST")
+    if pg_host:
+        return "PostgreSQL"
 
     return None

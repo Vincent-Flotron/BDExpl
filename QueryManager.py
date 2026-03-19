@@ -731,6 +731,320 @@ class QueriesSQLite(Queries):
        
 
 # ======================================================================
+# POSTGRESQL QUERIES
+# ======================================================================
+
+class QueriesPostgreSQL(Queries):
+    """PostgreSQL-specific SQL queries"""
+
+    @staticmethod
+    def get_first_x_rows(schema, table, limit):
+        return f'SELECT * FROM "{schema}"."{table}" LIMIT {limit}'
+
+    @staticmethod
+    def get_all_schemas_with_their_table_count():
+        return """
+            SELECT table_schema AS owner, COUNT(*) AS table_count
+            FROM information_schema.tables
+            WHERE table_type = 'BASE TABLE'
+              AND table_schema NOT IN ('pg_catalog', 'information_schema')
+            GROUP BY table_schema
+            ORDER BY table_schema
+        """
+
+    @staticmethod
+    def get_all_table_names_in_schema(schema):
+        return f"""
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_schema = '{schema}'
+              AND table_type = 'BASE TABLE'
+            ORDER BY table_name
+        """
+
+    @staticmethod
+    def get_table_primary_keys(schema, table):
+        return f"""
+            SELECT
+                kcu.column_name,
+                'P' AS constraint_type
+            FROM information_schema.table_constraints tc
+            JOIN information_schema.key_column_usage kcu
+                ON tc.constraint_name = kcu.constraint_name
+                AND tc.table_schema  = kcu.table_schema
+            WHERE tc.constraint_type = 'PRIMARY KEY'
+              AND tc.table_schema = '{schema}'
+              AND tc.table_name   = '{table}'
+            ORDER BY kcu.ordinal_position
+        """
+
+    @staticmethod
+    def get_table_foreign_keys(schema, table):
+        return f"""
+            SELECT
+                kcu.column_name,
+                'R' AS constraint_type,
+                ccu.table_schema AS r_owner,
+                tc.constraint_name AS r_constraint_name,
+                ccu.table_name AS referenced_table
+            FROM information_schema.table_constraints tc
+            JOIN information_schema.key_column_usage kcu
+                ON tc.constraint_name = kcu.constraint_name
+                AND tc.table_schema  = kcu.table_schema
+            JOIN information_schema.referential_constraints rc
+                ON tc.constraint_name = rc.constraint_name
+                AND tc.table_schema  = rc.constraint_schema
+            JOIN information_schema.constraint_column_usage ccu
+                ON rc.unique_constraint_name   = ccu.constraint_name
+                AND rc.unique_constraint_schema = ccu.constraint_schema
+            WHERE tc.constraint_type = 'FOREIGN KEY'
+              AND tc.table_schema = '{schema}'
+              AND tc.table_name   = '{table}'
+            ORDER BY kcu.ordinal_position
+        """
+
+    @staticmethod
+    def get_table_structure(schema, table):
+        return f"""
+            SELECT
+                column_name  AS fieldname,
+                data_type    AS type,
+                character_maximum_length AS data_length,
+                numeric_precision        AS data_precision,
+                numeric_scale            AS data_scale,
+                CASE WHEN is_nullable = 'YES' THEN 'Y' ELSE 'N' END AS nullable
+            FROM information_schema.columns
+            WHERE table_schema = '{schema}'
+              AND table_name   = '{table}'
+            ORDER BY ordinal_position
+        """
+
+    @staticmethod
+    def get_table_indexes(schema, table):
+        return f"""
+            SELECT
+                i.relname  AS index_name,
+                CASE WHEN ix.indisunique THEN 'UNIQUE' ELSE 'NORMAL' END AS index_type,
+                CASE WHEN ix.indisunique THEN 'UNIQUE' ELSE 'NONUNIQUE' END AS uniqueness,
+                COUNT(a.attnum) AS column_count,
+                STRING_AGG(a.attname, ', ' ORDER BY array_position(ix.indkey, a.attnum)) AS columns
+            FROM pg_class t
+            JOIN pg_index ix    ON t.oid = ix.indrelid
+            JOIN pg_class i     ON i.oid = ix.indexrelid
+            JOIN pg_namespace n ON t.relnamespace = n.oid
+            JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(ix.indkey)
+            WHERE n.nspname = '{schema}'
+              AND t.relname = '{table}'
+              AND NOT ix.indisprimary
+            GROUP BY i.relname, ix.indisunique
+            ORDER BY i.relname
+        """
+
+    @staticmethod
+    def count_table_indexes(schema, table):
+        return f"""
+            SELECT COUNT(DISTINCT i.relname)
+            FROM pg_class t
+            JOIN pg_index ix    ON t.oid = ix.indrelid
+            JOIN pg_class i     ON i.oid = ix.indexrelid
+            JOIN pg_namespace n ON t.relnamespace = n.oid
+            WHERE n.nspname = '{schema}'
+              AND t.relname = '{table}'
+              AND NOT ix.indisprimary
+        """
+
+    @staticmethod
+    def count_table_prim_and_foreign_keys(schema, table):
+        return f"""
+            SELECT COUNT(*)
+            FROM information_schema.table_constraints
+            WHERE table_schema    = '{schema}'
+              AND table_name      = '{table}'
+              AND constraint_type IN ('PRIMARY KEY', 'FOREIGN KEY')
+        """
+
+    @staticmethod
+    def get_table_triggers(schema, table):
+        return f"""
+            SELECT trigger_name
+            FROM information_schema.triggers
+            WHERE event_object_schema = '{schema}'
+              AND event_object_table  = '{table}'
+            ORDER BY trigger_name
+        """
+
+    @staticmethod
+    def get_all_procedures_in_schema(schema):
+        return f"""
+            SELECT routine_name AS object_name
+            FROM information_schema.routines
+            WHERE routine_schema = '{schema}'
+              AND routine_type   = 'PROCEDURE'
+            ORDER BY routine_name
+        """
+
+    @staticmethod
+    def get_all_functions_in_schema(schema):
+        return f"""
+            SELECT routine_name AS object_name
+            FROM information_schema.routines
+            WHERE routine_schema = '{schema}'
+              AND routine_type   = 'FUNCTION'
+            ORDER BY routine_name
+        """
+
+    @staticmethod
+    def count_procedures_in_schema(schema):
+        return f"""
+            SELECT COUNT(*)
+            FROM information_schema.routines
+            WHERE routine_schema = '{schema}'
+              AND routine_type   = 'PROCEDURE'
+        """
+
+    @staticmethod
+    def count_functions_in_schema(schema):
+        return f"""
+            SELECT COUNT(*)
+            FROM information_schema.routines
+            WHERE routine_schema = '{schema}'
+              AND routine_type   = 'FUNCTION'
+        """
+
+    @staticmethod
+    def get_procedure_body(schema, procedure_name):
+        return f"""
+            SELECT
+                1 AS line,
+                routine_definition AS text
+            FROM information_schema.routines
+            WHERE routine_schema = '{schema}'
+              AND routine_name   = '{procedure_name}'
+              AND routine_type   = 'PROCEDURE'
+        """
+
+    @staticmethod
+    def get_function_body(schema, function_name):
+        return f"""
+            SELECT
+                1 AS line,
+                routine_definition AS text
+            FROM information_schema.routines
+            WHERE routine_schema = '{schema}'
+              AND routine_name   = '{function_name}'
+              AND routine_type   = 'FUNCTION'
+        """
+
+    @staticmethod
+    def get_all_packages_in_schema(schema):
+        # PostgreSQL does not have packages
+        return "SELECT NULL AS object_name WHERE 1=0"
+
+    @staticmethod
+    def count_packages_in_schema(schema):
+        return "SELECT 0"
+
+    @staticmethod
+    def get_package_spec(schema, package_name):
+        return "SELECT NULL AS line, NULL AS text WHERE 1=0"
+
+    @staticmethod
+    def get_package_body(schema, package_name):
+        return "SELECT NULL AS line, NULL AS text WHERE 1=0"
+
+    @staticmethod
+    def get_package_functions_and_procedures(schema, package_name):
+        return "SELECT NULL AS procedure_name, NULL AS object_type, NULL AS overload WHERE 1=0"
+
+    @staticmethod
+    def extract_packaged_routine(source_lines, routine_name):
+        return ""
+
+    @staticmethod
+    def get_all_views_in_schema(schema):
+        return f"""
+            SELECT table_name AS object_name
+            FROM information_schema.views
+            WHERE table_schema = '{schema}'
+            ORDER BY table_name
+        """
+
+    @staticmethod
+    def count_views_in_schema(schema):
+        return f"""
+            SELECT COUNT(*)
+            FROM information_schema.views
+            WHERE table_schema = '{schema}'
+        """
+
+    @staticmethod
+    def get_view_body(schema, view_name):
+        return f"""
+            SELECT view_definition AS text
+            FROM information_schema.views
+            WHERE table_schema = '{schema}'
+              AND table_name   = '{view_name}'
+        """
+
+    @staticmethod
+    def get_view_query(schema, view_name):
+        return f"""
+            SELECT view_definition AS text
+            FROM information_schema.views
+            WHERE table_schema = '{schema}'
+              AND table_name   = '{view_name}'
+        """
+
+    @staticmethod
+    def get_view_structure(schema, view_name):
+        return f"""
+            SELECT
+                column_name  AS column_name,
+                data_type    AS data_type,
+                character_maximum_length AS data_length,
+                numeric_precision        AS data_precision,
+                numeric_scale            AS data_scale,
+                CASE WHEN is_nullable = 'YES' THEN 'Y' ELSE 'N' END AS nullable
+            FROM information_schema.columns
+            WHERE table_schema = '{schema}'
+              AND table_name   = '{view_name}'
+            ORDER BY ordinal_position
+        """
+
+    @staticmethod
+    def get_view_dependencies(schema, view_name):
+        return f"""
+            SELECT DISTINCT
+                cl_ref.relnamespace::regnamespace::text AS schema_name,
+                cl_ref.relname AS table_name,
+                CASE cl_ref.relkind
+                    WHEN 'r' THEN 'TABLE'
+                    WHEN 'v' THEN 'VIEW'
+                    ELSE cl_ref.relkind::text
+                END AS referenced_type
+            FROM pg_rewrite rw
+            JOIN pg_depend  d   ON d.objid = rw.oid AND d.deptype = 'n'
+            JOIN pg_class   cl  ON cl.oid  = rw.ev_class
+            JOIN pg_class   cl_ref ON cl_ref.oid = d.refobjid
+            JOIN pg_namespace n ON cl.relnamespace = n.oid
+            WHERE n.nspname  = '{schema}'
+              AND cl.relname = '{view_name}'
+              AND cl_ref.relname <> '{view_name}'
+              AND cl_ref.relkind IN ('r', 'v')
+            ORDER BY table_name
+        """
+
+    @staticmethod
+    def get_view_comment(schema, view_name):
+        return f"""
+            SELECT obj_description(
+                (quote_ident('{schema}') || '.' || quote_ident('{view_name}'))::regclass,
+                'pg_class'
+            ) AS comments
+        """
+
+
+# ======================================================================
 # QUERY MANAGER
 # ======================================================================
 

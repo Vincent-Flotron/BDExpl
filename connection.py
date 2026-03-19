@@ -1,6 +1,7 @@
 import pyodbc
 import sqlite3
-from QueryManager import QueriesSQLite, QueriesOracle
+import psycopg2
+from QueryManager import QueriesSQLite, QueriesOracle, QueriesPostgreSQL
 
 class DBConnection:
     def __init__(self):
@@ -24,6 +25,18 @@ class DBConnection:
             return pyodbc.connect(conn_str)
         elif conn_details["db_type"] == "SQLite":
             return sqlite3.connect(conn_details["host"])  # Assuming host is the path for SQLite
+        elif conn_details["db_type"] == "PostgreSQL":
+            ssl_args = {"sslmode": conn_details.get("sslmode", "require")}
+            if conn_details.get("sslrootcert"):
+                ssl_args["sslrootcert"] = conn_details["sslrootcert"]
+            return psycopg2.connect(
+                host=conn_details["host"],
+                port=conn_details["port"],
+                dbname=conn_details.get("database", ""),
+                user=conn_details["user"],
+                password=conn_details["password"],
+                **ssl_args,
+            )
         else:
             raise ValueError(f"Unsupported database type: {conn_details['db_type']}")
 
@@ -31,9 +44,26 @@ class DBConnection:
         """Connect to a SQLite database"""
         return sqlite3.connect(db_path)
 
+    def connect_postgresql(self, host, port, database, user, password,
+                           sslmode="require", sslrootcert=""):
+        """Connect to a PostgreSQL database"""
+        ssl_args = {"sslmode": sslmode}
+        if sslrootcert:
+            ssl_args["sslrootcert"] = sslrootcert
+        return psycopg2.connect(
+            host=host,
+            port=int(port),
+            dbname=database,
+            user=user,
+            password=password,
+            **ssl_args,
+        )
+
     def get_queries_instance(self, connection):
         if type(connection) == sqlite3.Connection:
             return QueriesSQLite()
+        elif isinstance(connection, psycopg2.extensions.connection):
+            return QueriesPostgreSQL()
         elif type(connection) == pyodbc.Connection:
             return QueriesOracle()
         else:
