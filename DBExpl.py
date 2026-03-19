@@ -349,7 +349,7 @@ class DBExp:
         """Show dialog for creating a new connection"""
         dialog = tk.Toplevel(self.root)
         dialog.title("New Connection")
-        dialog.geometry("400x620")
+        dialog.geometry("400x710")
         dialog.transient(self.root)
         dialog.grab_set()
 
