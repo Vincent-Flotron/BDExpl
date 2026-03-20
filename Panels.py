@@ -982,23 +982,17 @@ class SQLQueryEditorPanel:
             cursor = self.db_connection.current_connection.cursor()
             queries = self.get_queries_instance()
 
-            # Vérifier si c'est une table ou une vue
-            cursor.execute(queries.get_table_primary_keys(schema, table))
-            primary_keys = cursor.fetchall()
+            cursor.execute(queries.get_table_keys(schema, table))
+            raw_rows = cursor.fetchall()
+            cursor.close()
 
-            cursor.execute(queries.get_table_foreign_keys(schema, table))
-            foreign_keys = cursor.fetchall()
-
-            columns = ["Column Name", "Key Type", "Referenced Schema", "Referenced Constraint", "Referenced Table"]
-            rows = []
-            for pk in primary_keys:
-                rows.append((pk[0], pk[1], "", "", ""))
-            for fk in foreign_keys:
-                rows.append((fk[0], fk[1], fk[2], fk[3], fk[4]))
-
-            if not rows:
+            if not raw_rows:
                 messagebox.showinfo("Info", f"No keys found for {table}.")
                 return
+
+            columns = ["Key name", "Key Type", "Column name", "Ref. Schema", "Ref. Table", "Ref. Constraint"]
+            # Replace None with "" so the Treeview never shows "None"
+            rows = [tuple("" if v is None else v for v in row) for row in raw_rows]
 
             tree = self._create_result_tab(f"{table} (Keys)", columns, rows)
 
@@ -1009,7 +1003,6 @@ class SQLQueryEditorPanel:
             )
             tree.bind("<Button-3>", lambda event: context_menu.post(event.x_root, event.y_root))
 
-            cursor.close()
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load table keys: {str(e)}")
 

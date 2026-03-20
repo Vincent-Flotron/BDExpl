@@ -29,6 +29,10 @@ class Queries(ABC):
         pass
 
     @abstractmethod
+    def get_table_keys(self, schema, table):
+        pass
+
+    @abstractmethod
     def get_table_structure(self, schema, table):
         pass
 
@@ -193,10 +197,34 @@ class QueriesOracle(Queries):
             """
 
     @staticmethod
+    def get_table_keys(schema, table):
+        """Combined PK + FK query — returns all 5 display columns in one result set.
+        PKs have NULL in the three reference columns; FKs have NULL in none."""
+        return f"""
+                SELECT
+                    cons.constraint_name,
+                    cons.constraint_type,
+                    cols.column_name,
+                    cons.r_owner           AS "-> schema",
+                    cons_pk.table_name     AS "-> referenced_table",
+                    cons.r_constraint_name AS "-> CONSTRAINT NAME"
+                FROM all_constraints cons
+                JOIN all_cons_columns cols
+                    ON cons.constraint_name   = cols.constraint_name
+                    AND cons.owner            = cols.owner
+                LEFT JOIN all_constraints cons_pk
+                    ON cons.r_constraint_name = cons_pk.constraint_name
+                    AND cons.r_owner          = cons_pk.owner
+                WHERE cons.owner              = '{schema}'
+                    AND cons.table_name       = '{table}'
+                    AND cons.constraint_type  IN ('P', 'R')
+                ORDER BY cons.constraint_type ASC, cols.position
+            """
+
+    @staticmethod
     def get_table_structure(schema, table):
         return f"""
                 SELECT
-                    column_name AS fieldname,
                     data_type AS type,
                     data_length,
                     data_precision,
@@ -541,6 +569,36 @@ class QueriesSQLite(Queries):
         """
 
     @staticmethod
+    def get_table_keys(schema, table):
+        """Combined PK + FK via UNION ALL — SQLite has no JOIN-based system catalog."""
+        return f"""
+            -- Primary keys
+            SELECT
+                NULL AS r_constraint_name,
+                'P' AS constraint_type,
+                m.name AS column_name,
+                NULL AS r_owner,
+                NULL AS referenced_table,
+                NULL AS fk_constraint_name  -- Explicitly named NULL column
+            FROM pragma_table_info('{table}') m
+            WHERE m.pk > 0
+
+            UNION ALL
+
+            -- Foreign keys
+            SELECT
+                f."table" || '_fk_' || f.id AS r_constraint_name,
+                'R' AS constraint_type,
+                f."from" AS column_name,
+                NULL AS r_owner,
+                f."table" AS referenced_table,
+                NULL AS fk_constraint_name  -- Explicitly named NULL column
+            FROM pragma_foreign_key_list('{table}') f
+
+            ORDER BY constraint_type ASC, column_name;
+        """
+
+    @staticmethod
     def get_table_structure(schema, table):
         return f"""
             SELECT
@@ -801,6 +859,36 @@ class QueriesPostgreSQL(Queries):
               AND tc.table_schema = '{schema}'
               AND tc.table_name   = '{table}'
             ORDER BY kcu.ordinal_position
+        """
+
+    @staticmethod
+    def get_table_keys(schema, table):
+        """Combined PK + FK in one query using LEFT JOINs to the referential catalog views."""
+        return f"""
+            SELECT
+                tc.constraint_name,
+                CASE tc.constraint_type
+                    WHEN 'PRIMARY KEY' THEN 'P'
+                    WHEN 'FOREIGN KEY' THEN 'R'
+                END AS constraint_type,
+                kcu.column_name,
+                ccu.table_schema AS r_owner,
+                ccu.table_name AS referenced_table,
+                rc.unique_constraint_name AS r_constraint_name
+            FROM information_schema.table_constraints tc
+            JOIN information_schema.key_column_usage kcu
+                ON tc.constraint_name = kcu.constraint_name
+                AND tc.table_schema = kcu.table_schema
+            LEFT JOIN information_schema.referential_constraints rc
+                ON tc.constraint_name = rc.constraint_name
+                AND tc.table_schema = rc.constraint_schema
+            LEFT JOIN information_schema.constraint_column_usage ccu
+                ON rc.unique_constraint_name = ccu.constraint_name
+                AND rc.unique_constraint_schema = ccu.constraint_schema
+            WHERE tc.constraint_type IN ('PRIMARY KEY', 'FOREIGN KEY')
+            AND tc.table_schema = '{schema}'
+            AND tc.table_name = '{table}'
+            ORDER BY tc.constraint_type ASC, kcu.ordinal_position
         """
 
     @staticmethod
