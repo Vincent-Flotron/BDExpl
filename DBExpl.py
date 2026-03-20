@@ -8,7 +8,7 @@ import signal
 from connection import DBConnection
 from Panels import DatabaseTreePanel, SQLQueryEditorPanel, QueryResultPanel, StatusBarPanel
 from ConnectionManager import ConnectionManager
-from connstr_generator import get_all_connection_names, save_odbc_user_credentials, save_postgresql_connection, save_sqlite_connection
+from connstr_generator import get_all_connection_names, save_odbc_user_credentials, save_oracledb_connection, save_postgresql_connection, save_sqlite_connection
 
 
 class Theme:
@@ -349,7 +349,7 @@ class DBExp:
         """Show dialog for creating a new connection"""
         dialog = tk.Toplevel(self.root)
         dialog.title("New Connection")
-        dialog.geometry("400x710")
+        dialog.geometry("400x750")
         dialog.transient(self.root)
         dialog.grab_set()
 
@@ -366,6 +366,7 @@ class DBExp:
         db_type_frame.pack(fill=tk.X, padx=20, pady=5)
 
         ttk.Radiobutton(db_type_frame, text="Oracle",     variable=db_type_var, value="Oracle").pack(side=tk.LEFT, padx=10)
+        ttk.Radiobutton(db_type_frame, text="OracleDB",   variable=db_type_var, value="OracleDB").pack(side=tk.LEFT, padx=10)
         ttk.Radiobutton(db_type_frame, text="PostgreSQL", variable=db_type_var, value="PostgreSQL").pack(side=tk.LEFT, padx=10)
         ttk.Radiobutton(db_type_frame, text="SQLite",     variable=db_type_var, value="SQLite").pack(side=tk.LEFT, padx=10)
 
@@ -383,6 +384,29 @@ class DBExp:
         tk.Label(oracle_frame, text="Password:").pack(pady=(10, 0))
         oracle_pwd_var = tk.StringVar()
         tk.Entry(oracle_frame, textvariable=oracle_pwd_var, show="*").pack(fill=tk.X, pady=5)
+
+        # ── OracleDB fields (oracledb driver — host/port/sid) ──────────
+        oracledb_frame = tk.Frame(dialog)
+
+        tk.Label(oracledb_frame, text="Host:").pack(pady=(10, 0))
+        odb_host_var = tk.StringVar(value="localhost")
+        tk.Entry(oracledb_frame, textvariable=odb_host_var).pack(fill=tk.X, pady=5)
+
+        tk.Label(oracledb_frame, text="Port:").pack(pady=(10, 0))
+        odb_port_var = tk.StringVar(value="1521")
+        tk.Entry(oracledb_frame, textvariable=odb_port_var).pack(fill=tk.X, pady=5)
+
+        tk.Label(oracledb_frame, text="SID:").pack(pady=(10, 0))
+        odb_sid_var = tk.StringVar()
+        tk.Entry(oracledb_frame, textvariable=odb_sid_var).pack(fill=tk.X, pady=5)
+
+        tk.Label(oracledb_frame, text="Username:").pack(pady=(10, 0))
+        odb_user_var = tk.StringVar()
+        tk.Entry(oracledb_frame, textvariable=odb_user_var).pack(fill=tk.X, pady=5)
+
+        tk.Label(oracledb_frame, text="Password:").pack(pady=(10, 0))
+        odb_pwd_var = tk.StringVar()
+        tk.Entry(oracledb_frame, textvariable=odb_pwd_var, show="*").pack(fill=tk.X, pady=5)
 
         # ── PostgreSQL fields ──────────────────────────────────────────
         pg_frame = tk.Frame(dialog)
@@ -453,8 +477,8 @@ class DBExp:
         ttk.Button(sqlite_frame, text="Browse...", command=browse_db_file).pack(pady=5)
 
         # ── Toggle visibility ──────────────────────────────────────────
-        all_frames = [oracle_frame, pg_frame, sqlite_frame]
-        frame_map  = {"Oracle": oracle_frame, "PostgreSQL": pg_frame, "SQLite": sqlite_frame}
+        all_frames = [oracle_frame, oracledb_frame, pg_frame, sqlite_frame]
+        frame_map  = {"Oracle": oracle_frame, "OracleDB": oracledb_frame, "PostgreSQL": pg_frame, "SQLite": sqlite_frame}
 
         def toggle_db_fields(*args):
             active = frame_map[db_type_var.get()]
@@ -486,6 +510,32 @@ class DBExp:
                         messagebox.showerror("Error", "Password is required")
                         return
                     save_odbc_user_credentials(conn_name, host, user, password)
+
+                elif db_type == "OracleDB":
+                    odb_host = odb_host_var.get().strip()
+                    odb_port = odb_port_var.get().strip()
+                    odb_sid  = odb_sid_var.get().strip()
+                    odb_user = odb_user_var.get().strip()
+                    odb_pwd  = odb_pwd_var.get().strip()
+                    if not odb_host:
+                        messagebox.showerror("Error", "Host is required")
+                        return
+                    if not odb_sid:
+                        messagebox.showerror("Error", "SID is required")
+                        return
+                    if not odb_user:
+                        messagebox.showerror("Error", "Username is required")
+                        return
+                    if not odb_pwd:
+                        messagebox.showerror("Error", "Password is required")
+                        return
+                    try:
+                        port_int = int(odb_port)
+                    except ValueError:
+                        messagebox.showerror("Error", "Port must be a number")
+                        return
+                    save_oracledb_connection(conn_name, odb_host, port_int, odb_sid,
+                                             odb_user, odb_pwd)
 
                 elif db_type == "PostgreSQL":
                     pg_host = pg_host_var.get().strip()

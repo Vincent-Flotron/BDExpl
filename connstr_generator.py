@@ -153,6 +153,57 @@ def get_postgresql_conn_params(connection_name: str, use_root_name: bool = True)
         "sslrootcert": get_cred(f"{root_name}{connection_name}_SSLROOTCERT") or "",
     }
 
+def save_oracledb_connection(connection_name: str, host: str, port: int,
+                             sid: str, user: str, password: str,
+                             use_root_name: bool = True):
+    """Save an oracledb (thin/thick) connection to Windows Credential Manager."""
+    if "_" in connection_name:
+        raise ValueError("Underscores are not allowed in connection names")
+
+    if use_root_name:
+        root_name = f"{ROOT_NAME}_"
+    else:
+        root_name = ""
+
+    save_in_win_cred(f"{root_name}{connection_name}_DBTYPE",   "OracleDB")
+    save_in_win_cred(f"{root_name}{connection_name}_HOST",     host)
+    save_in_win_cred(f"{root_name}{connection_name}_PORT",     str(port))
+    save_in_win_cred(f"{root_name}{connection_name}_SID",      sid)
+    save_in_win_cred(f"{root_name}{connection_name}_UID",      user)
+    save_in_win_cred(f"{root_name}{connection_name}_PWD",      password)
+
+
+def get_oracledb_conn_params(connection_name: str, use_root_name: bool = True) -> dict:
+    """Get oracledb connection parameters from Windows Credential Manager."""
+    if not type(connection_name) == str:
+        raise ValueError(f"connection_name '{connection_name}' is not of type str")
+
+    def get_cred(name: str) -> str:
+        try:
+            cred = win32cred.CredRead(name, win32cred.CRED_TYPE_GENERIC, 0)
+        except Exception as e:
+            print(f"Error with name '{name}': {str(e)}")
+            return None
+        return cred["CredentialBlob"].decode("utf-16")
+
+    if use_root_name:
+        root_name = f"{ROOT_NAME}_"
+    else:
+        root_name = ""
+
+    db_type = get_cred(f"{root_name}{connection_name}_DBTYPE")
+    if db_type != "OracleDB":
+        raise ValueError(f"Not an OracleDB connection (DBTYPE={db_type})")
+
+    return {
+        "host":     get_cred(f"{root_name}{connection_name}_HOST"),
+        "port":     get_cred(f"{root_name}{connection_name}_PORT") or "1521",
+        "sid":      get_cred(f"{root_name}{connection_name}_SID"),
+        "user":     get_cred(f"{root_name}{connection_name}_UID"),
+        "password": get_cred(f"{root_name}{connection_name}_PWD"),
+    }
+
+
 def get_sqlite_conn_string(connection_name: str, use_root_name: bool = True):
     """Get SQLite database path from Windows Credential Manager"""
     if not type(connection_name) == str:
@@ -288,6 +339,9 @@ def delete_connection_credentials(connection_name: str):
     delete_cred(f"{prefix}_SSLMODE")
     delete_cred(f"{prefix}_SSLROOTCERT")
 
+    # OracleDB credentials (host/port/sid shared with PostgreSQL host/port above)
+    delete_cred(f"{prefix}_SID")
+
     # Shared credentials (all types)
     delete_cred(f"{prefix}_DBTYPE")
     delete_cred(f"{prefix}_UID")
@@ -327,8 +381,13 @@ def get_connection_type(connection_name: str, use_root_name: bool = True):
     if db_path:
         return "SQLite"
 
-    # Fallback: Check for PostgreSQL-specific credentials
+    # Fallback: Check for OracleDB-specific credentials (SID without DRIVER)
+    sid = get_cred(f"{root_name}{connection_name}_SID")
     pg_host = get_cred(f"{root_name}{connection_name}_HOST")
+    if sid and pg_host:
+        return "OracleDB"
+
+    # Fallback: Check for PostgreSQL-specific credentials
     if pg_host:
         return "PostgreSQL"
 
