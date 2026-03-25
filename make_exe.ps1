@@ -1,0 +1,1 @@
+pyinstaller --onefile --windowed --hidden-import=win32timezone DBExpl.py
