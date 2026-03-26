@@ -225,6 +225,7 @@ class QueriesOracle(Queries):
     def get_table_structure(schema, table):
         return f"""
                 SELECT
+                    column_name,
                     data_type AS type,
                     data_length,
                     data_precision,
