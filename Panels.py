@@ -853,9 +853,14 @@ class SQLQueryEditorPanel:
         editor_frame = ttk.Frame(self.parent, style='TFrame')
         self.parent.add(editor_frame, weight=1)
 
-        self.sql_notebook = ttk.Notebook(editor_frame, style='TNotebook')
-
         ttk.Label(editor_frame, text="Query Editor", style='Bold.TLabel').pack(fill=tk.X, padx=5, pady=2)
+
+        # SQL Helper Buttons Frame
+        sql_helper_frame = ttk.Frame(editor_frame, style='TFrame')
+        sql_helper_frame.pack(fill=tk.X, padx=5, pady=2)
+
+        # Add SQL helper buttons
+        self.add_sql_helper_buttons(sql_helper_frame)
 
         toolbar = ttk.Frame(editor_frame, style='TFrame')
         toolbar.pack(fill=tk.X, padx=5, pady=5)
@@ -878,6 +883,85 @@ class SQLQueryEditorPanel:
 
         self.sql_notebook.bind('<Button-2>', self.close_current_tab)
 
+    def add_sql_helper_buttons(self, parent_frame):
+        """Add buttons for inserting common SQL clauses"""
+        # Frame for limit buttons
+        limit_frame = ttk.Frame(parent_frame, style='TFrame')
+        limit_frame.pack(side=tk.LEFT, padx=2)
+
+        ttk.Label(limit_frame, text="Limit:", style='TLabel').pack(side=tk.LEFT)
+
+        # Create buttons for different limit values
+        limit_values = [10, 50, 100, 500, 1000]
+        for limit in limit_values:
+            btn = ttk.Button(
+                limit_frame,
+                text=str(limit),
+                command=lambda l=limit: self.insert_limit_clause(l),
+                style='TButton',
+                width=4
+            )
+            btn.pack(side=tk.LEFT, padx=1)
+
+        # Frame for other SQL helpers
+        helper_frame = ttk.Frame(parent_frame, style='TFrame')
+        helper_frame.pack(side=tk.LEFT, padx=10)
+
+        ttk.Button(
+            helper_frame,
+            text="WHERE 1=1",
+            command=lambda: self.insert_at_cursor("WHERE 1=1\n"),
+            style='TButton'
+        ).pack(side=tk.LEFT, padx=2)
+
+        ttk.Button(
+            helper_frame,
+            text="ORDER BY",
+            command=lambda: self.insert_at_cursor("ORDER BY "),
+            style='TButton'
+        ).pack(side=tk.LEFT, padx=2)
+
+        ttk.Button(
+            helper_frame,
+            text="GROUP BY",
+            command=lambda: self.insert_at_cursor("GROUP BY "),
+            style='TButton'
+        ).pack(side=tk.LEFT, padx=2)
+
+    def insert_limit_clause(self, limit):
+        """Insert the appropriate LIMIT clause based on database type"""
+        if not self.db_connection.current_connection:
+            messagebox.showwarning("Not Connected", "Please connect to a database first")
+            return
+
+        # Get the current connection type
+        conn_type = self.get_connection_type()
+
+        if conn_type == "Oracle" or conn_type == "OracleDB":
+            clause = f"WHERE ROWNUM <= {limit}"
+        elif conn_type == "PostgreSQL":
+            clause = f"LIMIT {limit}"
+        elif conn_type == "SQLite":
+            clause = f"LIMIT {limit}"
+        else:
+            clause = f"LIMIT {limit}"  # Default to standard SQL
+
+        self.insert_at_cursor(clause)
+
+    def get_connection_type(self):
+        """Get the type of the current database connection"""
+        return self.db_connection.get_connection_type()
+
+    def insert_at_cursor(self, text):
+        """Insert text at the current cursor position in the active editor"""
+        tab_id, info = self.get_current_sql_tab()
+        if not info:
+            return
+
+        widget = info["widget"]
+        widget.insert(tk.INSERT, text)
+        widget.see(tk.INSERT)  # Scroll to make the insertion point visible
+        widget.focus_set()     # Set focus back to the editor
 
     def display_error(self, error: str):
         """Display error in result panel"""

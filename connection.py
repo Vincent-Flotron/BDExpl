@@ -89,3 +89,21 @@ class DBConnection:
             return QueriesOracle()
         else:
             return QueriesOracle()
+
+    def get_connection_type(self):
+        """Get the type of the current database connection"""
+        if not self.current_connection:
+            return None
+
+        # Check the connection type based on the connection object
+        conn = self.current_connection
+        if isinstance(conn, pyodbc.Connection):
+            return "Oracle"
+        elif isinstance(conn, psycopg2.extensions.connection):
+            return "PostgreSQL"
+        elif isinstance(conn, sqlite3.Connection):
+            return "SQLite"
+        elif isinstance(conn, oracledb.Connection):
+            return "OracleDB"
+        else:
+            return "Unknown"
