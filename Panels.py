@@ -1448,16 +1448,34 @@ class QueryResultPanel:
         self.result_tree.update_idletasks()
 
     def display_results(self, columns: List[str], rows: List[Tuple], description):
-        """Display query results in grid"""
+        """Display query results in grid with duplicate column name handling"""
         self.result_tree.delete(*self.result_tree.get_children())
 
-        self.result_tree['columns'] = columns
-        self.result_tree.column('#0', width=0, stretch=tk.NO)
+        # Handle duplicate column names by adding numbered suffixes
+        column_counts = {}
+        unique_columns = []
 
         for col in columns:
+            if col in column_counts:
+                column_counts[col] += 1
+                unique_col = f"{col} (#{column_counts[col]})"
+            else:
+                column_counts[col] = 1
+                unique_col = col
+            unique_columns.append(unique_col)
+
+        # number the first occurence
+        # for each column_counts > 1, find the colname that doesn't match "colname \(#\d+\) and add it "(# 1)"
+        for i, col in enumerate(columns):
+            if column_counts[col] > 1 and not re.match(rf"{re.escape(col)} \(#\d+\)", unique_columns[i]):
+                unique_columns[i] = f"{col} (#1)"
+
+        self.result_tree['columns'] = unique_columns
+        self.result_tree.column('#0', width=0, stretch=tk.NO)
+
+        for col in unique_columns:
             self.result_tree.column(col, minwidth=100, width=150, stretch=tk.NO, anchor=tk.W)
-            display_name = col
-            self.result_tree.heading(col, text=display_name, anchor=tk.W)
+            self.result_tree.heading(col, text=col, anchor=tk.W)
 
         row_count = 0
         for row in rows:
