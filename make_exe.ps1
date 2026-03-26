@@ -1,1 +1,1 @@
-pyinstaller --onefile --windowed --hidden-import=win32timezone DBExpl.py
+pyinstaller --onefile --windowed --hidden-import=win32timezone --collect-all cryptography DBExpl.py
