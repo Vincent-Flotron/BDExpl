@@ -63,6 +63,17 @@ class Theme:
                       background=[('active', accent_color), ('!active', primary_color)],
                       relief=[('pressed', 'sunken'), ('!pressed', 'raised')])
 
+        # Style for SQL helper buttons (green)
+        self.style.configure('SQLHelper.TButton',
+                            font=('Helvetica', 9),
+                            borderwidth=1,
+                            padding=8,
+                            background=success_color,
+                            foreground='white')
+        self.style.map('SQLHelper.TButton',
+                      background=[('active', '#27ae60'), ('!active', success_color)],
+                      relief=[('pressed', 'sunken'), ('!pressed', 'raised')])
+
         # Style for notebook (tabs)
         self.style.configure('TNotebook',
                             background=bg_color,
@@ -121,15 +132,14 @@ class Theme:
                             background=bg_color,
                             foreground=text_color,
                             font=('Helvetica', 9))
-        
-        # Style tab close button 
+
+        # Style tab close button
         self.style.configure('Close.TButton',
                     font=('Helvetica', 9, 'bold'),
                     borderwidth=1,
                     padding=2,
                     background=error_color,
                     foreground='white')
-
 
         # Configure custom style for SQL editor text
         self.sql_editor_style = {

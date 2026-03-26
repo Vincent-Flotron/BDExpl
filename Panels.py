@@ -898,7 +898,7 @@ class SQLQueryEditorPanel:
                 limit_frame,
                 text=str(limit),
                 command=lambda l=limit: self.insert_limit_clause(l),
-                style='TButton',
+                style='SQLHelper.TButton',
                 width=4
             )
             btn.pack(side=tk.LEFT, padx=1)
@@ -909,23 +909,16 @@ class SQLQueryEditorPanel:
 
         ttk.Button(
             helper_frame,
-            text="WHERE 1=1",
-            command=lambda: self.insert_at_cursor("WHERE 1=1\n"),
-            style='TButton'
-        ).pack(side=tk.LEFT, padx=2)
-
-        ttk.Button(
-            helper_frame,
             text="ORDER BY",
             command=lambda: self.insert_at_cursor("ORDER BY "),
-            style='TButton'
+            style='SQLHelper.TButton'
         ).pack(side=tk.LEFT, padx=2)
 
         ttk.Button(
             helper_frame,
             text="GROUP BY",
             command=lambda: self.insert_at_cursor("GROUP BY "),
-            style='TButton'
+            style='SQLHelper.TButton'
         ).pack(side=tk.LEFT, padx=2)
 
     def insert_limit_clause(self, limit):
