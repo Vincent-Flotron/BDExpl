@@ -1184,13 +1184,16 @@ class SQLQueryEditorPanel:
         return None, None
 
     def open_sql_file(self):
-        """Open SQL file"""
-        filepath = filedialog.askopenfilename(
-            title="Open SQL File",
+        """Open SQL file(s)"""
+        filepaths = filedialog.askopenfilenames(
+            title="Open SQL File(s)",
             filetypes=[("SQL Files", "*.sql"), ("All Files", "*.*")]
         )
 
-        if filepath:
+        if not filepaths:
+            return
+
+        for filepath in filepaths:
             try:
                 with open(filepath, 'r', encoding='utf-8') as f:
                     content = f.read()
@@ -1204,7 +1207,8 @@ class SQLQueryEditorPanel:
                 filename = os.path.basename(filepath)
                 self.sql_notebook.tab(self.sql_files[tab_id]["frame"], text=filename)
             except Exception as e:
-                messagebox.showerror("Error", f"Failed to open file: {str(e)}")
+                messagebox.showerror("Error", f"Failed to open file {filepath}: {str(e)}")
+
 
     def save_current_sql(self):
         """Save current SQL file and update tab name"""
