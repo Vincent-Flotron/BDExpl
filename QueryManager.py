@@ -1145,8 +1145,46 @@ class QueryManager:
         self.db_connection = db_connection
         self.query_result_panel = query_result_panel
 
+    def _clean_sql(self, sql: str) -> str:
+        """
+        Clean SQL before execution:
+        - Strip leading/trailing whitespace
+        - Remove trailing semicolon for plain SQL statements
+        - Preserve trailing semicolon inside PL/SQL blocks (BEGIN...END)
+        - Remove trailing slash (/) used in SQL*Plus scripts
+        """
+        sql = sql.strip()
+
+        # Remove trailing slash (SQL*Plus style)
+        if sql.endswith('/'):
+            sql = sql[:-1].strip()
+
+        # Detect PL/SQL block — semicolons inside BEGIN...END must be kept
+        sql_upper = sql.upper()
+        is_plsql = (
+            sql_upper.startswith('BEGIN')
+            or sql_upper.startswith('DECLARE')
+            or sql_upper.startswith('CREATE OR REPLACE')
+            or sql_upper.startswith('CREATE PROCEDURE')
+            or sql_upper.startswith('CREATE FUNCTION')
+            or sql_upper.startswith('CREATE PACKAGE')
+            or sql_upper.startswith('CREATE TRIGGER')
+        )
+
+        if is_plsql:
+            # PL/SQL blocks end with END; — the semicolon after END is required
+            # and must be kept. Nothing to strip.
+            pass
+        else:
+            # Plain SQL: strip the trailing semicolon if present
+            if sql.endswith(';'):
+                sql = sql[:-1].strip()
+
+        return sql
+
     def execute_query(self, sql: str) -> Dict[str, Any]:
         try:
+            sql = self._clean_sql(sql)
             cursor = self.db_connection.current_connection.cursor()
             cursor.execute(sql)
 
