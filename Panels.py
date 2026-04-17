@@ -112,6 +112,11 @@ class DatabaseTreePanel:
         for cb in self._type_checkboxes:
             cb.pack(side=tk.LEFT, padx=1)
 
+
+        # Container for ariane wire (Nautilus style)
+        self.breadcrumb_frame = ttk.Frame(left_frame, style='TFrame')
+        self.breadcrumb_frame.pack(fill=tk.X, padx=4, pady=2)
+
         # Internal search state
         self._search_results       = []
         self._search_results_index = 0
@@ -162,6 +167,7 @@ class DatabaseTreePanel:
         self.db_tree.bind("<Double-1>", lambda e: self.view_table_data(100))
         self.db_tree.bind("<<TreeviewOpen>>", self.on_tree_expand)
         self.db_tree.bind("<<TreeviewSelect>>", lambda e: self._update_search_checkboxes_state())
+        self.db_tree.bind("<<TreeviewSelect>>", self._update_breadcrumbs)
 
     def on_tree_expand(self, event):
         """Handle tree expansion - lazy load table children (indexes, keys, triggers), schema children (procedures, functions, packages, views), and package children (functions, procedures)"""
@@ -605,9 +611,14 @@ class DatabaseTreePanel:
             cursor = self.db_connection.current_connection.cursor()
             queries = self.get_queries_instance()
 
-            # Rest of the method remains the same...
             cursor.execute(queries.get_all_schemas_with_their_table_count())
             schemas = cursor.fetchall()
+
+            # Clean ariane wire when connecting to a new db
+            for widget in self.breadcrumb_frame.winfo_children():
+                widget.destroy()
+
+            self.db_tree.delete(*self.db_tree.get_children())
 
             for schema, table_count in schemas:
                 schema_node = self.db_tree.insert('', 'end', text=f"{schema} ({table_count} tables)", values=(schema, 'schema'))
@@ -1080,10 +1091,72 @@ class DatabaseTreePanel:
         self.db_tree.focus(target)
 
     def _reset_search_session(self, *args):
-        """Vide les résultats mis en mémoire pour forcer une nouvelle recherche."""
+        """Clears cached search results to force a new search."""
         self._search_results = []
         self._search_results_index = 0
         self._search_results_term = ""
+
+
+    def _update_breadcrumbs(self, event=None):
+        # 1. Remove old breadcrumb buttons
+        for widget in self.breadcrumb_frame.winfo_children():
+            widget.destroy()
+
+        selected = self.db_tree.selection()
+        if not selected:
+            return
+
+        item_id = selected[0]
+        path_items = []
+
+        # 2. Walk up from child to parent to build the full path
+        temp_id = item_id
+        while temp_id:
+            item_text = self.db_tree.item(temp_id)['text']
+            # Clean the text (e.g. "schema (2823 tables)" -> "schema")
+            clean_text = item_text.split(' (')[0]
+            path_items.insert(0, (temp_id, clean_text))
+            temp_id = self.db_tree.parent(temp_id)
+
+        # 3. Create breadcrumb buttons horizontally
+        for i, (original_id, label) in enumerate(path_items):
+            # Add a ">" separator between buttons
+            if i > 0:
+                ttk.Label(
+                    self.breadcrumb_frame,
+                    text=">",
+                    foreground="gray"
+                ).pack(side=tk.LEFT, padx=2)
+
+            btn = ttk.Button(
+                self.breadcrumb_frame,
+                text=label,
+                style='Breadcrumb.TButton',  # Optional: flatter button style
+                command=lambda idx=original_id: self._on_breadcrumb_click(idx)
+            )
+            btn.pack(side=tk.LEFT)
+
+
+    def _on_breadcrumb_click(self, item_id):
+        # Select the clicked item
+        self.db_tree.selection_set(item_id)
+        self.db_tree.see(item_id)
+        self.db_tree.focus(item_id)
+
+        # Collapse all children of the clicked item
+        children = self.db_tree.get_children(item_id)
+        for child in children:
+            self._collapse_all(child)
+
+        # Optional: also collapse the clicked item itself (strict Nautilus behavior)
+        # self.db_tree.item(item_id, open=False)
+
+
+    def _collapse_all(self, item_id):
+        """Recursively collapses all child nodes."""
+        self.db_tree.item(item_id, open=False)
+        for child in self.db_tree.get_children(item_id):
+            self._collapse_all(child)
 
 
 class SQLQueryEditorPanel:

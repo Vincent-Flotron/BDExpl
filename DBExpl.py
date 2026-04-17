@@ -103,6 +103,11 @@ class Theme:
                             font=('Helvetica', 10, 'bold'),
                             foreground=text_color,
                             padding=[5, 5])
+        
+        # Style for Nautilus/ariane wire/breadcumb
+        self.style.configure('Breadcrumb.TButton', 
+                padding=2, 
+                font=('Segoe UI', 9, 'bold'))
 
         # Style for entry and combobox
         self.style.configure('TEntry',
