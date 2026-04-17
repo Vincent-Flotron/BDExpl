@@ -364,7 +364,7 @@ class DBExp:
         """Show dialog for creating a new connection"""
         dialog = tk.Toplevel(self.root)
         dialog.title("New Connection")
-        dialog.geometry("400x750")
+        dialog.geometry("530x830")
         dialog.transient(self.root)
         dialog.grab_set()
 
@@ -725,6 +725,15 @@ class DBExp:
 def main():
     root = tk.Tk()
     app = DBExp(root)
+
+    # Load the image
+    resources_path = os.path.join(os.path.dirname(__file__), "resources")
+    icon_path = os.path.join(resources_path, "icon.png")
+
+    icon = tk.PhotoImage(file=icon_path)
+
+    # Set it as the icon
+    root.iconphoto(True, icon)  # The 'True' argument makes it apply to all future top-level windows too
 
     # Graceful shutdown on signals
     signal.signal(signal.SIGINT, lambda sig, frame: app.shutdown())
