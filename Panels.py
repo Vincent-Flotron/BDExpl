@@ -56,6 +56,67 @@ class DatabaseTreePanel:
 
         ttk.Label(left_frame, text="Database Objects", style='Bold.TLabel').pack(pady=5)
 
+        # ── Search bar ────────────────────────────────────────────────
+        search_frame = ttk.Frame(left_frame, style='TFrame')
+        search_frame.pack(fill=tk.X, padx=4, pady=(0, 2))
+
+        self.search_var = tk.StringVar()
+        search_entry = ttk.Entry(search_frame, textvariable=self.search_var)
+        search_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        search_entry.bind("<Return>", self.search_in_tree)
+
+        # "Everywhere" checkbox
+        self.search_everywhere_var = tk.BooleanVar(value=False)
+        everywhere_cb = ttk.Checkbutton(
+            search_frame, text="everywhere",
+            variable=self.search_everywhere_var,
+            command=self._update_search_checkboxes_state
+        )
+        everywhere_cb.pack(side=tk.LEFT, padx=(4, 0))
+
+        # Object-type filter checkboxes
+        type_frame = ttk.Frame(left_frame, style='TFrame')
+        type_frame.pack(fill=tk.X, padx=4, pady=(0, 4))
+
+        self.search_tables_var     = tk.BooleanVar(value=True)
+        self.search_views_var      = tk.BooleanVar(value=True)
+        self.search_procedures_var = tk.BooleanVar(value=True)
+        self.search_functions_var  = tk.BooleanVar(value=True)
+        self.search_packages_var   = tk.BooleanVar(value=True)
+
+        # Track states
+        vars_to_watch = [
+            self.search_everywhere_var, self.search_tables_var, 
+            self.search_views_var, self.search_procedures_var,
+            self.search_functions_var, self.search_packages_var
+        ]
+        
+        for var in vars_to_watch:
+            var.trace_add("write", self._reset_search_session)
+
+        self._cb_tables = ttk.Checkbutton(type_frame, text="tables",
+                                          variable=self.search_tables_var, state='disabled')
+        self._cb_views  = ttk.Checkbutton(type_frame, text="views",
+                                          variable=self.search_views_var,  state='disabled')
+        self._cb_procs  = ttk.Checkbutton(type_frame, text="procedures",
+                                          variable=self.search_procedures_var, state='disabled')
+        self._cb_funcs  = ttk.Checkbutton(type_frame, text="functions",
+                                          variable=self.search_functions_var,  state='disabled')
+        self._cb_pkgs   = ttk.Checkbutton(type_frame, text="packages",
+                                          variable=self.search_packages_var,   state='disabled')
+
+        self._type_checkboxes = [
+            self._cb_tables, self._cb_views,
+            self._cb_procs,  self._cb_funcs, self._cb_pkgs,
+        ]
+        for cb in self._type_checkboxes:
+            cb.pack(side=tk.LEFT, padx=1)
+
+        # Internal search state
+        self._search_results       = []
+        self._search_results_index = 0
+        self._search_results_term  = ""
+
         # Treeview with scrollbars
         tree_container = ttk.Frame(left_frame, style='TFrame')
         tree_container.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
@@ -100,6 +161,7 @@ class DatabaseTreePanel:
         self.db_tree.bind("<Button-3>", self.show_tree_context_menu)
         self.db_tree.bind("<Double-1>", lambda e: self.view_table_data(100))
         self.db_tree.bind("<<TreeviewOpen>>", self.on_tree_expand)
+        self.db_tree.bind("<<TreeviewSelect>>", lambda e: self._update_search_checkboxes_state())
 
     def on_tree_expand(self, event):
         """Handle tree expansion - lazy load table children (indexes, keys, triggers), schema children (procedures, functions, packages, views), and package children (functions, procedures)"""
@@ -834,6 +896,195 @@ class DatabaseTreePanel:
 
     def clear_tree(self):
         self.db_tree.delete(*self.db_tree.get_children())
+
+    # ------------------------------------------------------------------
+    # SEARCH
+    # ------------------------------------------------------------------
+
+    def _update_search_checkboxes_state(self, *args):
+        """Enable type-filter checkboxes only when a schema is selected or 'everywhere' is on."""
+        everywhere = self.search_everywhere_var.get()
+        if everywhere:
+            state = 'normal'
+        else:
+            selection = self.db_tree.selection()
+            if selection:
+                values = self.db_tree.item(selection[0])['values']
+                item_type = values[1] if len(values) > 1 else ''
+                state = 'normal' if item_type == 'schema' else 'disabled'
+            else:
+                state = 'disabled'
+
+        for cb in self._type_checkboxes:
+            cb.config(state=state)
+
+    def _ensure_schema_loaded(self, schema_node):
+        """Force-load procedures/functions/packages/views for a schema if not yet expanded."""
+        children = self.db_tree.get_children(schema_node)
+        # The loading placeholder is always the second child (index 1), right after
+        # the tables_folder.  If it is still present the schema hasn't been expanded.
+        if len(children) > 1:
+            second_values = self.db_tree.item(children[1])['values']
+            if second_values and len(second_values) > 1 and second_values[1] == 'loading':
+                self.db_tree.delete(children[1])
+                schema_name = self.db_tree.item(schema_node)['values'][0]
+                self.load_schema_children(schema_node, schema_name)
+
+    def _collect_folder_matches(self, folder_node, term):
+        """Return all direct children of *folder_node* whose name contains *term*."""
+        results = []
+        for child in self.db_tree.get_children(folder_node):
+            child_values = self.db_tree.item(child)['values']
+            # Leaf objects always have at least 3 values: (schema, type, name)
+            if len(child_values) >= 3:
+                name = str(child_values[2])
+                if term.lower() in name.lower():
+                    results.append(child)
+        return results
+
+    def _search_in_schema_node(self, schema_node, term,
+                                tables, views, procedures, functions, packages):
+        """Return all matching items inside *schema_node* for the requested types."""
+        results = []
+
+        # Lazy-load procedures, functions, packages, views if requested
+        if procedures or functions or packages or views:
+            self._ensure_schema_loaded(schema_node)
+
+        folder_type_map = {
+            'tables_folder':     tables,
+            'views_folder':      views,
+            'procedures_folder': procedures,
+            'functions_folder':  functions,
+            'packages_folder':   packages,
+        }
+
+        for folder_node in self.db_tree.get_children(schema_node):
+            folder_values = self.db_tree.item(folder_node)['values']
+            if not folder_values or len(folder_values) < 2:
+                continue
+            folder_type = folder_values[1]
+            if folder_type_map.get(folder_type, False):
+                results += self._collect_folder_matches(folder_node, term)
+
+        return results
+
+    def search_in_tree(self, event=None):
+        """
+        Search for objects in the tree and select the first (or next) match.
+
+        Behaviour:
+        • If 'everywhere' is checked: search across all schemas using the
+          type-filter checkboxes (tables, views, procedures, functions, packages).
+        • If a schema is selected: search within that schema using the type filters.
+        • If a leaf object (table, view, procedure …) is selected: search siblings
+          inside the same folder, ignoring the type filters.
+        • Pressing ENTER again cycles to the next match in the result list.
+        """
+        term = self.search_var.get().strip()
+        if not term:
+            return
+
+        everywhere  = self.search_everywhere_var.get()
+        do_tables   = self.search_tables_var.get()
+        do_views    = self.search_views_var.get()
+        do_procs    = self.search_procedures_var.get()
+        do_funcs    = self.search_functions_var.get()
+        do_pkgs     = self.search_packages_var.get()
+
+        selection = self.db_tree.selection()
+        results   = []
+
+        if everywhere:
+            # ── Search across ALL schemas ──────────────────────────────
+            for schema_node in self.db_tree.get_children(''):
+                node_vals = self.db_tree.item(schema_node)['values']
+                if node_vals and node_vals[1] == 'schema':
+                    results += self._search_in_schema_node(
+                        schema_node, term,
+                        do_tables, do_views, do_procs, do_funcs, do_pkgs
+                    )
+
+        elif not selection:
+            messagebox.showinfo("Search", "Please select an item in the tree or check 'everywhere'.")
+            return
+
+        else:
+            selected_item = selection[0]
+            values    = self.db_tree.item(selected_item)['values']
+            item_type = values[1] if len(values) > 1 else ''
+
+            if item_type == 'schema':
+                # ── Search within the selected schema ──────────────────
+                results += self._search_in_schema_node(
+                    selected_item, term,
+                    do_tables, do_views, do_procs, do_funcs, do_pkgs
+                )
+
+            elif item_type in ('tables_folder', 'views_folder',
+                               'procedures_folder', 'functions_folder',
+                               'packages_folder'):
+                # ── Search within the selected folder ──────────────────
+                results += self._collect_folder_matches(selected_item, term)
+
+            else:
+                # ── Leaf or sub-item: search siblings (parent folder) ──
+                parent = self.db_tree.parent(selected_item)
+                if not parent:
+                    return
+                parent_values = self.db_tree.item(parent)['values']
+                parent_type   = parent_values[1] if len(parent_values) > 1 else ''
+
+                if parent_type in ('tables_folder', 'views_folder',
+                                   'procedures_folder', 'functions_folder',
+                                   'packages_folder'):
+                    # Direct child of a folder — search all siblings
+                    results += self._collect_folder_matches(parent, term)
+
+                elif parent_type == 'schema':
+                    # The selected item *is* a folder node itself — search its contents
+                    results += self._collect_folder_matches(selected_item, term)
+
+                else:
+                    # Deeper nesting (trigger, index …) — search among siblings
+                    results += self._collect_folder_matches(parent, term)
+
+        if not results:
+            messagebox.showinfo("Search", f"No result found for '{term}'.")
+            return
+
+        # ── Cycle through results on repeated ENTER ──────────────────
+        if term != self._search_results_term:
+            # New term: reset cycle
+            self._search_results       = results
+            self._search_results_term  = term
+            self._search_results_index = 0
+        else:
+            # Same term: advance to next match
+            self._search_results_index = (
+                (self._search_results_index + 1) % len(self._search_results)
+            )
+
+        target = self._search_results[self._search_results_index]
+
+        # Ensure parent nodes are open so the item is reachable
+        parent = self.db_tree.parent(target)
+        if parent:
+            self.db_tree.item(parent, open=True)
+            grandparent = self.db_tree.parent(parent)
+            if grandparent:
+                self.db_tree.item(grandparent, open=True)
+
+        self.db_tree.selection_set(target)
+        self.db_tree.see(target)
+        self.db_tree.focus(target)
+
+    def _reset_search_session(self, *args):
+        """Vide les résultats mis en mémoire pour forcer une nouvelle recherche."""
+        self._search_results = []
+        self._search_results_index = 0
+        self._search_results_term = ""
+
 
 class SQLQueryEditorPanel:
     def __init__(self, query_result_panel, db_connection):
