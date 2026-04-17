@@ -231,7 +231,74 @@ def get_sqlite_conn_string(connection_name: str, use_root_name: bool = True):
     return db_path
 
 
-def save_odbc_user_credentials(connection_name: str, host: str ,user: str, password: str, use_root_name: bool = True):
+def save_mssql_connection(connection_name: str, host: str, port: int, database: str,
+                          user: str, password: str,
+                          auth_type: str = "SQL",
+                          driver: str = "{ODBC Driver 17 for SQL Server}",
+                          encrypt: str = "yes",
+                          trust_server_cert: str = "yes",
+                          use_root_name: bool = True):
+    """Save a Microsoft SQL Server connection to Windows Credential Manager.
+
+    auth_type: "SQL" for SQL Server Authentication, "Windows" for Windows Auth.
+    When using Windows Auth, user and password may be left empty.
+    """
+    if "_" in connection_name:
+        raise ValueError("Underscores are not allowed in connection names")
+
+    if use_root_name:
+        root_name = f"{ROOT_NAME}_"
+    else:
+        root_name = ""
+
+    save_in_win_cred(f"{root_name}{connection_name}_DBTYPE",          "MSSQL")
+    save_in_win_cred(f"{root_name}{connection_name}_HOST",            host)
+    save_in_win_cred(f"{root_name}{connection_name}_PORT",            str(port))
+    save_in_win_cred(f"{root_name}{connection_name}_DATABASE",        database)
+    save_in_win_cred(f"{root_name}{connection_name}_UID",             user or "")
+    save_in_win_cred(f"{root_name}{connection_name}_PWD",             password or "")
+    save_in_win_cred(f"{root_name}{connection_name}_AUTHTYPE",        auth_type)
+    save_in_win_cred(f"{root_name}{connection_name}_DRIVER",          driver)
+    save_in_win_cred(f"{root_name}{connection_name}_ENCRYPT",         encrypt)
+    save_in_win_cred(f"{root_name}{connection_name}_TRUSTSERVERCERT", trust_server_cert)
+
+
+def get_mssql_conn_params(connection_name: str, use_root_name: bool = True) -> dict:
+    """Get Microsoft SQL Server connection parameters from Windows Credential Manager."""
+    if not type(connection_name) == str:
+        raise ValueError(f"connection_name '{connection_name}' is not of type str")
+
+    def get_cred(name: str) -> str:
+        try:
+            cred = win32cred.CredRead(name, win32cred.CRED_TYPE_GENERIC, 0)
+        except Exception as e:
+            print(f"Error with name '{name}': {str(e)}")
+            return None
+        return cred["CredentialBlob"].decode("utf-16")
+
+    if use_root_name:
+        root_name = f"{ROOT_NAME}_"
+    else:
+        root_name = ""
+
+    db_type = get_cred(f"{root_name}{connection_name}_DBTYPE")
+    if db_type != "MSSQL":
+        raise ValueError(f"Not a MSSQL connection (DBTYPE={db_type})")
+
+    return {
+        "host":             get_cred(f"{root_name}{connection_name}_HOST"),
+        "port":             get_cred(f"{root_name}{connection_name}_PORT") or "1433",
+        "database":         get_cred(f"{root_name}{connection_name}_DATABASE"),
+        "user":             get_cred(f"{root_name}{connection_name}_UID") or "",
+        "password":         get_cred(f"{root_name}{connection_name}_PWD") or "",
+        "auth_type":        get_cred(f"{root_name}{connection_name}_AUTHTYPE") or "SQL",
+        "driver":           get_cred(f"{root_name}{connection_name}_DRIVER") or "{ODBC Driver 17 for SQL Server}",
+        "encrypt":          get_cred(f"{root_name}{connection_name}_ENCRYPT") or "yes",
+        "trust_server_cert":get_cred(f"{root_name}{connection_name}_TRUSTSERVERCERT") or "yes",
+    }
+
+
+def save_oracle_odbc_user_credentials(connection_name: str, host: str ,user: str, password: str, use_root_name: bool = True):
     save_odbc_connection_credentials(driver          = "{Oracle dans OraClient19Home1}",
                                      connection_name = connection_name,
                                      host            = host,
@@ -342,6 +409,11 @@ def delete_connection_credentials(connection_name: str):
     # OracleDB credentials (host/port/sid shared with PostgreSQL host/port above)
     delete_cred(f"{prefix}_SID")
 
+    # MSSQL credentials
+    delete_cred(f"{prefix}_AUTHTYPE")
+    delete_cred(f"{prefix}_ENCRYPT")
+    delete_cred(f"{prefix}_TRUSTSERVERCERT")
+
     # Shared credentials (all types)
     delete_cred(f"{prefix}_DBTYPE")
     delete_cred(f"{prefix}_UID")
@@ -390,5 +462,10 @@ def get_connection_type(connection_name: str, use_root_name: bool = True):
     # Fallback: Check for PostgreSQL-specific credentials
     if pg_host:
         return "PostgreSQL"
+
+    # Fallback: Check for MSSQL — requires DATABASE and no SID
+    db_name = get_cred(f"{root_name}{connection_name}_DATABASE")
+    if db_name:
+        return "MSSQL"
 
     return None

@@ -2,12 +2,13 @@ import pyodbc
 import sqlite3
 import psycopg2
 import oracledb
-from QueryManager import QueriesSQLite, QueriesOracle, QueriesPostgreSQL
+from QueryManager import QueriesSQLite, QueriesOracle, QueriesPostgreSQL, QueriesMSSQL
 
 class DBConnection:
     def __init__(self):
         self.connections = {}
         self.current_connection = None
+        self.current_connection_type = None  # Explicit type tracking ("Oracle", "OracleDB", "PostgreSQL", "SQLite", "MSSQL")
 
     def add_connection(self, name, host, port, user, password, db_type="Oracle", ssh_tunnel=None):
         self.connections[name] = {
@@ -78,15 +79,51 @@ class DBConnection:
             **ssl_args,
         )
 
+    def connect_mssql(self, host, port, database, user, password,
+                      auth_type="SQL", driver="{ODBC Driver 17 for SQL Server}",
+                      encrypt="yes", trust_server_cert="yes"):
+        """Connect to a Microsoft SQL Server database via pyodbc"""
+        server = f"{host},{port}" if port else host
+        if auth_type == "Windows":
+            conn_str = (
+                f"DRIVER={driver};"
+                f"SERVER={server};"
+                f"DATABASE={database};"
+                f"Trusted_Connection=yes;"
+                f"Encrypt={encrypt};"
+                f"TrustServerCertificate={trust_server_cert};"
+            )
+        else:
+            conn_str = (
+                f"DRIVER={driver};"
+                f"SERVER={server};"
+                f"DATABASE={database};"
+                f"UID={user};"
+                f"PWD={password};"
+                f"Encrypt={encrypt};"
+                f"TrustServerCertificate={trust_server_cert};"
+            )
+        return pyodbc.connect(conn_str)
+
     def get_queries_instance(self, connection):
+        # Prefer the explicit type tracker when available
+        if self.current_connection_type == "MSSQL":
+            return QueriesMSSQL()
+        if self.current_connection_type == "PostgreSQL":
+            return QueriesPostgreSQL()
+        if self.current_connection_type in ("Oracle", "OracleDB"):
+            return QueriesOracle()
+        if self.current_connection_type == "SQLite":
+            return QueriesSQLite()
+        # Fallback: isinstance checks (cannot distinguish Oracle ODBC from MSSQL)
         if type(connection) == sqlite3.Connection:
             return QueriesSQLite()
         elif isinstance(connection, psycopg2.extensions.connection):
             return QueriesPostgreSQL()
-        elif type(connection) == pyodbc.Connection:
-            return QueriesOracle()
         elif isinstance(connection, oracledb.Connection):
             return QueriesOracle()
+        elif type(connection) == pyodbc.Connection:
+            return QueriesOracle()  # conservative fallback for pyodbc
         else:
             return QueriesOracle()
 
@@ -95,15 +132,19 @@ class DBConnection:
         if not self.current_connection:
             return None
 
-        # Check the connection type based on the connection object
+        # Prefer the explicit tracker set by ConnectionManager
+        if self.current_connection_type:
+            return self.current_connection_type
+
+        # Fallback: isinstance checks (cannot distinguish Oracle ODBC from MSSQL)
         conn = self.current_connection
-        if isinstance(conn, pyodbc.Connection):
-            return "Oracle"
-        elif isinstance(conn, psycopg2.extensions.connection):
+        if isinstance(conn, psycopg2.extensions.connection):
             return "PostgreSQL"
         elif isinstance(conn, sqlite3.Connection):
             return "SQLite"
         elif isinstance(conn, oracledb.Connection):
             return "OracleDB"
+        elif isinstance(conn, pyodbc.Connection):
+            return "Oracle"   # conservative fallback
         else:
             return "Unknown"

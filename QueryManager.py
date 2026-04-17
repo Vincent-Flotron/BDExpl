@@ -137,7 +137,7 @@ class QueriesOracle(Queries):
 
     @staticmethod
     def get_first_x_rows(schema, table, limit):
-        return f"SELECT * FROM {schema}.{table} WHERE ROWNUM <= {limit}"
+        return f"SELECT * FROM {schema}.{table} FETCH FIRST {limit} ROWS ONLY"
 
     @staticmethod
     def get_all_schemas_with_their_table_count():
@@ -1130,6 +1130,403 @@ class QueriesPostgreSQL(Queries):
                 (quote_ident('{schema}') || '.' || quote_ident('{view_name}'))::regclass,
                 'pg_class'
             ) AS comments
+        """
+
+
+# ======================================================================
+# MICROSOFT SQL SERVER QUERIES
+# ======================================================================
+
+class QueriesMSSQL(Queries):
+    """Microsoft SQL Server-specific SQL queries (via pyodbc)."""
+
+    @staticmethod
+    def get_first_x_rows(schema, table, limit):
+        return f"SELECT TOP {limit} * FROM [{schema}].[{table}]"
+
+    @staticmethod
+    def get_all_schemas_with_their_table_count():
+        return """
+            SELECT s.name AS owner, COUNT(t.object_id) AS table_count
+            FROM sys.schemas s
+            LEFT JOIN sys.tables t ON t.schema_id = s.schema_id
+            WHERE s.name NOT IN (
+                'sys', 'INFORMATION_SCHEMA', 'guest',
+                'db_owner', 'db_accessadmin', 'db_securityadmin',
+                'db_ddladmin', 'db_backupoperator', 'db_datareader',
+                'db_datawriter', 'db_denydatareader', 'db_denydatawriter'
+            )
+            GROUP BY s.name
+            ORDER BY s.name
+        """
+
+    @staticmethod
+    def get_all_table_names_in_schema(schema):
+        return f"""
+            SELECT t.name AS table_name
+            FROM sys.tables t
+            JOIN sys.schemas s ON t.schema_id = s.schema_id
+            WHERE s.name = '{schema}'
+            ORDER BY t.name
+        """
+
+    @staticmethod
+    def get_table_primary_keys(schema, table):
+        return f"""
+            SELECT
+                c.name AS column_name,
+                'P'    AS constraint_type
+            FROM sys.tables t
+            JOIN sys.schemas s     ON t.schema_id             = s.schema_id
+            JOIN sys.key_constraints kc
+                                   ON kc.parent_object_id     = t.object_id
+                                  AND kc.type                 = 'PK'
+            JOIN sys.index_columns ic
+                                   ON ic.object_id            = kc.parent_object_id
+                                  AND ic.index_id             = kc.unique_index_id
+            JOIN sys.columns c     ON c.object_id             = ic.object_id
+                                  AND c.column_id             = ic.column_id
+            WHERE s.name = '{schema}' AND t.name = '{table}'
+            ORDER BY ic.key_ordinal
+        """
+
+    @staticmethod
+    def get_table_foreign_keys(schema, table):
+        return f"""
+            SELECT
+                c.name                    AS column_name,
+                'R'                       AS constraint_type,
+                SCHEMA_NAME(rt.schema_id) AS r_owner,
+                fk.name                   AS r_constraint_name,
+                rt.name                   AS referenced_table
+            FROM sys.foreign_keys fk
+            JOIN sys.foreign_key_columns fkc
+                ON fk.object_id              = fkc.constraint_object_id
+            JOIN sys.columns c
+                ON fkc.parent_object_id      = c.object_id
+               AND fkc.parent_column_id      = c.column_id
+            JOIN sys.tables t
+                ON fkc.parent_object_id      = t.object_id
+            JOIN sys.schemas s
+                ON t.schema_id               = s.schema_id
+            JOIN sys.tables rt
+                ON fkc.referenced_object_id  = rt.object_id
+            WHERE s.name = '{schema}' AND t.name = '{table}'
+            ORDER BY fk.name
+        """
+
+    @staticmethod
+    def get_table_keys(schema, table):
+        return f"""
+            SELECT
+                kc.name        AS constraint_name,
+                'P'            AS constraint_type,
+                c.name         AS column_name,
+                NULL           AS [-> schema],
+                NULL           AS [-> referenced_table],
+                NULL           AS [-> CONSTRAINT NAME]
+            FROM sys.tables t
+            JOIN sys.schemas s
+                ON t.schema_id               = s.schema_id
+            JOIN sys.key_constraints kc
+                ON kc.parent_object_id       = t.object_id
+               AND kc.type                   = 'PK'
+            JOIN sys.index_columns ic
+                ON ic.object_id              = kc.parent_object_id
+               AND ic.index_id              = kc.unique_index_id
+            JOIN sys.columns c
+                ON c.object_id               = ic.object_id
+               AND c.column_id               = ic.column_id
+            WHERE s.name = '{schema}' AND t.name = '{table}'
+
+            UNION ALL
+
+            SELECT
+                fk.name                       AS constraint_name,
+                'R'                           AS constraint_type,
+                c.name                        AS column_name,
+                SCHEMA_NAME(rt.schema_id)     AS [-> schema],
+                rt.name                       AS [-> referenced_table],
+                fk.name                       AS [-> CONSTRAINT NAME]
+            FROM sys.foreign_keys fk
+            JOIN sys.foreign_key_columns fkc
+                ON fk.object_id              = fkc.constraint_object_id
+            JOIN sys.columns c
+                ON fkc.parent_object_id      = c.object_id
+               AND fkc.parent_column_id      = c.column_id
+            JOIN sys.tables t
+                ON fkc.parent_object_id      = t.object_id
+            JOIN sys.schemas s
+                ON t.schema_id               = s.schema_id
+            JOIN sys.tables rt
+                ON fkc.referenced_object_id  = rt.object_id
+            WHERE s.name = '{schema}' AND t.name = '{table}'
+
+            ORDER BY constraint_type ASC, column_name
+        """
+
+    @staticmethod
+    def get_table_structure(schema, table):
+        return f"""
+            SELECT
+                c.name                   AS fieldname,
+                tp.name                  AS type,
+                c.max_length             AS data_length,
+                c.precision              AS data_precision,
+                c.scale                  AS data_scale,
+                CASE WHEN c.is_nullable = 1 THEN 'Y' ELSE 'N' END AS nullable
+            FROM sys.columns c
+            JOIN sys.types tp   ON c.user_type_id  = tp.user_type_id
+            JOIN sys.objects o  ON c.object_id      = o.object_id
+            JOIN sys.schemas s  ON o.schema_id      = s.schema_id
+            WHERE s.name = '{schema}' AND o.name = '{table}'
+            ORDER BY c.column_id
+        """
+
+    @staticmethod
+    def get_table_indexes(schema, table):
+        return f"""
+            SELECT
+                i.name                                                          AS index_name,
+                i.type_desc                                                     AS index_type,
+                CASE WHEN i.is_unique = 1 THEN 'UNIQUE' ELSE 'NONUNIQUE' END   AS uniqueness,
+                COUNT(ic.column_id)                                             AS column_count,
+                STRING_AGG(c.name, ', ')
+                    WITHIN GROUP (ORDER BY ic.key_ordinal)                      AS columns
+            FROM sys.indexes i
+            JOIN sys.tables t   ON i.object_id   = t.object_id
+            JOIN sys.schemas s  ON t.schema_id   = s.schema_id
+            JOIN sys.index_columns ic
+                                ON i.object_id   = ic.object_id
+                               AND i.index_id    = ic.index_id
+            JOIN sys.columns c  ON ic.object_id  = c.object_id
+                               AND ic.column_id  = c.column_id
+            WHERE s.name = '{schema}'
+              AND t.name = '{table}'
+              AND i.is_primary_key = 0
+              AND i.type > 0
+            GROUP BY i.name, i.type_desc, i.is_unique
+            ORDER BY i.name
+        """
+
+    @staticmethod
+    def count_table_indexes(schema, table):
+        return f"""
+            SELECT COUNT(DISTINCT i.index_id)
+            FROM sys.indexes i
+            JOIN sys.tables t  ON i.object_id = t.object_id
+            JOIN sys.schemas s ON t.schema_id = s.schema_id
+            WHERE s.name = '{schema}'
+              AND t.name = '{table}'
+              AND i.type > 0
+              AND i.is_primary_key = 0
+        """
+
+    @staticmethod
+    def count_table_prim_and_foreign_keys(schema, table):
+        return f"""
+            SELECT
+                (SELECT COUNT(*)
+                 FROM sys.key_constraints kc
+                 JOIN sys.tables t  ON kc.parent_object_id = t.object_id
+                 JOIN sys.schemas s ON t.schema_id          = s.schema_id
+                 WHERE s.name = '{schema}' AND t.name = '{table}' AND kc.type = 'PK')
+              + (SELECT COUNT(*)
+                 FROM sys.foreign_keys fk
+                 JOIN sys.tables t  ON fk.parent_object_id = t.object_id
+                 JOIN sys.schemas s ON t.schema_id          = s.schema_id
+                 WHERE s.name = '{schema}' AND t.name = '{table}')
+        """
+
+    @staticmethod
+    def get_table_triggers(schema, table):
+        return f"""
+            SELECT tr.name AS trigger_name
+            FROM sys.triggers tr
+            JOIN sys.tables t  ON tr.parent_id = t.object_id
+            JOIN sys.schemas s ON t.schema_id  = s.schema_id
+            WHERE s.name = '{schema}' AND t.name = '{table}'
+            ORDER BY tr.name
+        """
+
+    @staticmethod
+    def get_all_procedures_in_schema(schema):
+        return f"""
+            SELECT p.name AS object_name
+            FROM sys.procedures p
+            JOIN sys.schemas s ON p.schema_id = s.schema_id
+            WHERE s.name = '{schema}'
+            ORDER BY p.name
+        """
+
+    @staticmethod
+    def get_all_functions_in_schema(schema):
+        return f"""
+            SELECT o.name AS object_name
+            FROM sys.objects o
+            JOIN sys.schemas s ON o.schema_id = s.schema_id
+            WHERE s.name = '{schema}'
+              AND o.type IN ('FN', 'IF', 'TF')
+            ORDER BY o.name
+        """
+
+    @staticmethod
+    def count_procedures_in_schema(schema):
+        return f"""
+            SELECT COUNT(*)
+            FROM sys.procedures p
+            JOIN sys.schemas s ON p.schema_id = s.schema_id
+            WHERE s.name = '{schema}'
+        """
+
+    @staticmethod
+    def count_functions_in_schema(schema):
+        return f"""
+            SELECT COUNT(*)
+            FROM sys.objects o
+            JOIN sys.schemas s ON o.schema_id = s.schema_id
+            WHERE s.name = '{schema}'
+              AND o.type IN ('FN', 'IF', 'TF')
+        """
+
+    @staticmethod
+    def get_procedure_body(schema, procedure_name):
+        return f"""
+            SELECT 1 AS line, sm.definition AS text
+            FROM sys.sql_modules sm
+            JOIN sys.procedures p  ON sm.object_id = p.object_id
+            JOIN sys.schemas s     ON p.schema_id  = s.schema_id
+            WHERE s.name = '{schema}' AND p.name = '{procedure_name}'
+        """
+
+    @staticmethod
+    def get_function_body(schema, function_name):
+        return f"""
+            SELECT 1 AS line, sm.definition AS text
+            FROM sys.sql_modules sm
+            JOIN sys.objects o  ON sm.object_id = o.object_id
+            JOIN sys.schemas s  ON o.schema_id  = s.schema_id
+            WHERE s.name = '{schema}'
+              AND o.name = '{function_name}'
+              AND o.type IN ('FN', 'IF', 'TF')
+        """
+
+    # SQL Server has no packages
+    @staticmethod
+    def get_all_packages_in_schema(schema):
+        return "SELECT NULL AS object_name WHERE 1=0"
+
+    @staticmethod
+    def count_packages_in_schema(schema):
+        return "SELECT 0"
+
+    @staticmethod
+    def get_package_spec(schema, package_name):
+        return "SELECT NULL AS line, NULL AS text WHERE 1=0"
+
+    @staticmethod
+    def get_package_body(schema, package_name):
+        return "SELECT NULL AS line, NULL AS text WHERE 1=0"
+
+    @staticmethod
+    def get_package_functions_and_procedures(schema, package_name):
+        return "SELECT NULL AS procedure_name, NULL AS object_type, NULL AS overload WHERE 1=0"
+
+    @staticmethod
+    def extract_packaged_routine(source_lines, routine_name):
+        return ""
+
+    @staticmethod
+    def get_all_views_in_schema(schema):
+        return f"""
+            SELECT v.name AS object_name
+            FROM sys.views v
+            JOIN sys.schemas s ON v.schema_id = s.schema_id
+            WHERE s.name = '{schema}'
+            ORDER BY v.name
+        """
+
+    @staticmethod
+    def count_views_in_schema(schema):
+        return f"""
+            SELECT COUNT(*)
+            FROM sys.views v
+            JOIN sys.schemas s ON v.schema_id = s.schema_id
+            WHERE s.name = '{schema}'
+        """
+
+    @staticmethod
+    def get_view_body(schema, view_name):
+        return f"""
+            SELECT sm.definition AS text
+            FROM sys.sql_modules sm
+            JOIN sys.views v   ON sm.object_id = v.object_id
+            JOIN sys.schemas s ON v.schema_id  = s.schema_id
+            WHERE s.name = '{schema}' AND v.name = '{view_name}'
+        """
+
+    @staticmethod
+    def get_view_query(schema, view_name):
+        return f"""
+            SELECT sm.definition AS text
+            FROM sys.sql_modules sm
+            JOIN sys.views v   ON sm.object_id = v.object_id
+            JOIN sys.schemas s ON v.schema_id  = s.schema_id
+            WHERE s.name = '{schema}' AND v.name = '{view_name}'
+        """
+
+    @staticmethod
+    def get_view_structure(schema, view_name):
+        return f"""
+            SELECT
+                c.COLUMN_NAME                AS column_name,
+                c.DATA_TYPE                  AS data_type,
+                c.CHARACTER_MAXIMUM_LENGTH   AS data_length,
+                c.NUMERIC_PRECISION          AS data_precision,
+                c.NUMERIC_SCALE              AS data_scale,
+                CASE WHEN c.IS_NULLABLE = 'YES' THEN 'Y' ELSE 'N' END AS nullable
+            FROM INFORMATION_SCHEMA.COLUMNS c
+            WHERE c.TABLE_SCHEMA = '{schema}'
+              AND c.TABLE_NAME   = '{view_name}'
+            ORDER BY c.ORDINAL_POSITION
+        """
+
+    @staticmethod
+    def get_view_dependencies(schema, view_name):
+        return f"""
+            SELECT DISTINCT
+                SCHEMA_NAME(o.schema_id)                       AS schema_name,
+                o.name                                         AS table_name,
+                CASE o.type
+                    WHEN 'U' THEN 'TABLE'
+                    WHEN 'V' THEN 'VIEW'
+                    ELSE o.type
+                END                                            AS referenced_type
+            FROM sys.views v
+            JOIN sys.schemas s
+                ON v.schema_id                = s.schema_id
+            JOIN sys.sql_expression_dependencies d
+                ON d.referencing_id           = v.object_id
+            JOIN sys.objects o
+                ON o.object_id                = d.referenced_id
+            WHERE s.name = '{schema}'
+              AND v.name = '{view_name}'
+              AND o.type IN ('U', 'V')
+            ORDER BY table_name
+        """
+
+    @staticmethod
+    def get_view_comment(schema, view_name):
+        # SQL Server stores comments as extended properties
+        return f"""
+            SELECT CAST(ep.value AS NVARCHAR(MAX)) AS comments
+            FROM sys.extended_properties ep
+            JOIN sys.views v   ON ep.major_id = v.object_id
+            JOIN sys.schemas s ON v.schema_id  = s.schema_id
+            WHERE s.name        = '{schema}'
+              AND v.name        = '{view_name}'
+              AND ep.name       = 'MS_Description'
+              AND ep.minor_id   = 0
         """
 
 

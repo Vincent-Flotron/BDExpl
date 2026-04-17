@@ -7,15 +7,16 @@ A Windows desktop application built with Python and Tkinter for exploring and qu
 ## Features
 
 ### Multi-database support
-DBExp connects to four types of databases:
+DBExp connects to five types of databases:
 
 - **Oracle (ODBC)** — via the `pyodbc` driver using the `{Oracle dans OraClient19Home1}` ODBC driver. Requires Oracle Client 19 installed on the machine.
 - **Oracle (OracleDB)** — via the `oracledb` Python driver (thin mode, no Oracle Client required), connecting with host, port, and SID.
 - **PostgreSQL** — via `psycopg2`, with full SSL support (modes: `require`, `verify-ca`, `verify-full`, `prefer`, `allow`, `disable`) and optional CA certificate.
+- **Microsoft SQL Server** — via `pyodbc` with any installed MSSQL ODBC driver (tested with "ODBC Driver 17/18 for SQL Server"). Supports both SQL Server Authentication and Windows Authentication, with configurable Encrypt and TrustServerCertificate settings.
 - **SQLite** — by selecting a `.db`, `.sqlite`, or `.sqlite3` file on disk.
 
 ### Connection management
-Connections are saved by name into Windows Credential Manager and can be reused across sessions. Each connection stores its type (`Oracle`, `OracleDB`, `PostgreSQL`, `SQLite`) and all required parameters. Connection names must not contain underscores (used internally as separators in credential key names).
+Connections are saved by name into Windows Credential Manager and can be reused across sessions. Each connection stores its type (`Oracle`, `OracleDB`, `PostgreSQL`, `MSSQL`, `SQLite`) and all required parameters. Connection names must not contain underscores (used internally as separators in credential key names).
 
 From the **Connection** menu you can:
 - **Connect with Existing** — pick a previously saved connection from the list.
@@ -26,13 +27,13 @@ From the **Connection** menu you can:
 ### Database object explorer (left panel)
 A tree view that loads the schema structure of the connected database. Expanding a schema lazy-loads its contents. Supported object types depend on the database engine:
 
-| Object type        | Oracle | OracleDB | PostgreSQL | SQLite |
-|--------------------|:------:|:--------:|:----------:|:------:|
-| Tables             | ✓     | ✓        | ✓          | ✓      |
-| Views              | ✓     | ✓        | ✓          | ✗      |
-| Stored procedures  | ✓     | ✓        | ✓          | ✗      |
-| Stored functions   | ✓     | ✓        | ✓          | ✗      |
-| Packages           | ✓     | ✓        | ✗          | ✗      |
+| Object type        | Oracle | OracleDB | PostgreSQL | SQL Server | SQLite |
+|--------------------|:------:|:--------:|:----------:|:----------:|:------:|
+| Tables             | ✓     | ✓        | ✓          | ✓          | ✓      |
+| Views              | ✓     | ✓        | ✓          | ✓          | ✗      |
+| Stored procedures  | ✓     | ✓        | ✓          | ✓          | ✗      |
+| Stored functions   | ✓     | ✓        | ✓          | ✓          | ✗      |
+| Packages           | ✓     | ✓        | ✗          | ✗          | ✗      |
 
 Right-clicking on a tree node opens a context menu with actions relevant to that object type, such as viewing data, structure, keys, indexes, triggers, procedure/function/package source, view query, view dependencies, or view comment.
 
@@ -71,8 +72,8 @@ Shows the current connection name and database type, or "Not connected" when idl
 | `SQLText.py`           | Custom `tkinter.Text` subclass that adds SQL syntax highlighting, keyboard shortcuts (comment/uncomment, indent, auto-indent), and undo/redo support. Used as the editor widget inside each SQL tab. |
 | `connection.py`        | `DBConnection` class — holds the active connection object and provides `connect_*` factory methods for each database type. Also has `get_queries_instance()` which returns the right `Queries` subclass based on the connection type. |
 | `ConnectionManager.py` | `ConnectionManager` class — bridges the GUI and the credential store. Reads saved credentials via `connstr_generator`, builds the appropriate connection, updates the status bar, and triggers the tree reload. Also handles disconnect and credential deletion. |
-| `connstr_generator.py` | All interactions with Windows Credential Manager (`win32cred`). Provides `save_*` functions to persist connection parameters, `get_*` functions to retrieve them, `get_all_connection_names()` to list saved connections, `get_connection_type()` to detect the database engine, and `delete_connection_credentials()` to remove all keys for a given connection. The credential key naming convention is `DBExp_{connection_name}_{FIELD}`. |
-| `QueryManager.py`      | Abstract `Queries` base class and three concrete implementations: `QueriesOracle`, `QueriesSQLite`, `QueriesPostgreSQL`. Each implements the same set of SQL queries adapted to the engine's system catalog (e.g. `ALL_TABLES` for Oracle, `sqlite_master` for SQLite, `information_schema` for PostgreSQL). Also contains `QueryManager`, which executes a query against the active connection and returns columns + rows. |
+| `connstr_generator.py` | All interactions with Windows Credential Manager (`win32cred`). Provides `save_*` functions to persist connection parameters, `get_*` functions to retrieve them, `get_all_connection_names()` to list saved connections, `get_connection_type()` to detect the database engine, and `delete_connection_credentials()` to remove all keys for a given connection. The credential key naming convention is `DBExp_{connection_name}_{FIELD}`. Supports Oracle, OracleDB, PostgreSQL, SQL Server (`MSSQL`), and SQLite. |
+| `QueryManager.py`      | Abstract `Queries` base class and four concrete implementations: `QueriesOracle`, `QueriesSQLite`, `QueriesPostgreSQL`, `QueriesMSSQL`. Each implements the same set of SQL queries adapted to the engine's system catalog (e.g. `ALL_TABLES` for Oracle, `sqlite_master` for SQLite, `information_schema` for PostgreSQL, `sys.*` catalog views for SQL Server). Also contains `QueryManager`, which executes a query against the active connection and returns columns + rows. |
 | `make_exe.ps1`         | PowerShell one-liner that packages the application into a standalone Windows executable using PyInstaller (`--onefile --windowed`), with `win32timezone` included as a hidden import (required by `pywin32`). |
 
 ---
@@ -94,7 +95,7 @@ Utility scripts for development and troubleshooting. They are **not** needed to 
 
 | Package                 | Purpose                                                     |
 |-------------------------|-------------------------------------------------------------|
-| `pyodbc`                | Oracle connections via ODBC driver                          |
+| `pyodbc`                | Oracle connections via ODBC driver; SQL Server connections  |
 | `oracledb`              | Oracle connections in thin mode (no Oracle Client required) |
 | `psycopg2-binary`       | PostgreSQL connections                                      |
 | `pywin32` (`win32cred`) | Windows Credential Manager access                           |
@@ -104,6 +105,8 @@ Install all at once:
 ```
 pip install pyodbc oracledb psycopg2-binary pywin32
 ```
+
+> **SQL Server ODBC driver:** the application defaults to `{ODBC Driver 17 for SQL Server}`. You can select a different driver (e.g. version 18) directly in the "New Connection" dialog. Download the driver from Microsoft if it is not already installed.
 
 > **Oracle ODBC driver:** the application is hardcoded to use the driver named `{Oracle dans OraClient19Home1}`. If your Oracle Client installation uses a different driver name, update `save_odbc_user_credentials()` in `connstr_generator.py`.
 
@@ -135,6 +138,7 @@ from connstr_generator import (
     save_oracledb_connection,
     save_postgresql_connection,
     save_sqlite_connection,
+    save_mssql_connection,
 )
 
 # Oracle via ODBC
@@ -146,6 +150,20 @@ save_oracledb_connection("myoracledb", host="localhost", port=1521, sid="ORCL", 
 # PostgreSQL
 save_postgresql_connection("mypg", host="localhost", port=5432, database="mydb",
                            user="postgres", password="secret", sslmode="require")
+
+# SQL Server — SQL Server Authentication
+save_mssql_connection("mssqldev", host="localhost", port=1433, database="AdventureWorks",
+                      user="sa", password="secret",
+                      auth_type="SQL",
+                      driver="{ODBC Driver 17 for SQL Server}",
+                      encrypt="yes", trust_server_cert="yes")
+
+# SQL Server — Windows Authentication (user/password left empty)
+save_mssql_connection("mssqlwin", host="MYSERVER", port=1433, database="AdventureWorks",
+                      user="", password="",
+                      auth_type="Windows",
+                      driver="{ODBC Driver 17 for SQL Server}",
+                      encrypt="yes", trust_server_cert="yes")
 
 # SQLite
 save_sqlite_connection("mydb", db_path=r"C:\data\mydb.sqlite3")

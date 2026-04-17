@@ -931,7 +931,7 @@ class SQLQueryEditorPanel:
         conn_type = self.get_connection_type()
 
         if conn_type == "Oracle" or conn_type == "OracleDB":
-            clause = f"WHERE ROWNUM <= {limit}"
+            clause = f"FETCH FIRST {limit} ROWS ONLY"
         elif conn_type == "PostgreSQL":
             clause = f"LIMIT {limit}"
         elif conn_type == "SQLite":
