@@ -1,5 +1,6 @@
 import sys
-from typing import List, Dict, Optional
+import os
+from typing import List, Dict, Optional, Callable
 
 ROOT_NAME = "DBExp"
 
@@ -10,25 +11,132 @@ else:
     win32cred = None
 
 class ConnectionStringGenerator:
-    def __init__(self):
-        pass
+    def __init__(self, use_env_vars: bool = True):
+        self.use_env_vars = use_env_vars
+        # Initialize environment variable storage if needed
+        if self.use_env_vars:
+            self._init_env_storage()
 
-    def get_conn_string(self, connection_name: str, use_root_name: bool = True):
-        if not type(connection_name) == str:
-            raise ValueError(f"connection_name '{connection_name}' is not of type str")
+    def _init_env_storage(self):
+        """Initialize environment variable storage file if it doesn't exist"""
+        if sys.platform == 'win32':
+            self.env_file = os.path.expanduser('~\\.dbexp_env')
+        else:  # Linux/Mac
+            self.env_file = os.path.expanduser('~/.dbexp_env')
 
-        def get_cred(name: str) -> str:
+        # Create file if it doesn't exist
+        if not os.path.exists(self.env_file):
+            with open(self.env_file, 'w') as f:
+                f.write("# DBExp Environment Variables\n")
+
+    def _load_env_vars(self):
+        """Load environment variables from storage file"""
+        env_vars = {}
+        if os.path.exists(self.env_file):
+            with open(self.env_file, 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith('#'):
+                        try:
+                            key, value = line.split('=', 1)
+                            env_vars[key] = value
+                        except ValueError:
+                            continue
+        return env_vars
+
+    def _save_env_var(self, name: str, value: str):
+        """Save an environment variable to storage file"""
+        env_vars = self._load_env_vars()
+        env_vars[name] = value
+
+        with open(self.env_file, 'w') as f:
+            f.write("# DBExp Environment Variables\n")
+            for key, val in env_vars.items():
+                f.write(f"{key}={val}\n")
+
+    def _get_env_var(self, name: str) -> Optional[str]:
+        """Get an environment variable from storage"""
+        env_vars = self._load_env_vars()
+        return env_vars.get(name)
+
+    def _delete_env_var(self, name: str):
+        """Delete an environment variable from storage"""
+        env_vars = self._load_env_vars()
+        if name in env_vars:
+            del env_vars[name]
+
+            with open(self.env_file, 'w') as f:
+                f.write("# DBExp Environment Variables\n")
+                for key, val in env_vars.items():
+                    f.write(f"{key}={val}\n")
+
+    def _get_cred_func(self) -> Callable[[str], Optional[str]]:
+        """Return the appropriate credential getter function based on storage method"""
+        if self.use_env_vars:
+            return self._get_env_var
+        else:
+            if win32cred is None:
+                raise Exception("Windows Credential Manager is only available on Windows systems")
+
+            def get_cred(name: str) -> Optional[str]:
+                try:
+                    cred = win32cred.CredRead(name, win32cred.CRED_TYPE_GENERIC, 0)
+                    return cred["CredentialBlob"].decode("utf-16")
+                except Exception as e:
+                    print(f"Error with name '{name}': {str(e)}")
+                    return None
+            return get_cred
+
+    def _save_cred(self, name: str, value: str):
+        """Save a credential using the appropriate storage method"""
+        if self.use_env_vars:
+            self._save_env_var(name, value)
+        else:
+            if win32cred is None:
+                raise Exception("Windows Credential Manager is only available on Windows systems")
+
+            try:
+                credential = {
+                    "TargetName": name,
+                    "Type": win32cred.CRED_TYPE_GENERIC,
+                    "CredentialBlob": value,
+                    "Persist": win32cred.CRED_PERSIST_LOCAL_MACHINE,
+                }
+                win32cred.CredWrite(credential, 0)
+            except Exception as e:
+                raise Exception(f"Failed to save credential '{name}': {str(e)}")
+
+    def _delete_cred(self, name: str):
+        """Delete a credential using the appropriate storage method"""
+        if self.use_env_vars:
+            self._delete_env_var(name)
+        else:
+            if win32cred is None:
+                raise Exception("Windows Credential Manager is only available on Windows systems")
+
             try:
                 cred = win32cred.CredRead(name, win32cred.CRED_TYPE_GENERIC, 0)
+                if cred:
+                    win32cred.CredDelete(name, win32cred.CRED_TYPE_GENERIC, 0)
             except Exception as e:
-                print(f"Error with name '{name}': {str(e)}")
-                return None
-            return cred["CredentialBlob"].decode("utf-16")
+                if "not found" not in str(e).lower():
+                    pass
 
-        if use_root_name:
-            root_name = f"{ROOT_NAME}_"
-        else:
-            root_name = ""
+    def _validate_connection_name(self, connection_name: str):
+        """Validate connection name doesn't contain underscores"""
+        if not type(connection_name) == str:
+            raise ValueError(f"connection_name '{connection_name}' is not of type str")
+        if "_" in connection_name:
+            raise ValueError("Underscores are not allowed in connection names")
+
+    def _get_root_name(self, use_root_name: bool) -> str:
+        """Get the root name prefix based on settings"""
+        return f"{ROOT_NAME}_" if use_root_name else ""
+
+    def get_conn_string(self, connection_name: str, use_root_name: bool = True):
+        self._validate_connection_name(connection_name)
+        get_cred = self._get_cred_func()
+        root_name = self._get_root_name(use_root_name)
 
         driver   = get_cred(f"{root_name}{connection_name}_DRIVER")
         server   = get_cred(f"{root_name}{connection_name}_SERVER")
@@ -37,185 +145,107 @@ class ConnectionStringGenerator:
         uid      = get_cred(f"{root_name}{connection_name}_UID")
         pwd      = get_cred(f"{root_name}{connection_name}_PWD")
 
-        connString = f"\
-DRIVER={driver};\
-SERVER={server};\
-Database={database};\
-DBQ={dbq};\
-UID={uid};\
-PWD={pwd}"
-
-        return connString
+        return f"DRIVER={driver};SERVER={server};Database={database};DBQ={dbq};UID={uid};PWD={pwd}"
 
     def save_in_win_cred(self, name: str, value: str):
-        """Save credential to Windows Credential Manager"""
-        if win32cred is None:
-            raise Exception("Windows Credential Manager is only available on Windows systems")
+        """Save credential using the appropriate storage method"""
+        self._save_cred(name, value)
 
-        try:
-            credential = {
-                "TargetName": name,
-                "Type": win32cred.CRED_TYPE_GENERIC,
-                "CredentialBlob": value,  # <-- MUST be str, not bytes
-                "Persist": win32cred.CRED_PERSIST_LOCAL_MACHINE,
-            }
+    def _save_connection_params(self, connection_name: str, params: Dict[str, str], use_root_name: bool = True):
+        """Generic method to save connection parameters"""
+        self._validate_connection_name(connection_name)
+        root_name = self._get_root_name(use_root_name)
 
-            win32cred.CredWrite(credential, 0)
-
-        except Exception as e:
-            raise Exception(f"Failed to save credential '{name}': {str(e)}")
+        for key, value in params.items():
+            self._save_cred(f"{root_name}{connection_name}_{key}", value)
 
     def save_sqlite_connection(self, connection_name: str, db_path: str, use_root_name: bool = True):
-        """Save SQLite connection to Windows Credential Manager"""
-        if win32cred is None:
-            raise Exception("Windows Credential Manager is only available on Windows systems")
-
-        if "_" in connection_name:
-            raise ValueError("Underscores are not allowed in connection names")
-
-        if use_root_name:
-            root_name = f"{ROOT_NAME}_"
-        else:
-            root_name = ""
-
-        # Save SQLite connection parameters
-        self.save_in_win_cred(f"{root_name}{connection_name}_DBTYPE", "SQLite")
-        self.save_in_win_cred(f"{root_name}{connection_name}_DBPATH", db_path)
+        """Save SQLite connection parameters"""
+        self._save_connection_params(
+            connection_name,
+            {"DBTYPE": "SQLite", "DBPATH": db_path},
+            use_root_name
+        )
 
     def save_postgresql_connection(self, connection_name: str, host: str, port: int, database: str,
                                    user: str, password: str, sslmode: str = "require",
                                    sslrootcert: str = "", use_root_name: bool = True):
-        """Save PostgreSQL connection to Windows Credential Manager"""
-        if win32cred is None:
-            raise Exception("Windows Credential Manager is only available on Windows systems")
-
-        if "_" in connection_name:
-            raise ValueError("Underscores are not allowed in connection names")
-
-        if use_root_name:
-            root_name = f"{ROOT_NAME}_"
-        else:
-            root_name = ""
-
-        self.save_in_win_cred(f"{root_name}{connection_name}_DBTYPE",      "PostgreSQL")
-        self.save_in_win_cred(f"{root_name}{connection_name}_HOST",        host)
-        self.save_in_win_cred(f"{root_name}{connection_name}_PORT",        str(port))
-        self.save_in_win_cred(f"{root_name}{connection_name}_DATABASE",    database)
-        self.save_in_win_cred(f"{root_name}{connection_name}_UID",         user)
-        self.save_in_win_cred(f"{root_name}{connection_name}_PWD",         password)
-        self.save_in_win_cred(f"{root_name}{connection_name}_SSLMODE",     sslmode or "require")
-        self.save_in_win_cred(f"{root_name}{connection_name}_SSLROOTCERT", sslrootcert or "")
+        """Save PostgreSQL connection parameters"""
+        self._save_connection_params(
+            connection_name,
+            {
+                "DBTYPE": "PostgreSQL",
+                "HOST": host,
+                "PORT": str(port),
+                "DATABASE": database,
+                "UID": user,
+                "PWD": password,
+                "SSLMODE": sslmode or "require",
+                "SSLROOTCERT": sslrootcert or ""
+            },
+            use_root_name
+        )
 
     def get_postgresql_conn_params(self, connection_name: str, use_root_name: bool = True) -> dict:
-        """Get PostgreSQL connection parameters from Windows Credential Manager"""
-        if win32cred is None:
-            raise Exception("Windows Credential Manager is only available on Windows systems")
-
-        if not type(connection_name) == str:
-            raise ValueError(f"connection_name '{connection_name}' is not of type str")
-
-        def get_cred(name: str) -> str:
-            try:
-                cred = win32cred.CredRead(name, win32cred.CRED_TYPE_GENERIC, 0)
-            except Exception as e:
-                print(f"Error with name '{name}': {str(e)}")
-                return None
-            return cred["CredentialBlob"].decode("utf-16")
-
-        if use_root_name:
-            root_name = f"{ROOT_NAME}_"
-        else:
-            root_name = ""
+        """Get PostgreSQL connection parameters"""
+        self._validate_connection_name(connection_name)
+        get_cred = self._get_cred_func()
+        root_name = self._get_root_name(use_root_name)
 
         db_type = get_cred(f"{root_name}{connection_name}_DBTYPE")
         if db_type != "PostgreSQL":
             raise ValueError(f"Not a PostgreSQL connection (DBTYPE={db_type})")
 
         return {
-            "host":        get_cred(f"{root_name}{connection_name}_HOST"),
-            "port":        get_cred(f"{root_name}{connection_name}_PORT") or "5432",
-            "database":    get_cred(f"{root_name}{connection_name}_DATABASE"),
-            "user":        get_cred(f"{root_name}{connection_name}_UID"),
-            "password":    get_cred(f"{root_name}{connection_name}_PWD"),
-            "sslmode":     get_cred(f"{root_name}{connection_name}_SSLMODE") or "require",
+            "host": get_cred(f"{root_name}{connection_name}_HOST"),
+            "port": get_cred(f"{root_name}{connection_name}_PORT") or "5432",
+            "database": get_cred(f"{root_name}{connection_name}_DATABASE"),
+            "user": get_cred(f"{root_name}{connection_name}_UID"),
+            "password": get_cred(f"{root_name}{connection_name}_PWD"),
+            "sslmode": get_cred(f"{root_name}{connection_name}_SSLMODE") or "require",
             "sslrootcert": get_cred(f"{root_name}{connection_name}_SSLROOTCERT") or "",
         }
 
     def save_oracledb_connection(self, connection_name: str, host: str, port: int,
                                  sid: str, user: str, password: str,
                                  use_root_name: bool = True):
-        """Save an oracledb (thin/thick) connection to Windows Credential Manager."""
-        if win32cred is None:
-            raise Exception("Windows Credential Manager is only available on Windows systems")
-
-        if "_" in connection_name:
-            raise ValueError("Underscores are not allowed in connection names")
-
-        if use_root_name:
-            root_name = f"{ROOT_NAME}_"
-        else:
-            root_name = ""
-
-        self.save_in_win_cred(f"{root_name}{connection_name}_DBTYPE",   "OracleDB")
-        self.save_in_win_cred(f"{root_name}{connection_name}_HOST",     host)
-        self.save_in_win_cred(f"{root_name}{connection_name}_PORT",     str(port))
-        self.save_in_win_cred(f"{root_name}{connection_name}_SID",      sid)
-        self.save_in_win_cred(f"{root_name}{connection_name}_UID",      user)
-        self.save_in_win_cred(f"{root_name}{connection_name}_PWD",      password)
+        """Save OracleDB connection parameters"""
+        self._save_connection_params(
+            connection_name,
+            {
+                "DBTYPE": "OracleDB",
+                "HOST": host,
+                "PORT": str(port),
+                "SID": sid,
+                "UID": user,
+                "PWD": password
+            },
+            use_root_name
+        )
 
     def get_oracledb_conn_params(self, connection_name: str, use_root_name: bool = True) -> dict:
-        """Get oracledb connection parameters from Windows Credential Manager."""
-        if win32cred is None:
-            raise Exception("Windows Credential Manager is only available on Windows systems")
-
-        if not type(connection_name) == str:
-            raise ValueError(f"connection_name '{connection_name}' is not of type str")
-
-        def get_cred(name: str) -> str:
-            try:
-                cred = win32cred.CredRead(name, win32cred.CRED_TYPE_GENERIC, 0)
-            except Exception as e:
-                print(f"Error with name '{name}': {str(e)}")
-                return None
-            return cred["CredentialBlob"].decode("utf-16")
-
-        if use_root_name:
-            root_name = f"{ROOT_NAME}_"
-        else:
-            root_name = ""
+        """Get OracleDB connection parameters"""
+        self._validate_connection_name(connection_name)
+        get_cred = self._get_cred_func()
+        root_name = self._get_root_name(use_root_name)
 
         db_type = get_cred(f"{root_name}{connection_name}_DBTYPE")
         if db_type != "OracleDB":
             raise ValueError(f"Not an OracleDB connection (DBTYPE={db_type})")
 
         return {
-            "host":     get_cred(f"{root_name}{connection_name}_HOST"),
-            "port":     get_cred(f"{root_name}{connection_name}_PORT") or "1521",
-            "sid":      get_cred(f"{root_name}{connection_name}_SID"),
-            "user":     get_cred(f"{root_name}{connection_name}_UID"),
+            "host": get_cred(f"{root_name}{connection_name}_HOST"),
+            "port": get_cred(f"{root_name}{connection_name}_PORT") or "1521",
+            "sid": get_cred(f"{root_name}{connection_name}_SID"),
+            "user": get_cred(f"{root_name}{connection_name}_UID"),
             "password": get_cred(f"{root_name}{connection_name}_PWD"),
         }
 
     def get_sqlite_conn_string(self, connection_name: str, use_root_name: bool = True):
-        """Get SQLite database path from Windows Credential Manager"""
-        if win32cred is None:
-            raise Exception("Windows Credential Manager is only available on Windows systems")
-
-        if not type(connection_name) == str:
-            raise ValueError(f"connection_name '{connection_name}' is not of type str")
-
-        def get_cred(name: str) -> str:
-            try:
-                cred = win32cred.CredRead(name, win32cred.CRED_TYPE_GENERIC, 0)
-            except Exception as e:
-                print(f"Error with name '{name}': {str(e)}")
-                return None
-            return cred["CredentialBlob"].decode("utf-16")
-
-        if use_root_name:
-            root_name = f"{ROOT_NAME}_"
-        else:
-            root_name = ""
+        """Get SQLite database path"""
+        self._validate_connection_name(connection_name)
+        get_cred = self._get_cred_func()
+        root_name = self._get_root_name(use_root_name)
 
         db_type = get_cred(f"{root_name}{connection_name}_DBTYPE")
         db_path = get_cred(f"{root_name}{connection_name}_DBPATH")
@@ -232,255 +262,170 @@ PWD={pwd}"
                               encrypt: str = "yes",
                               trust_server_cert: str = "yes",
                               use_root_name: bool = True):
-        """Save a Microsoft SQL Server connection to Windows Credential Manager.
-
-        auth_type: "SQL" for SQL Server Authentication, "Windows" for Windows Auth.
-        When using Windows Auth, user and password may be left empty.
-        """
-        if win32cred is None:
-            raise Exception("Windows Credential Manager is only available on Windows systems")
-
-        if "_" in connection_name:
-            raise ValueError("Underscores are not allowed in connection names")
-
-        if use_root_name:
-            root_name = f"{ROOT_NAME}_"
-        else:
-            root_name = ""
-
-        self.save_in_win_cred(f"{root_name}{connection_name}_DBTYPE",          "MSSQL")
-        self.save_in_win_cred(f"{root_name}{connection_name}_HOST",            host)
-        self.save_in_win_cred(f"{root_name}{connection_name}_PORT",            str(port))
-        self.save_in_win_cred(f"{root_name}{connection_name}_DATABASE",        database)
-        self.save_in_win_cred(f"{root_name}{connection_name}_UID",             user or "")
-        self.save_in_win_cred(f"{root_name}{connection_name}_PWD",             password or "")
-        self.save_in_win_cred(f"{root_name}{connection_name}_AUTHTYPE",        auth_type)
-        self.save_in_win_cred(f"{root_name}{connection_name}_DRIVER",          driver)
-        self.save_in_win_cred(f"{root_name}{connection_name}_ENCRYPT",         encrypt)
-        self.save_in_win_cred(f"{root_name}{connection_name}_TRUSTSERVERCERT", trust_server_cert)
+        """Save MSSQL connection parameters"""
+        self._save_connection_params(
+            connection_name,
+            {
+                "DBTYPE": "MSSQL",
+                "HOST": host,
+                "PORT": str(port),
+                "DATABASE": database,
+                "UID": user or "",
+                "PWD": password or "",
+                "AUTHTYPE": auth_type,
+                "DRIVER": driver,
+                "ENCRYPT": encrypt,
+                "TRUSTSERVERCERT": trust_server_cert
+            },
+            use_root_name
+        )
 
     def get_mssql_conn_params(self, connection_name: str, use_root_name: bool = True) -> dict:
-        """Get Microsoft SQL Server connection parameters from Windows Credential Manager."""
-        if win32cred is None:
-            raise Exception("Windows Credential Manager is only available on Windows systems")
-
-        if not type(connection_name) == str:
-            raise ValueError(f"connection_name '{connection_name}' is not of type str")
-
-        def get_cred(name: str) -> str:
-            try:
-                cred = win32cred.CredRead(name, win32cred.CRED_TYPE_GENERIC, 0)
-            except Exception as e:
-                print(f"Error with name '{name}': {str(e)}")
-                return None
-            return cred["CredentialBlob"].decode("utf-16")
-
-        if use_root_name:
-            root_name = f"{ROOT_NAME}_"
-        else:
-            root_name = ""
+        """Get MSSQL connection parameters"""
+        self._validate_connection_name(connection_name)
+        get_cred = self._get_cred_func()
+        root_name = self._get_root_name(use_root_name)
 
         db_type = get_cred(f"{root_name}{connection_name}_DBTYPE")
         if db_type != "MSSQL":
             raise ValueError(f"Not a MSSQL connection (DBTYPE={db_type})")
 
         return {
-            "host":             get_cred(f"{root_name}{connection_name}_HOST"),
-            "port":             get_cred(f"{root_name}{connection_name}_PORT") or "1433",
-            "database":         get_cred(f"{root_name}{connection_name}_DATABASE"),
-            "user":             get_cred(f"{root_name}{connection_name}_UID") or "",
-            "password":         get_cred(f"{root_name}{connection_name}_PWD") or "",
-            "auth_type":        get_cred(f"{root_name}{connection_name}_AUTHTYPE") or "SQL",
-            "driver":           get_cred(f"{root_name}{connection_name}_DRIVER") or "{ODBC Driver 17 for SQL Server}",
-            "encrypt":          get_cred(f"{root_name}{connection_name}_ENCRYPT") or "yes",
-            "trust_server_cert":get_cred(f"{root_name}{connection_name}_TRUSTSERVERCERT") or "yes",
+            "host": get_cred(f"{root_name}{connection_name}_HOST"),
+            "port": get_cred(f"{root_name}{connection_name}_PORT") or "1433",
+            "database": get_cred(f"{root_name}{connection_name}_DATABASE"),
+            "user": get_cred(f"{root_name}{connection_name}_UID") or "",
+            "password": get_cred(f"{root_name}{connection_name}_PWD") or "",
+            "auth_type": get_cred(f"{root_name}{connection_name}_AUTHTYPE") or "SQL",
+            "driver": get_cred(f"{root_name}{connection_name}_DRIVER") or "{ODBC Driver 17 for SQL Server}",
+            "encrypt": get_cred(f"{root_name}{connection_name}_ENCRYPT") or "yes",
+            "trust_server_cert": get_cred(f"{root_name}{connection_name}_TRUSTSERVERCERT") or "yes",
         }
 
-    def save_oracle_odbc_user_credentials(self, connection_name: str, host: str ,user: str, password: str, use_root_name: bool = True):
-        if win32cred is None:
-            raise Exception("Windows Credential Manager is only available on Windows systems")
-
-        self.save_odbc_connection_credentials(driver          = "{Oracle dans OraClient19Home1}",
-                                             connection_name = connection_name,
-                                             host            = host,
-                                             user            = user,
-                                             password        = password,
-                                             use_root_name   = use_root_name)
+    def save_oracle_odbc_user_credentials(self, connection_name: str, host: str, user: str, password: str, use_root_name: bool = True):
+        self.save_odbc_connection_credentials(
+            driver="{Oracle dans OraClient19Home1}",
+            connection_name=connection_name,
+            host=host,
+            user=user,
+            password=password,
+            use_root_name=use_root_name
+        )
 
     def save_odbc_connection_credentials(self, driver: str, connection_name: str, host: str, user: str, password: str, use_root_name: bool = True):
-        """Save connection credentials to Windows Credential Manager"""
-        if win32cred is None:
-            raise Exception("Windows Credential Manager is only available on Windows systems")
-
-        if "_" in connection_name:
-            raise ValueError("Underscores are not allowed in connection names")
-
-        if use_root_name:
-            root_name = f"{ROOT_NAME}_"
-        else:
-            root_name = ""
-
-        # Save all connection parameters
-        self.save_in_win_cred(f"{root_name}{connection_name}_DBTYPE", "Oracle")  # Add this line
-        self.save_in_win_cred(f"{root_name}{connection_name}_DRIVER", driver)
-        self.save_in_win_cred(f"{root_name}{connection_name}_SERVER", host)
-        self.save_in_win_cred(f"{root_name}{connection_name}_Database", host)  # For Oracle, database is often the same as server
-        self.save_in_win_cred(f"{root_name}{connection_name}_DBQ", host)       # DBQ is often the same as server for Oracle
-        self.save_in_win_cred(f"{root_name}{connection_name}_UID", user)
-        self.save_in_win_cred(f"{root_name}{connection_name}_PWD", password)
+        """Save ODBC connection credentials"""
+        self._save_connection_params(
+            connection_name,
+            {
+                "DBTYPE": "Oracle",
+                "DRIVER": driver,
+                "SERVER": host,
+                "Database": host,
+                "DBQ": host,
+                "UID": user,
+                "PWD": password
+            },
+            use_root_name
+        )
 
     def find_credentials_starting_with(self, prefix: str) -> List[Dict]:
         """Find all credentials whose TargetName starts with the given prefix"""
-        if win32cred is None:
-            raise Exception("Windows Credential Manager is only available on Windows systems")
+        if self.use_env_vars:
+            all_vars = self._load_env_vars()
+            return [
+                {"TargetName": key, "CredentialBlob": val.encode("utf-16")}
+                for key, val in all_vars.items()
+                if key.startswith(prefix)
+            ]
+        else:
+            if win32cred is None:
+                raise Exception("Windows Credential Manager is only available on Windows systems")
 
-        try:
-            # Use the prefix with wildcard
-            filter_string = f"{prefix}*"
-            creds = win32cred.CredEnumerate(filter_string, 0)
-            return creds
-        except Exception as e:
-            # No credentials found matching the filter
-            print(f"No credentials found starting with '{prefix}': {e}")
-            return []
+            try:
+                filter_string = f"{prefix}*"
+                return win32cred.CredEnumerate(filter_string, 0)
+            except Exception as e:
+                print(f"No credentials found starting with '{prefix}': {e}")
+                return []
 
     def parse_credential_name(self, target_name: str) -> Optional[str]:
-        """
-        Parse a credential target name to extract the connection name.
-        Credential names follow the pattern: {ROOT_NAME}_{connection_name}_{TYPE}
-        """
-        if win32cred is None:
-            raise Exception("Windows Credential Manager is only available on Windows systems")
-
+        """Parse a credential target name to extract the connection name"""
         if not target_name.startswith(f"{ROOT_NAME}_"):
             return None
 
-        # Remove the DBExp_ prefix
         parts = target_name.split('_')
-
-        if len(parts) == 3:
-            return parts[1]
-
-        return None
+        return parts[1] if len(parts) == 3 else None
 
     def get_all_connection_names(self) -> List[str]:
-        """Get a list of all connection names from Windows Credential Manager"""
-        if win32cred is None:
-            raise Exception("Windows Credential Manager is only available on Windows systems")
+        """Get a list of all connection names"""
+        if self.use_env_vars:
+            all_vars = self._load_env_vars()
+            unique_names = {
+                self.parse_credential_name(key)
+                for key in all_vars
+                if self.parse_credential_name(key)
+            }
+            return sorted(unique_names)
+        else:
+            if win32cred is None:
+                raise Exception("Windows Credential Manager is only available on Windows systems")
 
-        connections = []
-        try:
-            creds = self.find_credentials_starting_with(f"{ROOT_NAME}_")
-
-            # Use a set to avoid duplicates
-            unique_names = set()
-
-            for cred in creds:
-                name = self.parse_credential_name(cred["TargetName"])
-                if name and name not in unique_names:
-                    unique_names.add(name)
-
-            return sorted(list(unique_names))
-        except Exception as e:
-            print(f"Error getting connection names: {str(e)}")
-            return []
+            try:
+                creds = self.find_credentials_starting_with(f"{ROOT_NAME}_")
+                unique_names = {
+                    self.parse_credential_name(cred["TargetName"])
+                    for cred in creds
+                    if self.parse_credential_name(cred["TargetName"])
+                }
+                return sorted(unique_names)
+            except Exception as e:
+                print(f"Error getting connection names: {str(e)}")
+                return []
 
     def delete_connection_credentials(self, connection_name: str):
-        """Delete connection credentials from Windows Credential Manager"""
-        if win32cred is None:
-            raise Exception("Windows Credential Manager is only available on Windows systems")
-
-        def delete_cred(name: str):
-            """Delete credential from Windows Credential Manager"""
-            try:
-                # First try to read the credential to verify it exists
-                cred = win32cred.CredRead(name, win32cred.CRED_TYPE_GENERIC, 0)
-                if cred:
-                    win32cred.CredDelete(name, win32cred.CRED_TYPE_GENERIC, 0)
-            except Exception as e:
-                # If credential doesn't exist, that's fine
-                if "not found" not in str(e).lower():
-                    pass
-                    # raise Exception(f"Failed to delete credential '{name}': {str(e)}")
-
+        """Delete connection credentials"""
+        self._validate_connection_name(connection_name)
         prefix = f"{ROOT_NAME}_{connection_name}"
 
-        # Oracle credentials
-        delete_cred(f"{prefix}_DRIVER")
-        delete_cred(f"{prefix}_SERVER")
-        delete_cred(f"{prefix}_Database")
-        delete_cred(f"{prefix}_DBQ")
+        # List of all possible credential types to delete
+        cred_types = [
+            "DRIVER", "SERVER", "Database", "DBQ", "DBPATH",
+            "HOST", "PORT", "DATABASE", "SID", "UID", "PWD",
+            "SSLMODE", "SSLROOTCERT", "AUTHTYPE", "ENCRYPT",
+            "TRUSTSERVERCERT", "DBTYPE"
+        ]
 
-        # SQLite credentials
-        delete_cred(f"{prefix}_DBPATH")
-
-        # PostgreSQL credentials
-        delete_cred(f"{prefix}_HOST")
-        delete_cred(f"{prefix}_PORT")
-        delete_cred(f"{prefix}_DATABASE")
-        delete_cred(f"{prefix}_SSLMODE")
-        delete_cred(f"{prefix}_SSLROOTCERT")
-
-        # OracleDB credentials (host/port/sid shared with PostgreSQL host/port above)
-        delete_cred(f"{prefix}_SID")
-
-        # MSSQL credentials
-        delete_cred(f"{prefix}_AUTHTYPE")
-        delete_cred(f"{prefix}_ENCRYPT")
-        delete_cred(f"{prefix}_TRUSTSERVERCERT")
-
-        # Shared credentials (all types)
-        delete_cred(f"{prefix}_DBTYPE")
-        delete_cred(f"{prefix}_UID")
-        delete_cred(f"{prefix}_PWD")
+        for cred_type in cred_types:
+            self._delete_cred(f"{prefix}_{cred_type}")
 
     def get_connection_type(self, connection_name: str, use_root_name: bool = True):
-        """Get the type of connection (Oracle or SQLite)"""
-        if win32cred is None:
-            raise Exception("Windows Credential Manager is only available on Windows systems")
+        """Get the type of connection"""
+        self._validate_connection_name(connection_name)
+        get_cred = self._get_cred_func()
+        root_name = self._get_root_name(use_root_name)
 
-        if not type(connection_name) == str:
-            raise ValueError(f"connection_name '{connection_name}' is not of type str")
-
-        def get_cred(name: str) -> str:
-            try:
-                cred = win32cred.CredRead(name, win32cred.CRED_TYPE_GENERIC, 0)
-            except Exception as e:
-                print("WARNING", f"Error with name '{name}': {str(e)}")
-                return None
-            return cred["CredentialBlob"].decode("utf-16")
-
-        if use_root_name:
-            root_name = f"{ROOT_NAME}_"
-        else:
-            root_name = ""
-
-        # First try to get DBTYPE (most reliable method)
+        # Try to get DBTYPE first
         db_type = get_cred(f"{root_name}{connection_name}_DBTYPE")
         if db_type:
             return db_type
 
-        # Fallback: Check for Oracle-specific credentials
+        # Fallback checks
         driver = get_cred(f"{root_name}{connection_name}_DRIVER")
         if driver and "Oracle" in driver:
             return "Oracle"
 
-        # Fallback: Check for SQLite-specific credentials
         db_path = get_cred(f"{root_name}{connection_name}_DBPATH")
         if db_path:
             return "SQLite"
 
-        # Fallback: Check for OracleDB-specific credentials (SID without DRIVER)
         sid = get_cred(f"{root_name}{connection_name}_SID")
         pg_host = get_cred(f"{root_name}{connection_name}_HOST")
         if sid and pg_host:
             return "OracleDB"
 
-        # Fallback: Check for PostgreSQL-specific credentials
         if pg_host:
             return "PostgreSQL"
 
-        # Fallback: Check for MSSQL — requires DATABASE and no SID
         db_name = get_cred(f"{root_name}{connection_name}_DATABASE")
         if db_name:
             return "MSSQL"
