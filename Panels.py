@@ -1164,6 +1164,7 @@ class SQLQueryEditorPanel:
         self.query_result_panel = query_result_panel
         self.db_connection = db_connection
         self.query_manager = QueryManager(db_connection, query_result_panel)
+        self.tab_results = {}  # Store results for each tab
 
     def setup(self, parent, root, theme):
         """Panel 2: SQL Query Editor with tabs"""
@@ -1206,6 +1207,23 @@ class SQLQueryEditorPanel:
         self.root.bind('<F5>', lambda e: self.execute_query())
 
         self.sql_notebook.bind('<Button-2>', self.close_current_tab)
+        self.sql_notebook.bind("<<NotebookTabChanged>>", self.on_tab_changed)
+
+    def on_tab_changed(self, event):
+        """Handle tab change event to display the corresponding result"""
+        tab_id, info = self.get_current_sql_tab()
+        if tab_id and tab_id in self.tab_results:
+            result_data = self.tab_results[tab_id]
+            if result_data["type"] == "results":
+                self.query_result_panel.display_results(
+                    result_data["columns"],
+                    result_data["rows"],
+                    result_data["description"]
+                )
+            elif result_data["type"] == "message":
+                self.query_result_panel.display_message(result_data["message"])
+            elif result_data["type"] == "error":
+                self.query_result_panel.display_error(result_data["error"])
 
     def add_sql_helper_buttons(self, parent_frame):
         """Add buttons for inserting common SQL clauses"""
@@ -1685,9 +1703,62 @@ class SQLQueryEditorPanel:
         except tk.TclError:
             messagebox.showwarning("No Selection", "Please select SQL text to execute")
 
+
     def run_query(self, sql: str):
         """Execute SQL and display results"""
-        self.query_manager.run_query(sql)
+        result = self.query_manager.execute_query(sql)
+
+        # Get current tab
+        tab_id, info = self.get_current_sql_tab()
+        if not tab_id:
+            return
+
+        if result["success"]:
+            if "columns" in result:
+                # Store the result for this tab
+                self.tab_results[tab_id] = {
+                    "type": "results",
+                    "columns": result["columns"],
+                    "rows": result["rows"],
+                    "description": result["description"]
+                }
+                self.query_result_panel.display_results(
+                    result["columns"],
+                    result["rows"],
+                    result["description"],
+                )
+            else:
+                # Store the message for this tab
+                self.tab_results[tab_id] = {
+                    "type": "message",
+                    "message": result["message"]
+                }
+                self.query_result_panel.display_message(result["message"])
+        else:
+            # Store the error for this tab
+            self.tab_results[tab_id] = {
+                "type": "error",
+                "error": result["error"]
+            }
+            self.query_result_panel.display_error(result["error"])
+
+    def close_tab(self, tab_id):
+        """Close the specified tab"""
+        if tab_id in self.sql_files:
+            if self.sql_files[tab_id]["modified"]:
+                if not messagebox.askyesno("Unsaved Changes", "This file has unsaved changes. Close anyway?"):
+                    return
+            self.sql_notebook.forget(self.sql_files[tab_id]["frame"])
+            del self.sql_files[tab_id]
+
+            # Remove the result for this tab
+            if tab_id in self.tab_results:
+                del self.tab_results[tab_id]
+
+            # Clear the result panel if this was the current tab
+            current_tab = self.sql_notebook.select()
+            if not current_tab:
+                self.query_result_panel.display_message("No query results to display")
 
     def display_message(self, message: str):
         """Display message in result panel"""
