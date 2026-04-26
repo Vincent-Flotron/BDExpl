@@ -1343,8 +1343,15 @@ class SQLQueryEditorPanel:
 
         tree.update_idletasks()
 
-        close_button = ttk.Button(frame, text='×', command=lambda: self.close_result_tab(frame), style='Close.TButton')
-        close_button.pack(side=tk.RIGHT, padx=2, pady=2)
+        # Create close button with consistent positioning
+        close_button = ttk.Button(
+            frame,
+            text='×',
+            command=lambda: self.close_result_tab(frame),
+            style='Close.TButton',
+            width=2
+        )
+        close_button.place(relx=1.0, rely=0, anchor='ne', x=-23, y=8)
 
         self.sql_notebook.add(frame, text=title)
         self.sql_notebook.select(frame)
@@ -1483,13 +1490,18 @@ class SQLQueryEditorPanel:
         self.tab_counter += 1
         tab_id = f"tab_{self.tab_counter}"
 
-        frame = ttk.Frame(self.sql_notebook, style='TFrame')
+        # Create a frame to hold both the text widget and close button
+        main_frame = ttk.Frame(self.sql_notebook, style='TFrame')
 
-        text_scroll = ttk.Scrollbar(frame, style='TScrollbar')
+        # Create a container frame for the close button and text widget
+        content_frame = ttk.Frame(main_frame, style='TFrame')
+        content_frame.pack(fill=tk.BOTH, expand=True)
+
+        text_scroll = ttk.Scrollbar(content_frame, style='TScrollbar')
         text_scroll.pack(side=tk.RIGHT, fill=tk.Y)
 
         text_widget = SQLText(
-            frame,
+            content_frame,
             wrap=tk.NONE,
             yscrollcommand=text_scroll.set,
             undo=True,
@@ -1510,18 +1522,30 @@ class SQLQueryEditorPanel:
         # Focus the new text widget
         text_widget.focus_set()
 
-        # close_button = ttk.Button(frame, text='×', command=lambda: self.close_tab(tab_id), style='Close.TButton')
-        # close_button.pack(side=tk.RIGHT, padx=2, pady=2)
+        # Add close button to the main frame (not content frame)
+        close_btn = ttk.Button(
+            main_frame,
+            text='×',
+            command=lambda: self.close_tab(tab_id),
+            style='Close.TButton',
+            width=2
+        )
+        close_btn.place(relx=1.0, rely=0, anchor='ne', x=-17, y=2)
 
-        self.sql_notebook.add(frame, text=f"Untitled {self.tab_counter}")
-        self.sql_notebook.select(frame)
+        self.sql_notebook.add(main_frame, text=f"Untitled {self.tab_counter}")
+        self.sql_notebook.select(main_frame)
 
-        self.sql_files[tab_id] = {"path": None, "modified": False, "widget": text_widget, "frame": frame}
+        self.sql_files[tab_id] = {
+            "path": None,
+            "modified": False,
+            "widget": text_widget,
+            "frame": main_frame,
+            "content_frame": content_frame
+        }
 
         text_widget.bind('<<Modified>>', lambda e: self.mark_modified(tab_id))
 
         return tab_id
-
 
     def close_tab(self, tab_id):
         """Close the specified tab"""
