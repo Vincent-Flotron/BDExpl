@@ -1534,16 +1534,23 @@ class SQLQueryEditorPanel:
 
     def close_current_tab(self, event):
         """Close the current tab when middle mouse button is pressed"""
-        current_frame = self.sql_notebook.select()
-        if not current_frame:
+        # Get the tab index that was clicked on
+        tab_index = self.sql_notebook.index("@%d,%d" % (event.x, event.y))
+
+        if tab_index == "none":
             return
 
-        for tab_id, info in self.sql_files.items():
-            if str(info["frame"]) == current_frame:
-                self.close_tab(tab_id)
+        # Get the tab ID from the index
+        tab_id = self.sql_notebook.tabs()[int(tab_index)]
+
+        # Find the tab in our sql_files dictionary
+        for tid, info in self.sql_files.items():
+            if str(info["frame"]) == str(tab_id):
+                self.close_tab(tid)
                 return
 
-        self.sql_notebook.forget(current_frame)
+        # If it's a result tab (not in sql_files), just close it
+        self.sql_notebook.forget(tab_id)
 
     def close_result_tab(self, frame):
         """Close the specified result tab."""
