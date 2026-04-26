@@ -249,6 +249,25 @@ class DBExp:
         conn_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Connection", menu=conn_menu)
 
+        # Add submenu for storage method selection
+        storage_menu = tk.Menu(conn_menu, tearoff=0)
+        conn_menu.add_cascade(label="Storage Method", menu=storage_menu)
+
+        # Storage method options
+        self.storage_method_var = tk.StringVar(value="credman" if not self.conn_str_generator.use_env_vars else "envvars")
+        storage_menu.add_radiobutton(
+            label="Windows Credential Manager",
+            variable=self.storage_method_var,
+            value="credman",
+            command=self.change_storage_method
+        )
+        storage_menu.add_radiobutton(
+            label="Environment Variables",
+            variable=self.storage_method_var,
+            value="envvars",
+            command=self.change_storage_method
+        )
+
         # Add submenu for existing connections
         self.existing_connections_menu = tk.Menu(conn_menu, tearoff=0)
         conn_menu.add_cascade(label="Connect with Existing", menu=self.existing_connections_menu)
@@ -280,6 +299,35 @@ class DBExp:
 
         # Populate existing connections menu
         self.populate_existing_connections_menu()
+
+    def change_storage_method(self):
+        """Change the storage method between Windows Credential Manager and environment variables"""
+        current_method = self.storage_method_var.get()
+        new_use_env_vars = (current_method == "envvars")
+
+        # If already using the selected method, do nothing
+        if self.conn_str_generator.use_env_vars == new_use_env_vars:
+            return
+
+        # Warn user about the change
+        if messagebox.askyesno(
+            "Change Storage Method",
+            "Changing the storage method will require re-entering all connection credentials.\n\n"
+            "Do you want to proceed?"
+        ):
+            # Create new connection string generator with the new storage method
+            self.conn_str_generator = ConnectionStringGenerator(use_env_vars=new_use_env_vars)
+
+            # Update the menu to show the new storage method is active
+            self.storage_method_var.set(current_method)
+
+            # Refresh the existing connections menu (will be empty with new storage)
+            self.populate_existing_connections_menu()
+
+            messagebox.showinfo(
+                "Storage Method Changed",
+                f"Storage method changed to {'Environment Variables' if new_use_env_vars else 'Windows Credential Manager'}."
+            )
 
     def show_delete_connection_dialog(self):
         """Show dialog for deleting a connection"""
@@ -353,6 +401,14 @@ class DBExp:
                     label=conn_name,
                     command=lambda name=conn_name: self.connection_manager.connect_with_credman(name)
                 )
+
+            # If no connections, add a disabled item
+            if not connections:
+                self.existing_connections_menu.add_command(
+                    label="No connections available",
+                    state="disabled"
+                )
+
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load existing connections: {str(e)}")
 
@@ -363,6 +419,14 @@ class DBExp:
         dialog.geometry("530x830")
         dialog.transient(self.root)
         dialog.grab_set()
+
+        # Add storage method indicator at the top
+        storage_label = tk.Label(
+            dialog,
+            text=f"Storage: {'Environment Variables' if self.conn_str_generator.use_env_vars else 'Windows Credential Manager'}",
+            fg="blue"
+        )
+        storage_label.pack(pady=(5, 0))
 
         # Connection name
         tk.Label(dialog, text="Connection Name:").pack(pady=(10, 0))
