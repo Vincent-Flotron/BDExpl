@@ -1,6 +1,5 @@
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
-import pyodbc
 import json
 import os
 import signal
@@ -8,8 +7,7 @@ from typing            import Optional
 from connection        import DBConnection
 from Panels            import DatabaseTreePanel, SQLQueryEditorPanel, QueryResultPanel, StatusBarPanel
 from ConnectionManager import ConnectionManager
-from connstr_generator import get_all_connection_names, save_oracle_odbc_user_credentials, save_oracledb_connection, save_postgresql_connection, save_sqlite_connection, save_mssql_connection
-
+from connstr_generator import ConnectionStringGenerator
 
 class Theme:
     def __init__(self, root):
@@ -103,10 +101,10 @@ class Theme:
                             font=('Helvetica', 10, 'bold'),
                             foreground=text_color,
                             padding=[5, 5])
-        
+
         # Style for Nautilus/ariane wire/breadcumb
-        self.style.configure('Breadcrumb.TButton', 
-                padding=2, 
+        self.style.configure('Breadcrumb.TButton',
+                padding=2,
                 font=('Segoe UI', 9, 'bold'))
 
         # Style for entry and combobox
@@ -177,7 +175,6 @@ class DBExp:
 
         # Database connection
         self.db_connection = DBConnection()
-        self.db_connection.current_connection: Optional[pyodbc.Connection] = None
 
         # Configuration
         self.config = self.load_config()
@@ -189,9 +186,9 @@ class DBExp:
 
         # Initialize existing_connections_menu before setup_menu
         self.existing_connections_menu = tk.Menu(self.root, tearoff=0)
+        self.conn_str_generator = ConnectionStringGenerator()
 
         self.setup_menu()
-
 
     def setup_ui(self):
         """Create the three-panel interface"""
@@ -221,9 +218,9 @@ class DBExp:
 
         # Connection manager
         self.connection_manager = ConnectionManager(
-            self.root, 
-            self.db_connection, 
-            self.database_tree_panel, 
+            self.root,
+            self.db_connection,
+            self.database_tree_panel,
             self.status_bar_panel
         )
 
@@ -287,7 +284,7 @@ class DBExp:
     def show_delete_connection_dialog(self):
         """Show dialog for deleting a connection"""
         try:
-            connections = get_all_connection_names()
+            connections = self.conn_str_generator.get_all_connection_names()
 
             if not connections:
                 messagebox.showinfo("Info", "No connections available to delete")
@@ -341,11 +338,11 @@ class DBExp:
 
         except Exception as e:
             messagebox.showerror("Error", f"Failed to show delete dialog: {str(e)}")
-            
+
     def populate_existing_connections_menu(self):
         """Populate the existing connections menu with available connections"""
         try:
-            connections = get_all_connection_names()
+            connections = self.conn_str_generator.get_all_connection_names()
 
             # Clear existing items
             self.existing_connections_menu.delete(0, tk.END)
@@ -358,7 +355,6 @@ class DBExp:
                 )
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load existing connections: {str(e)}")
-
 
     def show_new_connection_dialog(self):
         """Show dialog for creating a new connection"""
@@ -602,7 +598,7 @@ class DBExp:
                     if not password:
                         messagebox.showerror("Error", "Password is required")
                         return
-                    save_oracle_odbc_user_credentials(conn_name, host, user, password)
+                    self.conn_str_generator.save_oracle_odbc_user_credentials(conn_name, host, user, password)
 
                 elif db_type == "OracleDB":
                     odb_host = odb_host_var.get().strip()
@@ -627,7 +623,7 @@ class DBExp:
                     except ValueError:
                         messagebox.showerror("Error", "Port must be a number")
                         return
-                    save_oracledb_connection(conn_name, odb_host, port_int, odb_sid,
+                    self.conn_str_generator.save_oracledb_connection(conn_name, odb_host, port_int, odb_sid,
                                              odb_user, odb_pwd)
 
                 elif db_type == "PostgreSQL":
@@ -655,7 +651,7 @@ class DBExp:
                     except ValueError:
                         messagebox.showerror("Error", "Port must be a number")
                         return
-                    save_postgresql_connection(conn_name, pg_host, port_int, pg_db,
+                    self.conn_str_generator.save_postgresql_connection(conn_name, pg_host, port_int, pg_db,
                                                pg_user, pg_pwd, pg_ssl, pg_cert)
 
                 elif db_type == "MSSQL":
@@ -686,7 +682,7 @@ class DBExp:
                     except ValueError:
                         messagebox.showerror("Error", "Port must be a number")
                         return
-                    save_mssql_connection(
+                    self.conn_str_generator.save_mssql_connection(
                         conn_name, ms_host, port_int, ms_db,
                         ms_user, ms_pwd, ms_auth, ms_driver, ms_enc, ms_trust
                     )
@@ -696,7 +692,7 @@ class DBExp:
                     if not db_path:
                         messagebox.showerror("Error", "Database file path is required")
                         return
-                    save_sqlite_connection(conn_name, db_path)
+                    self.conn_str_generator.save_sqlite_connection(conn_name, db_path)
 
                 messagebox.showinfo("Success", f"Connection '{conn_name}' saved successfully")
                 self.populate_existing_connections_menu()
@@ -709,18 +705,15 @@ class DBExp:
         ttk.Button(dialog, text="Save & Connect", command=save_connection).pack(pady=20)
         ttk.Button(dialog, text="Cancel",         command=dialog.destroy).pack(pady=5)
 
-
     def close_keys_tab(self, frame):
         print("close_keys_tab")
         self.sql_query_editor_panel.close_keys_tab(frame)
-
 
     def shutdown(self, *args):
         """Gracefully shutdown application and close DB connections"""
         self.connection_manager.disconnect()
         self.root.quit()
         self.root.destroy()
-
 
 def main():
     root = tk.Tk()

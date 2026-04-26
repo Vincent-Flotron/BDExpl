@@ -1,8 +1,14 @@
-import pyodbc
 import sqlite3
 import psycopg2
 import oracledb
 from QueryManager import QueriesSQLite, QueriesOracle, QueriesPostgreSQL, QueriesMSSQL
+
+# Conditionally import pyodbc only on Windows
+import sys
+if sys.platform == 'win32':
+    import pyodbc
+else:
+    pyodbc = None
 
 class DBConnection:
     def __init__(self):
@@ -24,7 +30,10 @@ class DBConnection:
         conn_details = self.connections[name]
         if conn_details["db_type"] == "Oracle":
             conn_str = f"DRIVER={{Oracle}};SERVER={conn_details['host']};PORT={conn_details['port']};UID={conn_details['user']};PWD={conn_details['password']}"
-            return pyodbc.connect(conn_str)
+            if pyodbc:
+                return pyodbc.connect(conn_str)
+            else:
+                raise Exception("pyodbc module is not available")
         elif conn_details["db_type"] == "SQLite":
             return sqlite3.connect(conn_details["host"])  # Assuming host is the path for SQLite
         elif conn_details["db_type"] == "OracleDB":
@@ -103,7 +112,10 @@ class DBConnection:
                 f"Encrypt={encrypt};"
                 f"TrustServerCertificate={trust_server_cert};"
             )
-        return pyodbc.connect(conn_str)
+        if pyodbc:
+            return pyodbc.connect(conn_str)
+        else:
+            raise Exception("pyodbc module is not available")
 
     def get_queries_instance(self, connection):
         # Prefer the explicit type tracker when available
@@ -122,7 +134,7 @@ class DBConnection:
             return QueriesPostgreSQL()
         elif isinstance(connection, oracledb.Connection):
             return QueriesOracle()
-        elif type(connection) == pyodbc.Connection:
+        elif pyodbc and type(connection) == pyodbc.Connection:
             return QueriesOracle()  # conservative fallback for pyodbc
         else:
             return QueriesOracle()
@@ -144,7 +156,7 @@ class DBConnection:
             return "SQLite"
         elif isinstance(conn, oracledb.Connection):
             return "OracleDB"
-        elif isinstance(conn, pyodbc.Connection):
+        elif pyodbc and isinstance(conn, pyodbc.Connection):
             return "Oracle"   # conservative fallback
         else:
             return "Unknown"
