@@ -3,7 +3,6 @@ from typing  import Optional
 import sqlite3
 import psycopg2
 import oracledb
-from connstr_generator import ConnectionStringGenerator
 
 # Conditionally import pyodbc only on Windows
 import sys
@@ -15,13 +14,13 @@ else:
 class ConnectionManager:
     """Manages database connections and related UI operations"""
 
-    def __init__(self, root, db_connection, database_tree_panel, status_bar_panel):
+    def __init__(self, root, db_connection, database_tree_panel, status_bar_panel, conn_str_generator):
         self.root = root
         self.db_connection = db_connection
         self.database_tree_panel = database_tree_panel
         self.status_bar_panel = status_bar_panel
         self.connection_name: Optional[str] = None
-        self.conn_str_generator = ConnectionStringGenerator()
+        self.conn_str_generator = conn_str_generator
 
     def connect_with_credman(self, connection_name: str):
         """Connect using Windows Credential Manager via connstr_generator.py"""

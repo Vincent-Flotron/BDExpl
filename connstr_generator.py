@@ -11,7 +11,7 @@ else:
     win32cred = None
 
 class ConnectionStringGenerator:
-    def __init__(self, use_env_vars: bool = True):
+    def __init__(self, use_env_vars: bool = False):
         self.use_env_vars = use_env_vars
         # Initialize environment variable storage if needed
         if self.use_env_vars:

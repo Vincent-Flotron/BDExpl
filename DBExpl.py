@@ -179,6 +179,9 @@ class DBExp:
         # Configuration
         self.config = self.load_config()
 
+        # Connection
+        self.conn_str_generator = ConnectionStringGenerator()
+
         # Setup theme and UI
         self.theme = Theme(self.root)
         self.theme.setup()
@@ -186,7 +189,6 @@ class DBExp:
 
         # Initialize existing_connections_menu before setup_menu
         self.existing_connections_menu = tk.Menu(self.root, tearoff=0)
-        self.conn_str_generator = ConnectionStringGenerator()
 
         self.setup_menu()
 
@@ -221,7 +223,8 @@ class DBExp:
             self.root,
             self.db_connection,
             self.database_tree_panel,
-            self.status_bar_panel
+            self.status_bar_panel,
+            self.conn_str_generator
         )
 
     def load_config(self) -> dict:
