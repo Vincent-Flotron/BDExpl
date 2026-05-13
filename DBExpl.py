@@ -209,6 +209,9 @@ class DBExp:
 
         self.setup_menu()
 
+        # Apply saved zoom settings
+        self.apply_saved_zoom_settings()
+
     def setup_ui(self):
         """Create the three-panel interface"""
         # Main container with PanedWindow for resizable panels
@@ -257,9 +260,27 @@ class DBExp:
 
     def save_config(self):
         """Save persistent configuration"""
-        self.config["show_labels"] = self.query_result_panel.show_labels
+        # Save zoom settings
+        if hasattr(self, 'database_tree_panel'):
+            self.config["database_tree_zoom"] = self.database_tree_panel.zoom_level
+        if hasattr(self, 'sql_query_editor_panel'):
+            self.config["query_editor_zoom"] = self.sql_query_editor_panel.zoom_level
+        if hasattr(self, 'query_result_panel'):
+            self.config["query_result_zoom"] = self.query_result_panel.zoom_level
+
         with open(self.CONFIG_FILE, 'w') as f:
             json.dump(self.config, f)
+
+    def apply_saved_zoom_settings(self):
+        """Apply saved zoom settings to all panels"""
+        if hasattr(self, 'database_tree_panel') and "database_tree_zoom" in self.config:
+            self.database_tree_panel.set_zoom(self.config["database_tree_zoom"])
+
+        if hasattr(self, 'sql_query_editor_panel') and "query_editor_zoom" in self.config:
+            self.sql_query_editor_panel.set_zoom(self.config["query_editor_zoom"])
+
+        if hasattr(self, 'query_result_panel') and "query_result_zoom" in self.config:
+            self.query_result_panel.set_zoom(self.config["query_result_zoom"])
 
     def setup_menu(self):
         """Create menu bar"""
@@ -796,6 +817,8 @@ class DBExp:
 
     def shutdown(self, *args):
         """Gracefully shutdown application and close DB connections"""
+        # Save zoom settings before shutting down
+        self.save_config()
         self.connection_manager.disconnect()
         self.root.quit()
         self.root.destroy()
@@ -808,10 +831,14 @@ def main():
     resources_path = os.path.join(os.path.dirname(__file__), "resources")
     icon_path = os.path.join(resources_path, "icon.png")
 
-    icon = tk.PhotoImage(file=icon_path)
-
-    # Set it as the icon
-    root.iconphoto(True, icon)  # The 'True' argument makes it apply to all future top-level windows too
+    try:
+        icon = tk.PhotoImage(file=icon_path)
+        # Set it as the icon
+        root.iconphoto(True, icon)  # The 'True' argument makes it apply to all future top-level windows too
+        # Keep a reference to prevent garbage collection
+        root.icon = icon  # Store as an attribute
+    except Exception as e:
+        print(f"Could not load icon: {e}")
 
     # Graceful shutdown on signals
     signal.signal(signal.SIGINT, lambda sig, frame: app.shutdown())

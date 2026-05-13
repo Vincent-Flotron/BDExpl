@@ -72,6 +72,30 @@ class SQLText(Text):
             'number': '#098658'
         }
 
+        # Initialize zoom level
+        self.zoom_level = 100  # Default 100%
+
+
+    def set_zoom(self, zoom_level):
+        """Set the zoom level for the text widget."""
+        self.zoom_level = max(50, min(200, zoom_level))  # Clamp between 50% and 200%
+        font_size = int(10 * (self.zoom_level / 100))  # Base size is 10
+        self.configure(font=('Consolas', font_size))
+        return self.zoom_level
+
+    def zoom_in(self):
+        """Increase the zoom level."""
+        return self.set_zoom(self.zoom_level + 10)
+
+    def zoom_out(self):
+        """Decrease the zoom level."""
+        return self.set_zoom(self.zoom_level - 10)
+
+    def reset_zoom(self):
+        """Reset the zoom level to default."""
+        return self.set_zoom(100)
+
+
     def align_with_previous_line(self, event=None):
         """Align cursor with the start of the previous line when pressing Enter."""
         try:

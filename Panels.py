@@ -76,13 +76,30 @@ class DatabaseTreePanel:
         self.sql_query_editor_panel = sql_query_editor_panel
         self.queries = None  # Will be set based on connection type
         self.query_manager = query_manager
+        self.zoom_level = 100  # Default zoom level
 
     def setup(self):
         """Panel 1: Database object tree"""
         left_frame = ttk.Frame(self.parent, style='TFrame')
         self.parent.add(left_frame, weight=1)
 
+        # Header with zoom controls
+        header_frame = ttk.Frame(left_frame, style='TFrame')
+        header_frame.pack(fill=tk.X, padx=4, pady=2)
+
         ttk.Label(left_frame, text="Database Objects", style='Bold.TLabel').pack(pady=5)
+
+        # Zoom controls
+        zoom_frame = ttk.Frame(header_frame, style='TFrame')
+        zoom_frame.pack(side=tk.RIGHT, padx=5)
+
+        self.zoom_label = ttk.Label(zoom_frame, text=f"{self.zoom_level}%", style='TLabel')
+        self.zoom_label.pack(side=tk.RIGHT, padx=5)
+
+        ttk.Button(zoom_frame, text="+", command=self.zoom_in, width=2).pack(side=tk.RIGHT, padx=2)
+        ttk.Button(zoom_frame, text="-", command=self.zoom_out, width=2).pack(side=tk.RIGHT, padx=2)
+        ttk.Button(zoom_frame, text="↻", command=self.reset_zoom, width=2).pack(side=tk.RIGHT, padx=2)
+
 
         # ── Search bar ────────────────────────────────────────────────
         search_frame = ttk.Frame(left_frame, style='TFrame')
@@ -208,6 +225,38 @@ class DatabaseTreePanel:
         self.db_tree.bind("<<TreeviewOpen>>", self.on_tree_expand)
         self.db_tree.bind("<<TreeviewSelect>>", lambda e: self._update_search_checkboxes_state())
         self.db_tree.bind("<<TreeviewSelect>>", self._update_breadcrumbs)
+
+
+    def zoom_in(self):
+        """Increase the zoom level."""
+        self.zoom_level = min(200, self.zoom_level + 10)
+        self._apply_zoom()
+        self.zoom_label.config(text=f"{self.zoom_level}%")
+
+    def zoom_out(self):
+        """Decrease the zoom level."""
+        self.zoom_level = max(50, self.zoom_level - 10)
+        self._apply_zoom()
+        self.zoom_label.config(text=f"{self.zoom_level}%")
+
+    def reset_zoom(self):
+        """Reset the zoom level to default."""
+        self.zoom_level = 100
+        self._apply_zoom()
+        self.zoom_label.config(text=f"{self.zoom_level}%")
+
+    def _apply_zoom(self):
+        """Apply the current zoom level to the treeview."""
+        font_size = int(9 * (self.zoom_level / 100))  # Base size is 9
+        style = ttk.Style()
+        style.configure('Treeview', font=('Helvetica', font_size))
+        style.configure('Treeview.Heading', font=('Helvetica', font_size, 'bold'))
+
+    def set_zoom(self, zoom_level):
+        """Set the zoom level."""
+        self.zoom_level = max(50, min(200, zoom_level))
+        self._apply_zoom()
+        self.zoom_label.config(text=f"{self.zoom_level}%")
 
     def on_tree_expand(self, event):
         """Handle tree expansion - lazy load table children (indexes, keys, triggers), schema children (procedures, functions, packages, views), and package children (functions, procedures)"""
@@ -1205,6 +1254,8 @@ class SQLQueryEditorPanel:
         self.db_connection = db_connection
         self.query_manager = query_manager
         self.tab_results = {}  # Store results for each tab
+        self.zoom_level = 100  # Default zoom level
+
 
     def setup(self, parent, root, theme):
         """Panel 2: SQL Query Editor with tabs"""
@@ -1218,7 +1269,22 @@ class SQLQueryEditorPanel:
         editor_frame = ttk.Frame(self.parent, style='TFrame')
         self.parent.add(editor_frame, weight=1)
 
-        ttk.Label(editor_frame, text="Query Editor", style='Bold.TLabel').pack(fill=tk.X, padx=5, pady=2)
+        # Header with zoom controls
+        header_frame = ttk.Frame(editor_frame, style='TFrame')
+        header_frame.pack(fill=tk.X, padx=5, pady=2)
+
+        ttk.Label(header_frame, text="Query Editor", style='Bold.TLabel').pack(side=tk.LEFT, pady=2)
+
+        # Zoom controls
+        zoom_frame = ttk.Frame(header_frame, style='TFrame')
+        zoom_frame.pack(side=tk.RIGHT, padx=5)
+
+        self.zoom_label = ttk.Label(zoom_frame, text=f"{self.zoom_level}%", style='TLabel')
+        self.zoom_label.pack(side=tk.RIGHT, padx=5)
+
+        ttk.Button(zoom_frame, text="+", command=self.zoom_in, width=2).pack(side=tk.RIGHT, padx=2)
+        ttk.Button(zoom_frame, text="-", command=self.zoom_out, width=2).pack(side=tk.RIGHT, padx=2)
+        ttk.Button(zoom_frame, text="↻", command=self.reset_zoom, width=2).pack(side=tk.RIGHT, padx=2)
 
         # SQL Helper Buttons Frame
         sql_helper_frame = ttk.Frame(editor_frame, style='TFrame')
@@ -1248,6 +1314,38 @@ class SQLQueryEditorPanel:
 
         self.sql_notebook.bind('<Button-2>', self.close_current_tab)
         self.sql_notebook.bind("<<NotebookTabChanged>>", self.on_tab_changed)
+
+
+    def zoom_in(self):
+        """Increase the zoom level."""
+        self.zoom_level = min(200, self.zoom_level + 10)
+        self._apply_zoom_to_all_tabs()
+        self.zoom_label.config(text=f"{self.zoom_level}%")
+
+    def zoom_out(self):
+        """Decrease the zoom level."""
+        self.zoom_level = max(50, self.zoom_level - 10)
+        self._apply_zoom_to_all_tabs()
+        self.zoom_label.config(text=f"{self.zoom_level}%")
+
+    def reset_zoom(self):
+        """Reset the zoom level to default."""
+        self.zoom_level = 100
+        self._apply_zoom_to_all_tabs()
+        self.zoom_label.config(text=f"{self.zoom_level}%")
+
+    def _apply_zoom_to_all_tabs(self):
+        """Apply the current zoom level to all SQL text widgets."""
+        for tab_id, info in self.sql_files.items():
+            if "widget" in info:
+                info["widget"].set_zoom(self.zoom_level)
+
+    def set_zoom(self, zoom_level):
+        """Set the zoom level."""
+        self.zoom_level = max(50, min(200, zoom_level))
+        self._apply_zoom_to_all_tabs()
+        self.zoom_label.config(text=f"{self.zoom_level}%")
+
 
     def on_tab_changed(self, event):
         """Handle tab change event to display the corresponding result"""
@@ -1562,6 +1660,9 @@ class SQLQueryEditorPanel:
         # Focus the new text widget
         text_widget.focus_set()
 
+        # Set the initial zoom level for the new text widget
+        text_widget.set_zoom(self.zoom_level)
+
         # Add close button to the main frame (not content frame)
         close_btn = ttk.Button(
             main_frame,
@@ -1840,6 +1941,7 @@ class QueryResultPanel:
         self.root = root
         self.db_connection = db_connection
         self.current_codepage = 'utf-8'
+        self.zoom_level = 100
 
         # ── Sort state ────────────────────────────────────────────────
         self._sort_col     = None
@@ -1865,10 +1967,52 @@ class QueryResultPanel:
         # ── Misc ──────────────────────────────────────────────────────
         self.raw_error_text   = None
 
+
+    def zoom_in(self):
+        """Increase the zoom level."""
+        self.zoom_level = min(200, self.zoom_level + 10)
+        self._apply_zoom()
+        if self.zoom_label:
+            self.zoom_label.config(text=f"{self.zoom_level}%")
+
+    def zoom_out(self):
+        """Decrease the zoom level."""
+        self.zoom_level = max(50, self.zoom_level - 10)
+        self._apply_zoom()
+        if self.zoom_label:
+            self.zoom_label.config(text=f"{self.zoom_level}%")
+
+    def reset_zoom(self):
+        """Reset the zoom level to default."""
+        self.zoom_level = 100
+        self._apply_zoom()
+        if self.zoom_label:
+            self.zoom_label.config(text=f"{self.zoom_level}%")
+
+    def _apply_zoom(self):
+        """Apply the current zoom level to the treeview."""
+        if not self.result_tree:
+            return
+
+        font_size = int(9 * (self.zoom_level / 100))  # Base size is 9
+        style = ttk.Style()
+        style.configure('Treeview', font=('Helvetica', font_size))
+        style.configure('Treeview.Heading', font=('Helvetica', font_size, 'bold'))
+
+        # Update column widths after font change
+        if self.result_tree.get_children():
+            self.update_column_widths()
+
+    def set_zoom(self, zoom_level):
+        """Set the zoom level."""
+        self.zoom_level = max(50, min(200, zoom_level))
+        self._apply_zoom()
+        if self.zoom_label:
+            self.zoom_label.config(text=f"{self.zoom_level}%")
+
     # ─────────────────────────────────────────────────────────────────
     # SETUP
     # ─────────────────────────────────────────────────────────────────
-
     def setup(self, parent, config):
         """Panel 3: Query Result Grid"""
         self.parent = parent
@@ -1881,6 +2025,18 @@ class QueryResultPanel:
         header = ttk.Frame(result_frame, style='TFrame')
         header.pack(fill=tk.X, padx=5, pady=(5, 2))
         ttk.Label(header, text="Query Result", style='Bold.TLabel').pack(side=tk.LEFT)
+
+        # Zoom controls
+        zoom_frame = ttk.Frame(header, style='TFrame')
+        zoom_frame.pack(side=tk.RIGHT, padx=5)
+
+        self.zoom_label = ttk.Label(zoom_frame, text=f"{self.zoom_level}%", style='TLabel')
+        self.zoom_label.pack(side=tk.RIGHT, padx=5)
+
+        ttk.Button(zoom_frame, text="+", command=self.zoom_in, width=2).pack(side=tk.RIGHT, padx=2)
+        ttk.Button(zoom_frame, text="-", command=self.zoom_out, width=2).pack(side=tk.RIGHT, padx=2)
+        ttk.Button(zoom_frame, text="↻", command=self.reset_zoom, width=2).pack(side=tk.RIGHT, padx=2)
+
 
         # ── Search / Filter block ─────────────────────────────────────
         search_outer = ttk.Frame(result_frame, style='TFrame')
