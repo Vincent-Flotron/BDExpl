@@ -1853,6 +1853,7 @@ class QueryResultPanel:
         self._search_col_vars = {}          # col_name → BooleanVar
         self._search_var      = None        # StringVar for the search entry
         self._select_all_var  = None        # BooleanVar for the "All" checkbox
+        self._regex_var       = None
 
         # ── UI references (populated in setup) ───────────────────────
         self._match_info      = None
@@ -1894,6 +1895,15 @@ class QueryResultPanel:
         self._search_var = tk.StringVar()
         self._search_var.trace_add("write", lambda *_: self._apply_search())
         ttk.Entry(search_row, textvariable=self._search_var, width=28).pack(side=tk.LEFT)
+
+        self._regex_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(
+            search_row,
+            text="Regex",
+            variable=self._regex_var,
+            command=self._apply_search,
+            style='TCheckbutton'
+        ).pack(side=tk.LEFT, padx=(2, 4))
 
         ttk.Button(
             search_row, text="✕",
@@ -2081,101 +2091,115 @@ class QueryResultPanel:
     # CORE RENDER PIPELINE  (filter → sort → display)
     # ─────────────────────────────────────────────────────────────────
     def _refresh_display(self):
-            """
-            Re-render the treeview applying:
-            1. Column-scoped text search (identifying matching cells)
-            2. Active sort column / direction
-            Matching cells are prefixed with a visual indicator.
-            """
-            if not self._all_unique_columns:
-                return
+        if not self._all_unique_columns:
+            return
 
-            search_term = (self._search_var.get().strip().lower() 
-                        if self._search_var else "")
+        search_term = self._search_var.get().strip()
+        use_regex = self._regex_var.get() if self._regex_var else False
 
-            # Indices of columns included in the search
-            if self._search_col_vars:
-                search_indices = [
-                    self._all_unique_columns.index(c)
-                    for c, v in self._search_col_vars.items()
-                    if v.get() and c in self._all_unique_columns
-                ]
-            else:
-                search_indices = list(range(len(self._all_unique_columns)))
+        # Indices of columns included in the search
+        if self._search_col_vars:
+            search_indices = [
+                self._all_unique_columns.index(c)
+                for c, v in self._search_col_vars.items()
+                if v.get() and c in self._all_unique_columns
+            ]
+        else:
+            search_indices = list(range(len(self._all_unique_columns)))
 
-            # ── 1. Filter ────────────────────────────────────────────────
-            if search_term and search_indices:
-                filtered = [
-                    row for row in self._all_rows
-                    if any(
-                        search_term in str(row[i] if i < len(row) else '').lower()
-                        for i in search_indices
-                    )
-                ]
-            else:
-                filtered = list(self._all_rows)
-
-            # ── 2. Sort ──────────────────────────────────────────────────
-            if self._sort_col and self._sort_col in self._all_unique_columns:
-                col_idx = self._all_unique_columns.index(self._sort_col)
-
-                def _key(row):
-                    val = row[col_idx] if col_idx < len(row) else None
-                    if val is None:
-                        return (2, 0.0, '')
-                    s = str(val)
-                    try:
-                        return (0, float(s.replace(' ', '').replace(',', '.')), '')
-                    except ValueError:
-                        return (1, 0.0, s.lower())
-
-                filtered.sort(key=_key, reverse=self._sort_reverse)
-
-            # ── 3. Render ────────────────────────────────────────────────
-            self.result_tree.delete(*self.result_tree.get_children())
-
-            for row in filtered:
-                formatted = []
-                for i, v in enumerate(row):
-                    # Standard string conversion
-                    if v is None:
-                        val_str = ''
-                    elif isinstance(v, (datetime.datetime, datetime.date)):
-                        val_str = str(v)
-                    else:
-                        val_str = str(v)
-
-                    # --- NEW CELL-SPECIFIC HIGHLIGHT LOGIC ---
-                    # If searching, check if THIS specific cell is in a searched column 
-                    # and contains the search term.
-                    if search_term and i in search_indices and search_term in val_str.lower():
-                        # Prefix with a symbol to "highlight" the cell
-                        formatted.append(f"▶ {val_str}") 
-                    else:
-                        formatted.append(val_str)
-
-                # We remove the tags=('match',) here so the whole row isn't colored
-                self.result_tree.insert('', 'end', values=formatted)
-
-            # ── 4. Update info labels ────────────────────────────────────
-            total = len(self._all_rows)
-            shown = len(filtered)
-
-            if search_term:
-                if shown == 0:
-                    self._match_info.config(text="No matches", foreground='#cc4400')
+        # ── 1. Filter ────────────────────────────────────────────────
+        if search_term and search_indices:
+            try:
+                if use_regex:
+                    # Compile regex pattern (case-insensitive)
+                    pattern = re.compile(search_term, re.IGNORECASE)
+                    filtered = [
+                        row for row in self._all_rows
+                        if any(
+                            pattern.search(str(row[i] if i < len(row) else ''))
+                            for i in search_indices
+                        )
+                    ]
                 else:
-                    self._match_info.config(
-                        text=f"{shown} match{'es' if shown != 1 else ''}",
-                        foreground='#227722'
-                    )
-                self.result_info.config(text=f"{shown}/{total} row(s) shown")
-            else:
-                if self._match_info:
-                    self._match_info.config(text="")
-                self.result_info.config(text=f"{total} row(s) displayed")
+                    # Standard substring search (case-insensitive)
+                    filtered = [
+                        row for row in self._all_rows
+                        if any(
+                            search_term.lower() in str(row[i] if i < len(row) else '').lower()
+                            for i in search_indices
+                        )
+                    ]
+            except re.error as e:
+                # Handle invalid regex (e.g., unbalanced parentheses)
+                filtered = []
+                self._match_info.config(
+                    text=f"Regex error: {str(e)}",
+                    foreground='#cc4400'
+                )
+        else:
+            filtered = list(self._all_rows)
 
-            self.update_column_widths()
+        # ── 2. Sort ──────────────────────────────────────────────────
+        if self._sort_col and self._sort_col in self._all_unique_columns:
+            col_idx = self._all_unique_columns.index(self._sort_col)
+
+            def _key(row):
+                val = row[col_idx] if col_idx < len(row) else None
+                if val is None:
+                    return (2, 0.0, '')
+                s = str(val)
+                try:
+                    return (0, float(s.replace(' ', '').replace(',', '.')), '')
+                except ValueError:
+                    return (1, 0.0, s.lower())
+
+            filtered.sort(key=_key, reverse=self._sort_reverse)
+
+        # ── 3. Render ────────────────────────────────────────────────
+        self.result_tree.delete(*self.result_tree.get_children())
+
+        for row in filtered:
+            formatted = []
+            for i, v in enumerate(row):
+                # Standard string conversion
+                if v is None:
+                    val_str = ''
+                elif isinstance(v, (datetime.datetime, datetime.date)):
+                    val_str = str(v)
+                else:
+                    val_str = str(v)
+
+                # --- NEW CELL-SPECIFIC HIGHLIGHT LOGIC ---
+                # If searching, check if THIS specific cell is in a searched column 
+                # and contains the search term.
+                if search_term and i in search_indices and search_term in val_str.lower():
+                    # Prefix with a symbol to "highlight" the cell
+                    formatted.append(f"▶ {val_str}") 
+                else:
+                    formatted.append(val_str)
+
+            # We remove the tags=('match',) here so the whole row isn't colored
+            self.result_tree.insert('', 'end', values=formatted)
+
+        # ── 4. Update info labels ────────────────────────────────────
+        total = len(self._all_rows)
+        shown = len(filtered)
+
+        if search_term:
+            if shown == 0:
+                self._match_info.config(text="No matches", foreground='#cc4400')
+            else:
+                self._match_info.config(
+                    text=f"{shown} match{'es' if shown != 1 else ''}",
+                    foreground='#227722'
+                )
+            self.result_info.config(text=f"{shown}/{total} row(s) shown")
+        else:
+            if self._match_info:
+                self._match_info.config(text="")
+            self.result_info.config(text=f"{total} row(s) displayed")
+
+        self.update_column_widths()
 
     # ─────────────────────────────────────────────────────────────────
     # PUBLIC DISPLAY METHODS
