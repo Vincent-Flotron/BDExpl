@@ -1964,15 +1964,9 @@ class QueryResultPanel:
         self._cb_inner        = None
         self._cb_window       = None
 
-        # ── Performance optimizations ─────────────────────────────────
-        self._column_width_cache = {}       # Cache for column widths
-        self._loaded_rows = 0               # Track loaded rows for virtual scrolling
-        self._batch_size = 1000             # Initial batch size
-        self._loading_item = None           # Reference to loading indicator
-        self._large_dataset_threshold = 10000 # Threshold for large datasets
-
         # ── Misc ──────────────────────────────────────────────────────
         self.raw_error_text   = None
+
 
     def zoom_in(self):
         """Increase the zoom level."""
@@ -2253,7 +2247,6 @@ class QueryResultPanel:
     # CORE RENDER PIPELINE  (filter → sort → display)
     # ─────────────────────────────────────────────────────────────────
     def _refresh_display(self):
-        """Optimized refresh with batch processing"""
         if not self._all_unique_columns:
             return
 
@@ -2275,6 +2268,7 @@ class QueryResultPanel:
         if search_term and search_indices:
             try:
                 if use_regex:
+                    # Compile regex pattern (case-insensitive)
                     pattern = re.compile(search_term, re.IGNORECASE)
                     filtered = [
                         row for row in self._all_rows
@@ -2284,6 +2278,7 @@ class QueryResultPanel:
                         )
                     ]
                 else:
+                    # Standard substring search (case-insensitive)
                     filtered = [
                         row for row in self._all_rows
                         if any(
@@ -2292,6 +2287,7 @@ class QueryResultPanel:
                         )
                     ]
             except re.error as e:
+                # Handle invalid regex (e.g., unbalanced parentheses)
                 filtered = []
                 self._match_info.config(
                     text=f"Regex error: {str(e)}",
@@ -2300,9 +2296,8 @@ class QueryResultPanel:
         else:
             filtered = list(self._all_rows)
 
-        # ── 2. Sort (only for small datasets) ─────────────────────────
-        if (self._sort_col and self._sort_col in self._all_unique_columns and
-            len(filtered) <= self._large_dataset_threshold):
+        # ── 2. Sort ──────────────────────────────────────────────────
+        if self._sort_col and self._sort_col in self._all_unique_columns:
             col_idx = self._all_unique_columns.index(self._sort_col)
 
             def _key(row):
@@ -2317,38 +2312,38 @@ class QueryResultPanel:
 
             filtered.sort(key=_key, reverse=self._sort_reverse)
 
-        # ── 3. Render with batch processing ────────────────────────
+        # ── 3. Render ────────────────────────────────────────────────
         self.result_tree.delete(*self.result_tree.get_children())
 
-        # For large filtered results, use batch loading
-        if len(filtered) > self._batch_size:
-            self._loading_item = self.result_tree.insert('', 'end', values=["Loading filtered results..."])
-            self.result_tree.update()
-            self._loaded_rows = 0
+        for row in filtered:
+            formatted = []
+            for i, v in enumerate(row):
+                # Standard string conversion
+                if v is None:
+                    val_str = ''
+                elif isinstance(v, (datetime.datetime, datetime.date)):
+                    val_str = str(v)
+                else:
+                    val_str = str(v)
 
-            # Process in batches
-            num_columns = len(self._all_unique_columns)
-            for i in range(0, len(filtered), self._batch_size):
-                batch = filtered[i:i+self._batch_size]
-                for row in batch:
-                    # Pad row with empty strings if it has fewer columns than expected
-                    formatted = [str(v) if v is not None else '' for v in row]
-                    if len(formatted) < num_columns:
-                        formatted += [''] * (num_columns - len(formatted))
-                    self.result_tree.insert('', 'end', values=formatted)
-                self.result_tree.update()
+                # --- UPDATED CELL-SPECIFIC HIGHLIGHT LOGIC ---
+                if search_term and i in search_indices:
+                    if use_regex:
+                        # Use the compiled regex pattern for highlighting
+                        if pattern and pattern.search(val_str):
+                            formatted.append(f"▶ {val_str}")
+                        else:
+                            formatted.append(val_str)
+                    else:
+                        # Standard substring search for highlighting
+                        if search_term.lower() in val_str.lower():
+                            formatted.append(f"▶ {val_str}")
+                        else:
+                            formatted.append(val_str)
+                else:
+                    formatted.append(val_str)
 
-            if self._loading_item:
-                self.result_tree.delete(self._loading_item)
-                self._loading_item = None
-        else:
-            num_columns = len(self._all_unique_columns)
-            for row in filtered:
-                # Pad row with empty strings if it has fewer columns than expected
-                formatted = [str(v) if v is not None else '' for v in row]
-                if len(formatted) < num_columns:
-                    formatted += [''] * (num_columns - len(formatted))
-                self.result_tree.insert('', 'end', values=formatted)
+            self.result_tree.insert('', 'end', values=formatted)
 
         # ── 4. Update info labels ────────────────────────────────────
         total = len(self._all_rows)
@@ -2373,22 +2368,10 @@ class QueryResultPanel:
     # ─────────────────────────────────────────────────────────────────
     # PUBLIC DISPLAY METHODS
     # ─────────────────────────────────────────────────────────────────
+
     def display_results(self, columns: List[str], rows: List[Tuple], description):
-        """Display query results with performance optimizations"""
+        """Display query results in the grid with sorting and search enabled."""
         self.result_tree.delete(*self.result_tree.get_children())
-
-        # Clear previous data and cache
-        self._all_rows = []
-        self._all_unique_columns = []
-        self._column_width_cache = {}
-        self._loaded_rows = 0
-        self._sort_col = None
-        self._sort_reverse = False
-
-        # Force garbage collection for large datasets
-        if len(rows) > self._large_dataset_threshold:
-            import gc
-            gc.collect()
 
         # ── Deduplicate column names ──────────────────────────────────
         column_counts = {}
@@ -2409,125 +2392,41 @@ class QueryResultPanel:
                 unique_columns[i] = f"{col} (#1)"
 
         # ── Store master data ─────────────────────────────────────────
-        self._all_rows = list(rows)
+        self._all_rows           = list(rows)
         self._all_unique_columns = unique_columns
 
         # ── Reset sort ────────────────────────────────────────────────
-        self._sort_col = None
+        self._sort_col     = None
         self._sort_reverse = False
         if self._clear_sort_btn:
             self._clear_sort_btn.config(state='disabled')
 
-        # ── Configure treeview columns ───────────────────────────────
+        # ── Configure treeview columns with sort-click handlers ───────
         self.result_tree['columns'] = unique_columns
         self.result_tree.column('#0', width=0, stretch=tk.NO)
 
         for col in unique_columns:
             self.result_tree.column(col, minwidth=100, width=150,
                                     stretch=tk.NO, anchor=tk.W)
-            # Disable sorting for large datasets
-            if len(rows) > self._large_dataset_threshold:
-                self.result_tree.heading(col, text=col, anchor=tk.W)
-            else:
-                self.result_tree.heading(
-                    col, text=col, anchor=tk.W,
-                    command=lambda c=col: self._sort_by_column(c)
-                )
+            self.result_tree.heading(
+                col, text=col, anchor=tk.W,
+                command=lambda c=col: self._sort_by_column(c)
+            )
 
         # ── Rebuild per-column search checkboxes ──────────────────────
         if self._cb_inner is not None:
             self._rebuild_search_checkboxes()
 
-        # ── Show loading indicator for large datasets ─────────────────
-        if len(rows) > self._batch_size:
-            self._loading_item = self.result_tree.insert('', 'end', values=["Loading results..."])
-            self.result_tree.update()
-
-        # ── Load initial batch ──────────────────────────────────────
-        self._load_next_batch()
-
-        # ── Set up virtual scrolling ─────────────────────────────────
-        self.result_tree.bind("<MouseWheel>", self._on_scroll)
-
-        # ── Clear previous search term ───────────────────────────────
+        # ── Clear previous search term and re-render ──────────────────
+        # Setting the var triggers the trace which calls _refresh_display.
+        # If it was already empty, force a direct refresh.
         if self._search_var:
             prev = self._search_var.get()
             self._search_var.set("")
             if prev == "":
-                self._refresh_display()
-
-    def _load_next_batch(self):
-        """Load the next batch of rows"""
-        remaining_rows = len(self._all_rows) - self._loaded_rows
-        if remaining_rows <= 0:
-            if self._loading_item:
-                self.result_tree.delete(self._loading_item)
-                self._loading_item = None
-            return
-
-        batch_size = min(self._batch_size, remaining_rows)
-        batch_rows = self._all_rows[self._loaded_rows:self._loaded_rows + batch_size]
-
-        # Update progress if loading indicator exists
-        if self._loading_item:
-            progress = min(100, int((self._loaded_rows + batch_size) / len(self._all_rows) * 100))
-            self.result_tree.item(self._loading_item, values=[f"Loading... {progress}%"])
-            self.result_tree.update()
-
-        # Insert batch - ensure we have the right number of columns
-        num_columns = len(self._all_unique_columns)
-        for row in batch_rows:
-            # Pad row with empty strings if it has fewer columns than expected
-            formatted = [str(v) if v is not None else '' for v in row]
-            if len(formatted) < num_columns:
-                formatted += [''] * (num_columns - len(formatted))
-            self.result_tree.insert('', 'end', values=formatted)
-
-        self._loaded_rows += batch_size
-
-        # Update column widths after batch loading
-        self.update_column_widths()
-
-    def _on_scroll(self, event):
-        """Handle scroll events for lazy loading"""
-        # Only trigger loading if we have a loading indicator (large dataset)
-        if not self._loading_item:
-            return
-
-        # Get currently visible items
-        visible_items = self.result_tree.get_children()
-        if not visible_items:
-            return
-
-        # Check if we're near the bottom
-        last_visible = visible_items[-1]
-        bbox = self.result_tree.bbox(last_visible)
-        if bbox and bbox[3] < self.result_tree.winfo_height() + 50:  # 50px threshold
-            self._load_next_batch()
-
-    def update_column_widths(self):
-        """Auto-size columns based on content (capped at 300 px)."""
-        if not self.result_tree['columns']:
-            return
-
-        for col in self.result_tree['columns']:
-            max_width = 0
-            col_index = list(self.result_tree['columns']).index(col)
-
-            # Get all visible items in the treeview
-            for item in self.result_tree.get_children():
-                values = self.result_tree.item(item)['values']
-                # Only process if this row has enough values for this column
-                if col_index < len(values):
-                    cell_value = str(values[col_index])
-                    text_width = len(cell_value) * 8
-                    if text_width > max_width:
-                        max_width = text_width
-
-            width = min(max(max_width, 150), 300)
-            self.result_tree.column(col, width=width)
-
-        self.result_tree.update_idletasks()
+                self._refresh_display()   # trace won't fire when value is unchanged
+        else:
+            self._refresh_display()
 
     def display_error(self, error: str):
         """Display error in the result panel (clears sort / search state)."""
@@ -2588,19 +2487,19 @@ class QueryResultPanel:
     # COLUMN WIDTHS
     # ─────────────────────────────────────────────────────────────────
 
-    # def update_column_widths(self):
-    #     """Auto-size columns based on content (capped at 300 px)."""
-    #     for col in self.result_tree['columns']:
-    #         max_width = 0
-    #         col_index = list(self.result_tree['columns']).index(col)
-    #         for item in self.result_tree.get_children():
-    #             cell_value = self.result_tree.item(item)['values'][col_index]
-    #             text_width = len(str(cell_value)) * 8
-    #             if text_width > max_width:
-    #                 max_width = text_width
-    #         width = min(max(max_width, 150), 300)
-    #         self.result_tree.column(col, width=width)
-    #     self.result_tree.update_idletasks()
+    def update_column_widths(self):
+        """Auto-size columns based on content (capped at 300 px)."""
+        for col in self.result_tree['columns']:
+            max_width = 0
+            col_index = list(self.result_tree['columns']).index(col)
+            for item in self.result_tree.get_children():
+                cell_value = self.result_tree.item(item)['values'][col_index]
+                text_width = len(str(cell_value)) * 8
+                if text_width > max_width:
+                    max_width = text_width
+            width = min(max(max_width, 150), 300)
+            self.result_tree.column(col, width=width)
+        self.result_tree.update_idletasks()
 
     def reset_column_widths(self):
         """Reset all columns to 150 px."""
