@@ -1580,7 +1580,20 @@ class QueryManager:
 
         return sql
 
+    def cursor_execute(self, sql: str, cursor):
+        try:
+            cursor.execute(sql)
+        except Exception as e:
+            # If we get a transaction error, try to rollback
+            if "current transaction is aborted" in str(e):
+                self.db_connection.current_connection.rollback()
+                # Try executing again after rollback
+                cursor.execute(sql)
+            else:
+                raise
 
+        return cursor
+        
 
     def execute_query(self, sql: str) -> Dict[str, Any]:
         try:

@@ -8,6 +8,7 @@ from connection        import DBConnection
 from Panels            import DatabaseTreePanel, SQLQueryEditorPanel, QueryResultPanel, StatusBarPanel
 from ConnectionManager import ConnectionManager
 from connstr_generator import ConnectionStringGenerator
+from QueryManager      import QueryManager
 
 class Theme:
     def __init__(self, root):
@@ -179,6 +180,9 @@ class DBExp:
         # Configuration
         self.config = self.load_config()
 
+        # Queries
+        self.query_manager = None
+
         # Connection
         self.conn_str_generator = ConnectionStringGenerator()
 
@@ -199,10 +203,11 @@ class DBExp:
         main_paned.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
         self.query_result_panel = QueryResultPanel(self.root, self.db_connection)
-        self.sql_query_editor_panel = SQLQueryEditorPanel(self.query_result_panel, self.db_connection)
+        self.query_manager = QueryManager(self.db_connection, self.query_result_panel)
+        self.sql_query_editor_panel = SQLQueryEditorPanel(self.query_result_panel, self.db_connection, self.query_manager)
 
         # Left Panel: DB Treeview
-        self.database_tree_panel = DatabaseTreePanel(main_paned, self.db_connection, self.sql_query_editor_panel)
+        self.database_tree_panel = DatabaseTreePanel(main_paned, self.db_connection, self.sql_query_editor_panel, self.query_manager)
         self.database_tree_panel.setup()
 
         # Right container for SQL Query and Query Result

@@ -7,7 +7,6 @@ from tkinter      import ttk, filedialog, messagebox
 from decimal      import Decimal
 from SQLText      import SQLText
 from typing       import List, Tuple
-from QueryManager import QueryManager
 
 
 class Helper:
@@ -43,11 +42,12 @@ class Helper:
         return menu
 
 class DatabaseTreePanel:
-    def __init__(self, parent, db_connection, sql_query_editor_panel):
+    def __init__(self, parent, db_connection, sql_query_editor_panel, query_manager):
         self.parent = parent
         self.db_connection = db_connection
         self.sql_query_editor_panel = sql_query_editor_panel
         self.queries = None  # Will be set based on connection type
+        self.query_manager = query_manager
 
     def setup(self):
         """Panel 1: Database object tree"""
@@ -112,7 +112,14 @@ class DatabaseTreePanel:
         for cb in self._type_checkboxes:
             cb.pack(side=tk.LEFT, padx=1)
 
+        # left_frame
+        # ── Refresh Frame ────────────────────────────────────────────────
+        self.refresh_frame = ttk.Frame(left_frame, style='TFrame')
+        self.refresh_frame.pack(fill=tk.X, padx=4, pady=2)
+        ttk.Button(self.refresh_frame, text="Refresh tree", command=self.load_database_objects, style='TButton').pack(side=tk.RIGHT, padx=2, ipady=2)
 
+        
+        # ── Breadcrumb Frame ──────────────────────────────────────────────
         # Container for ariane wire (Nautilus style)
         self.breadcrumb_frame = ttk.Frame(left_frame, style='TFrame')
         self.breadcrumb_frame.pack(fill=tk.X, padx=4, pady=2)
@@ -231,7 +238,7 @@ class DatabaseTreePanel:
             cursor = self.db_connection.current_connection.cursor()
             queries = self.get_queries_instance()
 
-            cursor.execute(queries.count_table_indexes(schema, table))
+            cursor = self.query_manager.cursor_execute(queries.count_table_indexes(schema, table), cursor)
             index_count = cursor.fetchone()[0]
             if index_count > 0:
                 self.db_tree.insert(
@@ -240,7 +247,7 @@ class DatabaseTreePanel:
                     values=(schema, 'indexes_summary', table)
                 )
 
-            cursor.execute(queries.count_table_prim_and_foreign_keys(schema, table))
+            cursor = self.query_manager.cursor_execute(queries.count_table_prim_and_foreign_keys(schema, table), cursor)
             key_count = cursor.fetchone()[0]
             if key_count > 0:
                 self.db_tree.insert(
@@ -249,7 +256,7 @@ class DatabaseTreePanel:
                     values=(schema, 'keys_summary', table)
                 )
 
-            cursor.execute(queries.get_table_triggers(schema, table))
+            cursor = self.query_manager.cursor_execute(queries.get_table_triggers(schema, table), cursor)
             triggers = cursor.fetchall()
             if triggers:
                 triggers_node = self.db_tree.insert(
@@ -275,7 +282,7 @@ class DatabaseTreePanel:
             queries = self.get_queries_instance()
 
             # Load procedures
-            cursor.execute(queries.count_procedures_in_schema(schema))
+            cursor = self.query_manager.cursor_execute(queries.count_procedures_in_schema(schema), cursor)
             procedure_count = cursor.fetchone()[0]
             if procedure_count > 0:
                 procedures_node = self.db_tree.insert(
@@ -284,7 +291,7 @@ class DatabaseTreePanel:
                     values=(schema, 'procedures_folder')
                 )
 
-                cursor.execute(queries.get_all_procedures_in_schema(schema))
+                cursor = self.query_manager.cursor_execute(queries.get_all_procedures_in_schema(schema), cursor)
                 procedures = cursor.fetchall()
                 for (procedure_name,) in procedures:
                     self.db_tree.insert(
@@ -294,7 +301,7 @@ class DatabaseTreePanel:
                     )
 
             # Load functions
-            cursor.execute(queries.count_functions_in_schema(schema))
+            cursor = self.query_manager.cursor_execute(queries.count_functions_in_schema(schema), cursor)
             function_count = cursor.fetchone()[0]
             if function_count > 0:
                 functions_node = self.db_tree.insert(
@@ -303,7 +310,7 @@ class DatabaseTreePanel:
                     values=(schema, 'functions_folder')
                 )
 
-                cursor.execute(queries.get_all_functions_in_schema(schema))
+                cursor = self.query_manager.cursor_execute(queries.get_all_functions_in_schema(schema), cursor)
                 functions = cursor.fetchall()
                 for (function_name,) in functions:
                     self.db_tree.insert(
@@ -313,7 +320,7 @@ class DatabaseTreePanel:
                     )
 
             # Load packages
-            cursor.execute(queries.count_packages_in_schema(schema))
+            cursor = self.query_manager.cursor_execute(queries.count_packages_in_schema(schema), cursor)
             package_count = cursor.fetchone()[0]
             if package_count > 0:
                 packages_node = self.db_tree.insert(
@@ -322,7 +329,7 @@ class DatabaseTreePanel:
                     values=(schema, 'packages_folder')
                 )
 
-                cursor.execute(queries.get_all_packages_in_schema(schema))
+                cursor = self.query_manager.cursor_execute(queries.get_all_packages_in_schema(schema), cursor)
                 packages = cursor.fetchall()
                 for (package_name,) in packages:
                     package_node = self.db_tree.insert(
@@ -334,7 +341,7 @@ class DatabaseTreePanel:
                     self.db_tree.insert(package_node, 'end', text='Loading...', values=(schema, 'loading'))
 
             # Load views
-            cursor.execute(queries.count_views_in_schema(schema))
+            cursor = self.query_manager.cursor_execute(queries.count_views_in_schema(schema), cursor)
             view_count = cursor.fetchone()[0]
             if view_count > 0:
                 views_node = self.db_tree.insert(
@@ -343,7 +350,7 @@ class DatabaseTreePanel:
                     values=(schema, 'views_folder')
                 )
 
-                cursor.execute(queries.get_all_views_in_schema(schema))
+                cursor = self.query_manager.cursor_execute(queries.get_all_views_in_schema(schema), cursor)
                 views = cursor.fetchall()
                 for (view_name,) in views:
                     self.db_tree.insert(
@@ -361,7 +368,7 @@ class DatabaseTreePanel:
         try:
             cursor = self.db_connection.current_connection.cursor()
             queries = self.get_queries_instance()
-            cursor.execute(queries.get_view_dependencies(schema, view))
+            cursor = self.query_manager.cursor_execute(queries.get_view_dependencies(schema, view), cursor)
             columns = [desc[0] for desc in cursor.description]
             rows = cursor.fetchall()
 
@@ -387,7 +394,7 @@ class DatabaseTreePanel:
         try:
             cursor = self.db_connection.current_connection.cursor()
             queries = self.get_queries_instance()
-            cursor.execute(queries.get_view_body(schema, view_name))
+            cursor = self.query_manager.cursor_execute(queries.get_view_body(schema, view_name), cursor)
             result = cursor.fetchall()
             cursor.close()
 
@@ -415,7 +422,7 @@ class DatabaseTreePanel:
         try:
             cursor = self.db_connection.current_connection.cursor()
             queries = self.get_queries_instance()
-            cursor.execute(queries.get_view_structure(schema, view))
+            cursor = self.query_manager.cursor_execute(queries.get_view_structure(schema, view), cursor)
             columns = [desc[0] for desc in cursor.description]
             rows = cursor.fetchall()
 
@@ -500,7 +507,7 @@ class DatabaseTreePanel:
         try:
             cursor = self.db_connection.current_connection.cursor()
             queries = self.get_queries_instance()
-            cursor.execute(queries.get_view_comment(schema, view))
+            cursor = self.query_manager.cursor_execute(queries.get_view_comment(schema, view), cursor)
             result = cursor.fetchone()
             cursor.close()
 
@@ -528,7 +535,7 @@ class DatabaseTreePanel:
         try:
             cursor = self.db_connection.current_connection.cursor()
             queries = self.get_queries_instance()
-            cursor.execute(queries.get_view_query(schema, view))
+            cursor = self.query_manager.cursor_execute(queries.get_view_query(schema, view), cursor)
             result = cursor.fetchall()
             cursor.close()
 
@@ -560,7 +567,7 @@ class DatabaseTreePanel:
             cursor = self.db_connection.current_connection.cursor()
             queries = self.get_queries_instance()
 
-            cursor.execute(queries.get_package_functions_and_procedures(schema, package_name))
+            cursor = self.query_manager.cursor_execute(queries.get_package_functions_and_procedures(schema, package_name), cursor)
             procedures = cursor.fetchall()
 
             if procedures:
@@ -611,7 +618,7 @@ class DatabaseTreePanel:
             cursor = self.db_connection.current_connection.cursor()
             queries = self.get_queries_instance()
 
-            cursor.execute(queries.get_all_schemas_with_their_table_count())
+            cursor = self.query_manager.cursor_execute(queries.get_all_schemas_with_their_table_count(), cursor)
             schemas = cursor.fetchall()
 
             # Clean ariane wire when connecting to a new db
@@ -629,14 +636,14 @@ class DatabaseTreePanel:
                 # Add loading placeholder for schema children (procedures, functions, and packages) after tables
                 loading_placeholder = self.db_tree.insert(schema_node, 'end', text='Loading...', values=(schema, 'loading'))
 
-                cursor.execute(queries.get_all_table_names_in_schema(schema))
+                cursor = self.query_manager.cursor_execute(queries.get_all_table_names_in_schema(schema), cursor)
                 table_results = cursor.fetchall()
                 for (table,) in table_results:
                     table_node = self.db_tree.insert(tables_node, 'end', text=table, values=(schema, 'table', table))
                     self.db_tree.insert(table_node, 'end', text='Loading...', values=(schema, 'loading'))
 
                 try:
-                    cursor.execute(queries.get_current_session_roles())
+                    cursor = self.query_manager.cursor_execute(queries.get_current_session_roles(), cursor)
                     roles = cursor.fetchall()
                     roles_node = self.db_tree.insert(schema_node, 'end', text=f'Roles ({len(roles)})', values=(schema, 'roles_folder'))
                     for (role,) in roles:
@@ -645,7 +652,7 @@ class DatabaseTreePanel:
                     roles_node = self.db_tree.insert(schema_node, 'end', text='Roles (0)', values=(schema, 'roles_folder'))
 
                 try:
-                    cursor.execute(queries.get_current_session_privileges())
+                    cursor = self.query_manager.cursor_execute(queries.get_current_session_privileges(), cursor)
                     privileges = cursor.fetchall()
                     privs_node = self.db_tree.insert(schema_node, 'end', text=f'Privileges ({len(privileges)})', values=(schema, 'privileges_folder'))
                     for (privilege,) in privileges:
@@ -690,7 +697,7 @@ class DatabaseTreePanel:
         try:
             cursor = self.db_connection.current_connection.cursor()
             queries = self.get_queries_instance()
-            cursor.execute(queries.get_trigger_body(schema, trigger_name))
+            cursor = self.query_manager.cursor_execute(queries.get_trigger_body(schema, trigger_name), cursor)
             result = cursor.fetchone()
             cursor.close()
 
@@ -716,7 +723,7 @@ class DatabaseTreePanel:
         try:
             cursor = self.db_connection.current_connection.cursor()
             queries = self.get_queries_instance()
-            cursor.execute(queries.get_procedure_body(schema, procedure_name))
+            cursor = self.query_manager.cursor_execute(queries.get_procedure_body(schema, procedure_name), cursor)
             result = cursor.fetchall()
             cursor.close()
 
@@ -743,7 +750,7 @@ class DatabaseTreePanel:
         try:
             cursor = self.db_connection.current_connection.cursor()
             queries = self.get_queries_instance()
-            cursor.execute(queries.get_function_body(schema, function_name))
+            cursor = self.query_manager.cursor_execute(queries.get_function_body(schema, function_name), cursor)
             result = cursor.fetchall()
             cursor.close()
 
@@ -771,12 +778,12 @@ class DatabaseTreePanel:
             queries = self.get_queries_instance()
 
             # 1️⃣ Try PACKAGE BODY first
-            cursor.execute(queries.get_package_body(schema, package_name))
+            cursor = self.query_manager.cursor_execute(queries.get_package_body(schema, package_name), cursor)
             rows = cursor.fetchall()
 
             # 2️⃣ Fallback to PACKAGE SPEC if BODY not visible
             if not rows:
-                cursor.execute(queries.get_package_spec(schema, package_name))
+                cursor = self.query_manager.cursor_execute(queries.get_package_spec(schema, package_name), cursor)
                 rows = cursor.fetchall()
                 title_suffix = " (Spec)"
             else:
@@ -821,11 +828,11 @@ class DatabaseTreePanel:
             queries = self.get_queries_instance()
 
             # 1️⃣ Load FULL package body
-            cursor.execute(queries.get_package_body(schema, package_name))
+            cursor = self.query_manager.cursor_execute(queries.get_package_body(schema, package_name), cursor)
             source = cursor.fetchall()
 
             if not source:
-                cursor.execute(queries.get_package_spec(schema, package_name))
+                cursor = self.query_manager.cursor_execute(queries.get_package_spec(schema, package_name), cursor)
                 source = cursor.fetchall()
 
             cursor.close()
@@ -879,7 +886,7 @@ class DatabaseTreePanel:
         try:
             cursor = self.db_connection.current_connection.cursor()
             queries = self.get_queries_instance()
-            cursor.execute(queries.get_package_function_or_procedure_parameters(schema, package_name, procedure_name, overload))
+            cursor = self.query_manager.cursor_execute(queries.get_package_function_or_procedure_parameters(schema, package_name, procedure_name, overload), cursor)
             columns = [desc[0] for desc in cursor.description]
             rows = cursor.fetchall()
             cursor.close()
@@ -1160,10 +1167,10 @@ class DatabaseTreePanel:
 
 
 class SQLQueryEditorPanel:
-    def __init__(self, query_result_panel, db_connection):
+    def __init__(self, query_result_panel, db_connection, query_manager):
         self.query_result_panel = query_result_panel
         self.db_connection = db_connection
-        self.query_manager = QueryManager(db_connection, query_result_panel)
+        self.query_manager = query_manager
         self.tab_results = {}  # Store results for each tab
 
     def setup(self, parent, root, theme):
@@ -1408,7 +1415,7 @@ class SQLQueryEditorPanel:
             cursor = self.db_connection.current_connection.cursor()
             queries = self.get_queries_instance()
 
-            cursor.execute(queries.get_table_keys(schema, table))
+            cursor = self.query_manager.cursor_execute(queries.get_table_keys(schema, table), cursor)
             raw_rows = cursor.fetchall()
             cursor.close()
 
@@ -1438,7 +1445,7 @@ class SQLQueryEditorPanel:
         try:
             cursor = self.db_connection.current_connection.cursor()
             queries = self.get_queries_instance()
-            cursor.execute(queries.get_table_structure(schema, table))
+            cursor = self.query_manager.cursor_execute(queries.get_table_structure(schema, table), cursor)
             columns = [desc[0] for desc in cursor.description]
             rows = cursor.fetchall()
 
@@ -1464,7 +1471,7 @@ class SQLQueryEditorPanel:
         try:
             cursor = self.db_connection.current_connection.cursor()
             queries = self.get_queries_instance()
-            cursor.execute(queries.get_table_indexes(schema, table))
+            cursor = self.query_manager.cursor_execute(queries.get_table_indexes(schema, table), cursor)
             columns = [desc[0] for desc in cursor.description]
             rows = cursor.fetchall()
             cursor.close()
