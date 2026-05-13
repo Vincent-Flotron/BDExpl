@@ -2108,6 +2108,7 @@ class QueryResultPanel:
             search_indices = list(range(len(self._all_unique_columns)))
 
         # ── 1. Filter ────────────────────────────────────────────────
+        pattern = None
         if search_term and search_indices:
             try:
                 if use_regex:
@@ -2169,16 +2170,23 @@ class QueryResultPanel:
                 else:
                     val_str = str(v)
 
-                # --- NEW CELL-SPECIFIC HIGHLIGHT LOGIC ---
-                # If searching, check if THIS specific cell is in a searched column 
-                # and contains the search term.
-                if search_term and i in search_indices and search_term in val_str.lower():
-                    # Prefix with a symbol to "highlight" the cell
-                    formatted.append(f"▶ {val_str}") 
+                # --- UPDATED CELL-SPECIFIC HIGHLIGHT LOGIC ---
+                if search_term and i in search_indices:
+                    if use_regex:
+                        # Use the compiled regex pattern for highlighting
+                        if pattern and pattern.search(val_str):
+                            formatted.append(f"▶ {val_str}")
+                        else:
+                            formatted.append(val_str)
+                    else:
+                        # Standard substring search for highlighting
+                        if search_term.lower() in val_str.lower():
+                            formatted.append(f"▶ {val_str}")
+                        else:
+                            formatted.append(val_str)
                 else:
                     formatted.append(val_str)
 
-            # We remove the tags=('match',) here so the whole row isn't colored
             self.result_tree.insert('', 'end', values=formatted)
 
         # ── 4. Update info labels ────────────────────────────────────
