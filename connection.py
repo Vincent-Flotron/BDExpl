@@ -139,14 +139,14 @@ class DBConnection:
         else:
             return QueriesOracle()
 
-    # def get_connection_type(self):
-    #     """Get the type of the current database connection"""
-    #     if not self.current_connection:
-    #         return None
+    def get_connection_type(self):
+        """Get the type of the current database connection"""
+        if not self.current_connection:
+            return None
 
-    #     # Prefer the explicit tracker set by ConnectionManager
-    #     if self.current_connection_type:
-    #         return self.current_connection_type
+        # Prefer the explicit tracker set by ConnectionManager
+        if self.current_connection_type:
+            return self.current_connection_type
 
     #     # Fallback: isinstance checks (cannot distinguish Oracle ODBC from MSSQL)
     #     conn = self.current_connection

@@ -1194,7 +1194,7 @@ class SQLQueryEditorPanel:
         ttk.Button(toolbar, text="Open", command=self.open_sql_file, style='TButton').pack(side=tk.LEFT, padx=2)
         ttk.Button(toolbar, text="Save", command=self.save_current_sql, style='TButton').pack(side=tk.LEFT, padx=2)
         ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=5)
-        ttk.Button(toolbar, text="Execute (F5)", command=self.execute_query, style='TButton').pack(side=tk.LEFT, padx=2)
+        ttk.Button(toolbar, text="Execute (F5)", command=self.execute, style='TButton').pack(side=tk.LEFT, padx=2)
         ttk.Button(toolbar, text="Execute Selection", command=self.execute_selection, style='TButton').pack(side=tk.LEFT, padx=2)
 
         self.sql_notebook = ttk.Notebook(editor_frame, style='TNotebook')
@@ -1204,7 +1204,7 @@ class SQLQueryEditorPanel:
 
         self.root.bind('<Control-n>', lambda e: self.new_sql_tab())
         self.root.bind('<Control-s>', lambda e: self.save_current_sql())
-        self.root.bind('<F5>', lambda e: self.execute_query())
+        self.root.bind('<F5>', lambda e: self.execute())
 
         self.sql_notebook.bind('<Button-2>', self.close_current_tab)
         self.sql_notebook.bind("<<NotebookTabChanged>>", self.on_tab_changed)
@@ -1701,7 +1701,7 @@ class SQLQueryEditorPanel:
         except Exception as e:
             messagebox.showerror("Error", f"Failed to save file: {str(e)}")
 
-    def execute_query(self):
+    def execute(self):
         """Execute SQL query from current tab"""
         if not self.db_connection.current_connection:
             messagebox.showwarning("Not Connected", "Please connect to a database first")

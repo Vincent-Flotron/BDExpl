@@ -297,7 +297,7 @@ class DBExp:
         # Query menu
         query_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Query", menu=query_menu)
-        query_menu.add_command(label="Execute (F5)", command=self.sql_query_editor_panel.execute_query)
+        query_menu.add_command(label="Execute (F5)", command=self.sql_query_editor_panel.execute)
         query_menu.add_command(label="Execute Selection", command=self.sql_query_editor_panel.execute_selection)
 
         # Populate existing connections menu

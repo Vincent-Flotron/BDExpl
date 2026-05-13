@@ -1580,11 +1580,23 @@ class QueryManager:
 
         return sql
 
+
+
     def execute_query(self, sql: str) -> Dict[str, Any]:
         try:
             sql = self._clean_sql(sql)
             cursor = self.db_connection.current_connection.cursor()
-            cursor.execute(sql)
+
+            try:
+                cursor.execute(sql)
+            except Exception as e:
+                # If we get a transaction error, try to rollback
+                if "current transaction is aborted" in str(e):
+                    self.db_connection.current_connection.rollback()
+                    # Try executing again after rollback
+                    cursor.execute(sql)
+                else:
+                    raise
 
             if cursor.description:
                 columns = [d[0] for d in cursor.description]
@@ -1606,17 +1618,17 @@ class QueryManager:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    def run_query(self, sql: str):
-        result = self.execute_query(sql)
+    # def run_query(self, sql: str):
+    #     result = self.execute_query(sql)
 
-        if result["success"]:
-            if "columns" in result:
-                self.query_result_panel.display_results(
-                    result["columns"],
-                    result["rows"],
-                    result["description"],
-                )
-            else:
-                self.query_result_panel.display_message(result["message"])
-        else:
-            self.query_result_panel.display_error(result["error"])
+    #     if result["success"]:
+    #         if "columns" in result:
+    #             self.query_result_panel.display_results(
+    #                 result["columns"],
+    #                 result["rows"],
+    #                 result["description"],
+    #             )
+    #         else:
+    #             self.query_result_panel.display_message(result["message"])
+    #     else:
+    #         self.query_result_panel.display_error(result["error"])
