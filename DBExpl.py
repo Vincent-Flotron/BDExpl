@@ -26,6 +26,7 @@ class Theme:
         highlight_color = '#e5e7eb'  # For highlighted elements
         success_color = '#2ecc71'  # Green for success messages
         error_color = '#e74c3c'  # Red for errors
+        refresh_color = '#666633'  # Custom color for refresh button
 
         self.style = ttk.Style()
         self.style.theme_use('clam')  # Best theme for custom styling
@@ -59,8 +60,8 @@ class Theme:
                             background=primary_color,
                             foreground='white')
         self.style.map('TButton',
-                      background=[('active', accent_color), ('!active', primary_color)],
-                      relief=[('pressed', 'sunken'), ('!pressed', 'raised')])
+                    background=[('active', accent_color), ('!active', primary_color)],
+                    relief=[('pressed', 'sunken'), ('!pressed', 'raised')])
 
         # Style for SQL helper buttons (green)
         self.style.configure('SQLHelper.TButton',
@@ -70,8 +71,19 @@ class Theme:
                             background=success_color,
                             foreground='white')
         self.style.map('SQLHelper.TButton',
-                      background=[('active', '#27ae60'), ('!active', success_color)],
-                      relief=[('pressed', 'sunken'), ('!pressed', 'raised')])
+                    background=[('active', '#27ae60'), ('!active', success_color)],
+                    relief=[('pressed', 'sunken'), ('!pressed', 'raised')])
+
+        # Style for refresh button (custom color)
+        self.style.configure('Refresh.TButton',
+                            font=('Helvetica', 9),
+                            borderwidth=1,
+                            padding=8,
+                            background=refresh_color,
+                            foreground='white')
+        self.style.map('Refresh.TButton',
+                    background=[('active', '#55552a'), ('!active', refresh_color)],
+                    relief=[('pressed', 'sunken'), ('!pressed', 'raised')])
 
         # Style for notebook (tabs)
         self.style.configure('TNotebook',
@@ -83,8 +95,8 @@ class Theme:
                             background=highlight_color,
                             foreground=text_color)
         self.style.map('TNotebook.Tab',
-                      background=[('selected', bg_color), ('!selected', highlight_color)],
-                      expand=[('selected', [1, 1, 1, 0])])
+                    background=[('selected', bg_color), ('!selected', highlight_color)],
+                    expand=[('selected', [1, 1, 1, 0])])
 
         # Style for treeview
         self.style.configure('Treeview',
@@ -96,8 +108,8 @@ class Theme:
                             bordercolor=border_color,
                             highlightthickness=0)
         self.style.map('Treeview',
-                      background=[('selected', primary_color)],
-                      foreground=[('selected', 'white')])
+                    background=[('selected', primary_color)],
+                    foreground=[('selected', 'white')])
         self.style.configure('Treeview.Heading',
                             font=('Helvetica', 10, 'bold'),
                             foreground=text_color,
