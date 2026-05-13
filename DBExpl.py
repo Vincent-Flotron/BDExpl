@@ -78,7 +78,8 @@ class Theme:
         self.style.configure('Refresh.TButton',
                             font=('Helvetica', 9),
                             borderwidth=1,
-                            padding=8,
+                            padding=4,
+                            width=4,
                             background=refresh_color,
                             foreground='white')
         self.style.map('Refresh.TButton',

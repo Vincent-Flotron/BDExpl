@@ -1854,36 +1854,6 @@ class QueryResultPanel:
 
         ttk.Label(header, text="Query Result", style='Bold.TLabel').pack(side=tk.LEFT)
 
-        # # Ajoutez un contrôle pour sélectionner le code-page
-        # codepage_frame = ttk.Frame(header, style='TFrame')
-        # codepage_frame.pack(side=tk.RIGHT, padx=5)
-
-        # ttk.Label(codepage_frame, text="Code Page:").pack(side=tk.LEFT, padx=2)
-
-        # # Liste des code-pages courants utilisés par Oracle
-        # self.codepage_options = [
-        #     'utf-8', 'iso-8859-1', 'iso-8859-15', 'windows-1252',
-        #     'cp1252', 'cp850', 'cp437', 'cp852', 'cp857', 'cp860',
-        #     'cp863', 'cp865', 'cp874', 'shift_jis', 'euc-jp', 'euc-kr'
-        # ]
-
-        # self.codepage_var = tk.StringVar(value=self.current_codepage)
-        # self.codepage_combobox = ttk.Combobox(
-        #     codepage_frame,
-        #     textvariable=self.codepage_var,
-        #     values=self.codepage_options,
-        #     state='readonly',
-        #     width=12
-        # )
-        # self.codepage_combobox.pack(side=tk.LEFT, padx=2)
-        # self.codepage_combobox.bind('<<ComboboxSelected>>', self.on_codepage_change)
-
-        # self.show_labels = self.config.get("show_labels", False)
-
-        # self.label_var = tk.BooleanVar(value=self.show_labels)
-        # ttk.Radiobutton(header, text="Field Names", variable=self.label_var, value=False, command=self.toggle_labels).pack(side=tk.RIGHT, padx=5)
-        # ttk.Radiobutton(header, text="Field Labels", variable=self.label_var, value=True, command=self.toggle_labels).pack(side=tk.RIGHT, padx=5)
-
         grid_container = ttk.Frame(result_frame, style='TFrame')
         grid_container.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
@@ -1907,19 +1877,6 @@ class QueryResultPanel:
 
         # Stocker le texte brut des erreurs pour rafraîchissement
         self.raw_error_text = None
-
-    # def on_codepage_change(self, event=None):
-    #     """Mise à jour du code-page courant"""
-    #     self.current_codepage = self.codepage_var.get()
-    #     if self.raw_error_text:
-    #         self.refresh_display()
-
-    # def decode_error_with_codepage(self, error_text, codepage):
-    #     """Décoder un texte d'erreur avec un code-page spécifique"""
-    #     try:
-    #         return error_text.decode(codepage, errors='replace')
-    #     except:
-    #         return error_text.decode('utf-8', errors='replace')
         
 
     def display_error(self, error: str):
@@ -1947,15 +1904,6 @@ class QueryResultPanel:
         self.result_tree.column('Error', width=800)
         self.result_tree.heading('Error', text='SQL Error')
         self.result_tree.insert('', 'end', values=[error])
-
-    # def refresh_display(self):
-    #     """Rafraîchir l'affichage avec le code-page courant"""
-    #     if self.raw_error_text:
-    #         try:
-    #             decoded_text = self.decode_error_with_codepage(self.raw_error_text, self.current_codepage)
-    #             self.display_error(decoded_text)
-    #         except Exception as e:
-    #             messagebox.showerror("Error", f"Failed to decode error message: {str(e)}")
 
 
     def display_message(self, message: str):
@@ -2092,10 +2040,6 @@ class QueryResultPanel:
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to export data: {str(e)}")
 
-    # def toggle_labels(self):
-    #     """Toggle between field names and labels"""
-    #     self.show_labels = self.label_var.get()
-    #     self.save_config()
 
 class StatusBarPanel:
     def __init__(self, root, text, style):
