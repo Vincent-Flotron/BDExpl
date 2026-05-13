@@ -2372,7 +2372,10 @@ class QueryResultPanel:
         if not selected:
             return
         lines = [
-            '\t'.join(str(v) for v in self.result_tree.item(item)['values'])
+            '\t'.join(
+                str(v).replace('▶ ', '') if isinstance(v, str) and v.startswith('▶ ') else str(v)
+                for v in self.result_tree.item(item)['values']
+            )
             for item in selected
         ]
         self.root.clipboard_clear()
@@ -2397,7 +2400,11 @@ class QueryResultPanel:
                     writer = csv.writer(f, delimiter='\t')
                     writer.writerow(self.result_tree['columns'])
                     for item in self.result_tree.get_children():
-                        writer.writerow(self.result_tree.item(item)['values'])
+                        row = [
+                            str(v).replace('▶ ', '') if isinstance(v, str) and v.startswith('▶ ') else str(v)
+                            for v in self.result_tree.item(item)['values']
+                        ]
+                        writer.writerow(row)
                 messagebox.showinfo("Success", f"Data exported to {filepath}")
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to export data: {str(e)}")
