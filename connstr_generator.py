@@ -11,11 +11,13 @@ else:
     win32cred = None
 
 class ConnectionStringGenerator:
-    def __init__(self, use_env_vars: bool = False):
+    def __init__(self, use_env_vars):
         self.use_env_vars = use_env_vars
-        # Initialize environment variable storage if needed
-        if self.use_env_vars:
-            self._init_env_storage()
+        # Initialize environment variable storage in any cases
+        self._init_env_storage()
+
+    def set_use_env_vars(self, use_env_vars):
+        self.use_env_vars = use_env_vars
 
     def _init_env_storage(self):
         """Initialize environment variable storage file if it doesn't exist"""
@@ -368,7 +370,8 @@ class ConnectionStringGenerator:
             return sorted(unique_names)
         else:
             if win32cred is None:
-                raise Exception("Windows Credential Manager is only available on Windows systems")
+                self.use_env_vars = True
+                raise Exception("Windows Credential Manager is only available on Windows systems.")
 
             try:
                 creds = self.find_credentials_starting_with(f"{ROOT_NAME}_")
