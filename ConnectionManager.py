@@ -118,8 +118,7 @@ class ConnectionManager:
             messagebox.showerror("Connection Error", f"PostgreSQL connection failed: {str(e)}")
         except oracledb.Error as e:
             messagebox.showerror("Connection Error", f"OracleDB connection failed: {str(e)}")
-        # except pyodbc and pyodbc.Error as e:
-        except pyodbc.Error as e:
+        except pyodbc and pyodbc.Error as e:
             messagebox.showerror("Connection Error", f"ODBC connection failed: {str(e)}")
         except Exception as e:
             messagebox.showerror("Connection Error", f"Failed to connect: {str(e)}")
