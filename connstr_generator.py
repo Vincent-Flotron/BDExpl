@@ -161,7 +161,7 @@ class ConnectionStringGenerator:
         for key, value in params.items():
             self._save_cred(f"{root_name}{connection_name}_{key}", value)
 
-    def save_sqlite_connection(self, connection_name: str, db_path: str, use_root_name: bool = True):
+    def save_sqlite_credentials(self, connection_name: str, db_path: str, use_root_name: bool = True):
         """Save SQLite connection parameters"""
         self._save_connection_params(
             connection_name,
@@ -169,7 +169,7 @@ class ConnectionStringGenerator:
             use_root_name
         )
 
-    def save_postgresql_connection(self, connection_name: str, host: str, port: int, database: str,
+    def save_postgresql_credentials(self, connection_name: str, host: str, port: int, database: str,
                                    user: str, password: str, sslmode: str = "require",
                                    sslrootcert: str = "", use_root_name: bool = True):
         """Save PostgreSQL connection parameters"""
@@ -208,7 +208,7 @@ class ConnectionStringGenerator:
             "sslrootcert": get_cred(f"{root_name}{connection_name}_SSLROOTCERT") or "",
         }
 
-    def save_oracledb_connection(self, connection_name: str, host: str, port: int,
+    def save_oracledb_credentials(self, connection_name: str, host: str, port: int,
                                  sid: str, user: str, password: str,
                                  use_root_name: bool = True):
         """Save OracleDB connection parameters"""
@@ -257,7 +257,7 @@ class ConnectionStringGenerator:
 
         return db_path
 
-    def save_mssql_connection(self, connection_name: str, host: str, port: int, database: str,
+    def save_mssql_credentials(self, connection_name: str, host: str, port: int, database: str,
                               user: str, password: str,
                               auth_type: str = "SQL",
                               driver: str = "{ODBC Driver 17 for SQL Server}",
@@ -305,7 +305,7 @@ class ConnectionStringGenerator:
         }
 
     def save_oracle_odbc_user_credentials(self, connection_name: str, host: str, user: str, password: str, use_root_name: bool = True):
-        self.save_odbc_connection_credentials(
+        self.save_odbc_credentials(
             driver="{Oracle dans OraClient19Home1}",
             connection_name=connection_name,
             host=host,
@@ -314,7 +314,7 @@ class ConnectionStringGenerator:
             use_root_name=use_root_name
         )
 
-    def save_odbc_connection_credentials(self, driver: str, connection_name: str, host: str, user: str, password: str, use_root_name: bool = True):
+    def save_odbc_credentials(self, driver: str, connection_name: str, host: str, user: str, password: str, use_root_name: bool = True):
         """Save ODBC connection credentials"""
         self._save_connection_params(
             connection_name,

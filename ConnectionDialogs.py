@@ -367,7 +367,7 @@ class NewConnectionDialog:
                     except ValueError:
                         messagebox.showerror("Error", "Port must be a number")
                         return
-                    self.conn_str_generator.save_oracledb_connection(conn_name, odb_host, port_int, odb_sid,
+                    self.conn_str_generator.save_oracledb_credentials(conn_name, odb_host, port_int, odb_sid,
                                              odb_user, odb_pwd)
 
                 elif db_type == "PostgreSQL":
@@ -395,7 +395,7 @@ class NewConnectionDialog:
                     except ValueError:
                         messagebox.showerror("Error", "Port must be a number")
                         return
-                    self.conn_str_generator.save_postgresql_connection(conn_name, pg_host, port_int, pg_db,
+                    self.conn_str_generator.save_postgresql_credentials(conn_name, pg_host, port_int, pg_db,
                                                pg_user, pg_pwd, pg_ssl, pg_cert)
 
                 elif db_type == "MSSQL":
@@ -426,7 +426,7 @@ class NewConnectionDialog:
                     except ValueError:
                         messagebox.showerror("Error", "Port must be a number")
                         return
-                    self.conn_str_generator.save_mssql_connection(
+                    self.conn_str_generator.save_mssql_credentials(
                         conn_name, ms_host, port_int, ms_db,
                         ms_user, ms_pwd, ms_auth, ms_driver, ms_enc, ms_trust
                     )
@@ -436,7 +436,7 @@ class NewConnectionDialog:
                     if not db_path:
                         messagebox.showerror("Error", "Database file path is required")
                         return
-                    self.conn_str_generator.save_sqlite_connection(conn_name, db_path)
+                    self.conn_str_generator.save_sqlite_credentials(conn_name, db_path)
 
                 messagebox.showinfo("Success", f"Connection '{conn_name}' saved successfully")
                 self.parent.populate_existing_connections_menu()

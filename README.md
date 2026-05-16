@@ -72,7 +72,7 @@ Shows the current connection name and database type, or "Not connected" when idl
 | `SQLText.py`           | Custom `tkinter.Text` subclass that adds SQL syntax highlighting, keyboard shortcuts (comment/uncomment, indent, auto-indent), and undo/redo support. Used as the editor widget inside each SQL tab. |
 | `connection.py`        | `DBConnection` class — holds the active connection object and provides `connect_*` factory methods for each database type. Also has `get_queries_instance()` which returns the right `Queries` subclass based on the connection type. |
 | `ConnectionManager.py` | `ConnectionManager` class — bridges the GUI and the credential store. Reads saved credentials via `connstr_generator`, builds the appropriate connection, updates the status bar, and triggers the tree reload. Also handles disconnect and credential deletion. |
-| `connstr_generator.py` | All interactions with Windows Credential Manager (`win32cred`). Provides `save_*` functions to persist connection parameters, `get_*` functions to retrieve them, `get_all_connection_names()` to list saved connections, `get_connection_type()` to detect the database engine, and `delete_connection_credentials()` to remove all keys for a given connection. The credential key naming convention is `DBExp_{connection_name}_{FIELD}`. Supports Oracle, OracleDB, PostgreSQL, SQL Server (`MSSQL`), and SQLite. |
+| `connstr_generator.py` | All interactions with Windows Credential Manager (`win32cred`). Provides `save_*` functions to persist connection parameters, `get_*` functions to retrieve them, `get_all_credentials_names()` to list saved connections, `get_connection_type()` to detect the database engine, and `delete_connection_credentials()` to remove all keys for a given connection. The credential key naming convention is `DBExp_{connection_name}_{FIELD}`. Supports Oracle, OracleDB, PostgreSQL, SQL Server (`MSSQL`), and SQLite. |
 | `QueryManager.py`      | Abstract `Queries` base class and four concrete implementations: `QueriesOracle`, `QueriesSQLite`, `QueriesPostgreSQL`, `QueriesMSSQL`. Each implements the same set of SQL queries adapted to the engine's system catalog (e.g. `ALL_TABLES` for Oracle, `sqlite_master` for SQLite, `information_schema` for PostgreSQL, `sys.*` catalog views for SQL Server). Also contains `QueryManager`, which executes a query against the active connection and returns columns + rows. |
 | `make_exe.ps1`         | PowerShell one-liner that packages the application into a standalone Windows executable using PyInstaller (`--onefile --windowed`), with `win32timezone` included as a hidden import (required by `pywin32`). |
 
@@ -135,38 +135,38 @@ If you need to pre-populate connections without going through the GUI, import fr
 ```python
 from connstr_generator import (
     save_odbc_user_credentials,
-    save_oracledb_connection,
-    save_postgresql_connection,
-    save_sqlite_connection,
-    save_mssql_connection,
+    save_oracledb_credentials,
+    save_postgresql_credentials,
+    save_sqlite_credentials,
+    save_mssql_credentials,
 )
 
 # Oracle via ODBC
 save_odbc_user_credentials("myoracle", host="MYSERVER", user="scott", password="tiger")
 
 # Oracle via oracledb (no ODBC driver needed)
-save_oracledb_connection("myoracledb", host="localhost", port=1521, sid="ORCL", user="scott", password="tiger")
+save_oracledb_credentials("myoracledb", host="localhost", port=1521, sid="ORCL", user="scott", password="tiger")
 
 # PostgreSQL
-save_postgresql_connection("mypg", host="localhost", port=5432, database="mydb",
+save_postgresql_credentials("mypg", host="localhost", port=5432, database="mydb",
                            user="postgres", password="secret", sslmode="require")
 
 # SQL Server — SQL Server Authentication
-save_mssql_connection("mssqldev", host="localhost", port=1433, database="AdventureWorks",
+save_mssql_credentials("mssqldev", host="localhost", port=1433, database="AdventureWorks",
                       user="sa", password="secret",
                       auth_type="SQL",
                       driver="{ODBC Driver 17 for SQL Server}",
                       encrypt="yes", trust_server_cert="yes")
 
 # SQL Server — Windows Authentication (user/password left empty)
-save_mssql_connection("mssqlwin", host="MYSERVER", port=1433, database="AdventureWorks",
+save_mssql_credentials("mssqlwin", host="MYSERVER", port=1433, database="AdventureWorks",
                       user="", password="",
                       auth_type="Windows",
                       driver="{ODBC Driver 17 for SQL Server}",
                       encrypt="yes", trust_server_cert="yes")
 
 # SQLite
-save_sqlite_connection("mydb", db_path=r"C:\data\mydb.sqlite3")
+save_sqlite_credentials("mydb", db_path=r"C:\data\mydb.sqlite3")
 ```
 
 > Connection names must not contain underscores.
