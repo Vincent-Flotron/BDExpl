@@ -1,15 +1,17 @@
 import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
+from tkinter import ttk, messagebox
 import json
 import os
 import signal
-from typing            import Optional
-from connection        import DBConnection
-from Panels            import DatabaseTreePanel, SQLQueryEditorPanel, QueryResultPanel, StatusBarPanel
-from ConnectionManager import ConnectionManager
-from connstr_generator import ConnectionStringGenerator
-from QueryManager      import QueryManager
-from ConnectionDialogs import DeleteConnectionDialog, NewConnectionDialog
+from connection          import DBConnection
+from Panels              import StatusBarPanel
+from PanelSQLQueryEditor import PanelSQLQueryEditor
+from PanelDatabaseTree   import PanelDatabaseTree
+from PanelQueryResult    import PanelQueryResult
+from ConnectionManager   import ConnectionManager
+from connstr_generator   import ConnectionStringGenerator
+from QueryManager        import QueryManager
+from ConnectionDialogs   import DeleteConnectionDialog, NewConnectionDialog
 
 class Theme:
     def __init__(self, root):
@@ -219,12 +221,12 @@ class DBExp:
         main_paned = ttk.PanedWindow(self.root, orient=tk.HORIZONTAL)
         main_paned.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
-        self.query_result_panel = QueryResultPanel(self.root, self.db_connection)
+        self.query_result_panel = PanelQueryResult(self.root, self.db_connection)
         self.query_manager = QueryManager(self.db_connection, self.query_result_panel)
-        self.sql_query_editor_panel = SQLQueryEditorPanel(self.query_result_panel, self.db_connection, self.query_manager)
+        self.sql_query_editor_panel = PanelSQLQueryEditor(self.query_result_panel, self.db_connection, self.query_manager)
 
         # Left Panel: DB Treeview
-        self.database_tree_panel = DatabaseTreePanel(main_paned, self.db_connection, self.sql_query_editor_panel, self.query_manager)
+        self.database_tree_panel = PanelDatabaseTree(main_paned, self.db_connection, self.sql_query_editor_panel, self.query_manager)
         self.database_tree_panel.setup()
 
         # Right container for SQL Query and Query Result
