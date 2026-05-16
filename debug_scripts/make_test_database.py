@@ -1,11 +1,11 @@
 import sqlite3
 import os
 
-DB_NAME = "test_database.db"
+DB_PATH = "test_database.db"
 
 def create_connection():
     """Create a database connection."""
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(DB_PATH)
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
@@ -263,11 +263,11 @@ def main():
     print("Setting up SQLite test database...")
     
     # Delete existing database if it exists
-    if os.path.exists(DB_NAME):
-        os.remove(DB_NAME)
-        print(f"  Deleted existing database: {DB_NAME}")
+    if os.path.exists(DB_PATH):
+        os.remove(DB_PATH)
+        print(f"  Deleted existing database: {DB_PATH}")
     
-    print(f"Database file: {DB_NAME}\n")
+    print(f"Database file: {DB_PATH}\n")
     
     conn = create_connection()
     
@@ -277,7 +277,7 @@ def main():
     verify_database(conn)
     
     conn.close()
-    print(f"\n✓ Database '{DB_NAME}' created successfully!")
+    print(f"\n✓ Database '{DB_PATH}' created successfully!")
 
 if __name__ == "__main__":
     main()

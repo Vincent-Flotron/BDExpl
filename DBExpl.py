@@ -3,7 +3,7 @@ from tkinter import ttk, messagebox
 import json
 import os
 import signal
-from connection          import DBConnection
+from DBConnection        import DBConnection
 from Panels              import StatusBarPanel
 from PanelSQLQueryEditor import PanelSQLQueryEditor
 from PanelDatabaseTree   import PanelDatabaseTree
@@ -221,7 +221,7 @@ class DBExp:
         main_paned = ttk.PanedWindow(self.root, orient=tk.HORIZONTAL)
         main_paned.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
-        self.query_result_panel = PanelQueryResult(self.root, self.db_connection)
+        self.query_result_panel = PanelQueryResult(self.root)
         self.query_manager = QueryManager(self.db_connection, self.query_result_panel)
         self.sql_query_editor_panel = PanelSQLQueryEditor(self.query_result_panel, self.db_connection, self.query_manager)
 

@@ -1,9 +1,8 @@
 from Panels import *
 
 class PanelQueryResult:
-    def __init__(self, root, db_connection):
+    def __init__(self, root):
         self.root = root
-        self.db_connection = db_connection
         self.current_codepage = 'utf-8'
         self.zoom_level = 100
 
