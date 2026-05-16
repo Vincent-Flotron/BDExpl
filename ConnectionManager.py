@@ -23,7 +23,7 @@ class ConnectionManager:
         self.conn_str_generator = conn_str_generator
 
     def connect_with_credman(self, connection_name: str):
-        """Connect using Windows Credential Manager via connstr_generator.py"""
+        """Connect using Windows Credential Manager via ConnectionStringGenerator.py"""
         # First, disconnect any existing connection
         self.disconnect()
 
@@ -111,7 +111,7 @@ class ConnectionManager:
                 messagebox.showerror("Connection Error", f"Unknown connection type: {conn_type}")
 
         except ImportError as e:
-            messagebox.showerror("Error", f"connstr_generator module not found: {str(e)}")
+            messagebox.showerror("Error", f"ConnectionStringGenerator module not found: {str(e)}")
         except sqlite3.Error as e:
             messagebox.showerror("Connection Error", f"SQLite connection failed: {str(e)}")
         except psycopg2.Error as e:

@@ -4,7 +4,7 @@ from pathlib import Path
 
 # Add parent directory to Python path
 sys.path.append(str(Path(__file__).parent.parent))
-from connstr_generator import ConnectionStringGenerator
+from ConnectionStringGenerator import ConnectionStringGenerator
 # get_conn_string, get_oracledb_conn_params, get_sqlite_conn_string, get_postgresql_conn_params, get_mssql_conn_params
 
 # Connection type constants

@@ -9,7 +9,7 @@ from PanelSQLQueryEditor import PanelSQLQueryEditor
 from PanelDatabaseTree   import PanelDatabaseTree
 from PanelQueryResult    import PanelQueryResult
 from ConnectionManager   import ConnectionManager
-from connstr_generator   import ConnectionStringGenerator
+from ConnectionStringGenerator   import ConnectionStringGenerator
 from QueryManager        import QueryManager
 from ConnectionDialogs   import DeleteConnectionDialog, NewConnectionDialog
 
