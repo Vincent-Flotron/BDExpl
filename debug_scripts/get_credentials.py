@@ -4,7 +4,7 @@ from pathlib import Path
 
 # Add parent directory to Python path
 sys.path.append(str(Path(__file__).parent.parent))
-from ConnectionStringGenerator import ConnectionStringGenerator
+from CredentialManager import CredentialManager
 # get_conn_string, get_oracledb_conn_params, get_sqlite_conn_string, get_postgresql_conn_params, get_mssql_conn_params
 
 # Connection type constants
@@ -25,7 +25,7 @@ def main():
     args = parser.parse_args()
 
 
-    connStrGen = ConnectionStringGenerator()
+    connStrGen = CredentialManager()
     if args.db_type == ORACLE_DRIVER:
         params = connStrGen.get_conn_string(args.connection_name)
     elif args.db_type == ORACLE_DRIVERLESS:

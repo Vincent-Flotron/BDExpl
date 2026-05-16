@@ -9,7 +9,7 @@ from PanelSQLQueryEditor import PanelSQLQueryEditor
 from PanelDatabaseTree   import PanelDatabaseTree
 from PanelQueryResult    import PanelQueryResult
 from ConnectionManager   import ConnectionManager
-from ConnectionStringGenerator   import ConnectionStringGenerator
+from CredentialManager   import CredentialManager
 from QueryManager        import QueryManager
 from ConnectionDialogs   import DeleteConnectionDialog, NewConnectionDialog
 
@@ -200,7 +200,7 @@ class DBExp:
         self.query_manager = None
 
         # Connection
-        self.conn_str_generator = ConnectionStringGenerator(False)
+        self.conn_str_generator = CredentialManager(False)
 
         # Setup theme and UI
         self.theme = Theme(self.root)

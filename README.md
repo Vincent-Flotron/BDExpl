@@ -71,8 +71,8 @@ Shows the current connection name and database type, or "Not connected" when idl
 | `Panels.py`            | All UI panels: `PanelDatabaseTree` (left tree view), `PanelSQLQueryEditor` (middle editor with tabs), `PanelQueryResult` (bottom results grid), `StatusBarPanel` (bottom bar). Also contains the `Helper` utility for creating scrollable treeviews and context menus. |
 | `SQLText.py`           | Custom `tkinter.Text` subclass that adds SQL syntax highlighting, keyboard shortcuts (comment/uncomment, indent, auto-indent), and undo/redo support. Used as the editor widget inside each SQL tab. |
 | `connection.py`        | `DBConnection` class — holds the active connection object and provides `connect_*` factory methods for each database type. Also has `get_queries_instance()` which returns the right `Queries` subclass based on the connection type. |
-| `ConnectionManager.py` | `ConnectionManager` class — bridges the GUI and the credential store. Reads saved credentials via `ConnectionStringGenerator`, builds the appropriate connection, updates the status bar, and triggers the tree reload. Also handles disconnect and credential deletion. |
-| `ConnectionStringGenerator.py` | All interactions with Windows Credential Manager (`win32cred`). Provides `save_*` functions to persist connection parameters, `get_*` functions to retrieve them, `get_all_credentials_names()` to list saved connections, `get_connection_type()` to detect the database engine, and `delete_connection_credentials()` to remove all keys for a given connection. The credential key naming convention is `DBExp_{connection_name}_{FIELD}`. Supports Oracle, OracleDB, PostgreSQL, SQL Server (`MSSQL`), and SQLite. |
+| `ConnectionManager.py` | `ConnectionManager` class — bridges the GUI and the credential store. Reads saved credentials via `CredentialManager`, builds the appropriate connection, updates the status bar, and triggers the tree reload. Also handles disconnect and credential deletion. |
+| `CredentialManager.py` | All interactions with Windows Credential Manager (`win32cred`). Provides `save_*` functions to persist connection parameters, `get_*` functions to retrieve them, `get_all_credentials_names()` to list saved connections, `get_connection_type()` to detect the database engine, and `delete_connection_credentials()` to remove all keys for a given connection. The credential key naming convention is `DBExp_{connection_name}_{FIELD}`. Supports Oracle, OracleDB, PostgreSQL, SQL Server (`MSSQL`), and SQLite. |
 | `QueryManager.py`      | Abstract `Queries` base class and four concrete implementations: `QueriesOracle`, `QueriesSQLite`, `QueriesPostgreSQL`, `QueriesMSSQL`. Each implements the same set of SQL queries adapted to the engine's system catalog (e.g. `ALL_TABLES` for Oracle, `sqlite_master` for SQLite, `information_schema` for PostgreSQL, `sys.*` catalog views for SQL Server). Also contains `QueryManager`, which executes a query against the active connection and returns columns + rows. |
 | `make_exe.ps1`         | PowerShell one-liner that packages the application into a standalone Windows executable using PyInstaller (`--onefile --windowed`), with `win32timezone` included as a hidden import (required by `pywin32`). |
 
@@ -108,7 +108,7 @@ pip install pyodbc oracledb psycopg2-binary pywin32
 
 > **SQL Server ODBC driver:** the application defaults to `{ODBC Driver 17 for SQL Server}`. You can select a different driver (e.g. version 18) directly in the "New Connection" dialog. Download the driver from Microsoft if it is not already installed.
 
-> **Oracle ODBC driver:** the application is hardcoded to use the driver named `{Oracle dans OraClient19Home1}`. If your Oracle Client installation uses a different driver name, update `save_odbc_user_credentials()` in `ConnectionStringGenerator.py`.
+> **Oracle ODBC driver:** the application is hardcoded to use the driver named `{Oracle dans OraClient19Home1}`. If your Oracle Client installation uses a different driver name, update `save_odbc_user_credentials()` in `CredentialManager.py`.
 
 ---
 
@@ -130,10 +130,10 @@ This produces a single `DBExpl.exe` in the `dist/` folder via PyInstaller.
 
 ## Saving connections programmatically
 
-If you need to pre-populate connections without going through the GUI, import from `ConnectionStringGenerator` directly:
+If you need to pre-populate connections without going through the GUI, import from `CredentialManager` directly:
 
 ```python
-from ConnectionStringGenerator import (
+from CredentialManager import (
     save_odbc_user_credentials,
     save_oracledb_credentials,
     save_postgresql_credentials,

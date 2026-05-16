@@ -10,7 +10,7 @@ if sys.platform == 'win32':
 else:
     win32cred = None
 
-class ConnectionStringGenerator:
+class CredentialManager:
     def __init__(self, use_env_vars):
         self.use_env_vars = use_env_vars
         # Initialize environment variable storage in any cases
