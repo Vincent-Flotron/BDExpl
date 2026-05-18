@@ -229,8 +229,7 @@ class PanelDatabaseTree:
         if len(values) >= 3 and (values[1] == 'table' or values[1] == 'view'):
             schema = values[0]
             table_or_view = values[2]
-            queries = self.get_queries_instance()
-            sql = queries.get_first_x_rows(schema, table_or_view, limit)
+            sql = self.get_first_x_rows(schema, table_or_view, limit)
 
             tab_id = self.sql_query_editor_panel.new_sql_tab()
             self.sql_query_editor_panel.set_text_without_undo(
@@ -688,8 +687,8 @@ class PanelDatabaseTree:
         if len(values) >= 3 and values[1] == 'view':
             schema = values[0]
             view = values[2]
-            queries = self.get_queries_instance()
-            sql = queries.get_first_x_rows(schema, view, limit)
+            sql = self.get_first_x_rows(schema, view, limit)
+
 
             tab_id = self.sql_query_editor_panel.new_sql_tab()
             self.sql_query_editor_panel.set_text_without_undo(
@@ -705,6 +704,16 @@ class PanelDatabaseTree:
             )
             self.sql_query_editor_panel.run_query(sql)
 
+    def get_first_x_rows(self, schema, table_or_view, limit):
+        queries = self.get_queries_instance()
+        query_get_col_names = queries.get_col_names(schema, table_or_view)
+        result = self.query_manager.execute_query(query_get_col_names)
+        if result['success'] == True:
+            col_names =  [row[0] for row in result['rows']]
+            return queries.get_first_x_rows(schema, table_or_view, limit, col_names)
+        else:
+            raise Exception(f"No columns found for table or view: {schema}.{table_or_view} !")
+        
 
     def view_trigger_content(self, schema: str, trigger_name: str):
         """View content of selected trigger in Query Editor"""

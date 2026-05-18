@@ -9,7 +9,11 @@ class Queries(ABC):
     """Abstract base class for database queries"""
 
     @abstractmethod
-    def get_first_x_rows(self, schema, table, limit):
+    def get_col_names(schema, table):
+        pass
+
+    @abstractmethod
+    def get_first_x_rows(schema, table, limit, colnames):
         pass
 
     @abstractmethod
@@ -136,8 +140,19 @@ class QueriesOracle(Queries):
     """Oracle-specific SQL queries"""
 
     @staticmethod
-    def get_first_x_rows(schema, table, limit):
-        return f"SELECT * FROM {schema}.{table} FETCH FIRST {limit} ROWS ONLY"
+    def get_col_names(schema, table):
+        query = f"""
+            SELECT column_name 
+            FROM all_tab_columns 
+            WHERE owner = '{schema}' AND table_name = '{table}' 
+            ORDER BY column_id
+        """
+        return query
+    
+    @staticmethod
+    def get_first_x_rows(schema, table, limit, colnames):
+        fields = ",\n  ".join(colnames)
+        return f"SELECT\n  {fields}\nFROM {schema}.{table}\nFETCH FIRST {limit} ROWS ONLY"
 
     @staticmethod
     def get_all_schemas_with_their_table_count():
@@ -522,9 +537,14 @@ class QueriesSQLite(Queries):
     """SQLite-specific SQL queries"""
 
     @staticmethod
-    def get_first_x_rows(schema, table, limit):
-        # SQLite doesn't have schemas, so we ignore the schema parameter
-        return f"SELECT * FROM {table} LIMIT {limit}"
+    def get_col_names(schema, table):
+        query = f"PRAGMA table_info('{table}')"
+        return query
+
+    @staticmethod
+    def get_first_x_rows(schema, table, limit, colnames):
+        fields = ",\n  ".join(colnames)
+        return f"SELECT\n  {fields}\nFROM {table}\nLIMIT {limit}"
 
     @staticmethod
     def get_all_schemas_with_their_table_count():
@@ -797,8 +817,19 @@ class QueriesPostgreSQL(Queries):
     """PostgreSQL-specific SQL queries"""
 
     @staticmethod
-    def get_first_x_rows(schema, table, limit):
-        return f'SELECT * FROM "{schema}"."{table}" LIMIT {limit}'
+    def get_col_names(schema, table):
+        query = f"""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_schema = '{schema}' AND table_name = '{table}' 
+            ORDER BY ordinal_position
+        """
+        return query
+
+    @staticmethod
+    def get_first_x_rows(schema, table, limit, colnames):
+        fields = ",\n  ".join(f'"{col}"' for col in colnames)
+        return f'SELECT\n  {fields}\nFROM "{schema}"."{table}"\n LIMIT {limit}'
 
     @staticmethod
     def get_all_schemas_with_their_table_count():
@@ -1141,8 +1172,23 @@ class QueriesMSSQL(Queries):
     """Microsoft SQL Server-specific SQL queries (via pyodbc)."""
 
     @staticmethod
-    def get_first_x_rows(schema, table, limit):
-        return f"SELECT TOP {limit} * FROM [{schema}].[{table}]"
+    def get_col_names(schema, table):
+        """Get column names for a table in Microsoft SQL Server."""
+        query = f"""
+            SELECT name
+            FROM sys.columns c
+            JOIN sys.objects o ON c.object_id = o.object_id
+            JOIN sys.schemas s ON o.schema_id = s.schema_id
+            WHERE s.name = '{schema}' AND o.name = '{table}'
+            ORDER BY c.column_id
+        """
+        return query
+
+    @staticmethod
+    def get_first_x_rows(schema, table, limit, colnames):
+        """Prepare the query to fetch the first x rows with explicit column names."""
+        columns = ",\n  ".join([f"[{col}]" for col in colnames])
+        return f"SELECT TOP {limit}\n  {columns}\nFROM [{schema}].[{table}]"
 
     @staticmethod
     def get_all_schemas_with_their_table_count():
