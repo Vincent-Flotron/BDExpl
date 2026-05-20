@@ -1,10 +1,11 @@
 from Panels import *
 
 class PanelQueryResult:
-    def __init__(self, root):
-        self.root = root
+    def __init__(self, root, status_bar_panel):
+        self.root             = root
         self.current_codepage = 'utf-8'
-        self.zoom_level = 100
+        self.zoom_level       = 100
+        self.status_bar_panel = status_bar_panel
 
     def zoom_in(self):
         """Increase the zoom level."""
@@ -84,9 +85,7 @@ class PanelQueryResult:
 
         self.result_tree.bind("<Shift-MouseWheel>", self.on_shift_mousewheel)
 
-        self.result_info = ttk.Label(result_frame, text="", style='TLabel', anchor=tk.W)
-        self.result_info.pack(fill=tk.X, padx=5, pady=2)
-
+        # Remove the result_info label from here since we'll use the status bar
         commands = [
             ("Copy Selected",       self.copy_selected_rows),
             ("Export to CSV",       self.export_to_csv),
@@ -158,7 +157,8 @@ class PanelQueryResult:
             self.result_tree.column(col, width=min(max(w, 150), 300))
         self.result_tree.update_idletasks()
 
-        self.result_info.config(text=f"{row_count} row(s) displayed")
+        # Update status bar instead of result_info
+        self.status_bar_panel.set_query_result_status(f"{row_count} row(s) displayed")
 
     def display_error(self, error: str):
         """Display error in result panel"""
@@ -174,7 +174,6 @@ class PanelQueryResult:
         else:
             error = str(error)
 
-
         # Store the cleaned error text
         self.raw_error_text = error
 
@@ -186,6 +185,9 @@ class PanelQueryResult:
         self.result_tree.heading('Error', text='SQL Error')
         self.result_tree.insert('', 'end', values=[error])
 
+        # Update status bar
+        self.status_bar_panel.set_query_result_status("Error executing query")
+
     def display_message(self, message: str):
         """Display a plain message in the result panel."""
         self.result_tree.delete(*self.result_tree.get_children())
@@ -194,6 +196,9 @@ class PanelQueryResult:
         self.result_tree.column('Message', width=800)
         self.result_tree.heading('Message', text='Message')
         self.result_tree.insert('', 'end', values=[message])
+
+        # Update status bar
+        self.status_bar_panel.set_query_result_status("Message displayed")
 
     # ─────────────────────────────────────────────────────────────────
     # COLUMN WIDTHS

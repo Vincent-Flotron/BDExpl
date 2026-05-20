@@ -17,14 +17,14 @@ class DeleteConnectionDialog:
     def __init__(self, parent):
         self.root = parent.root
         self.parent = parent
-        self.conn_str_generator = parent.conn_str_generator
+        self.credential_manager = parent.credential_manager
         self.connection_manager = parent.connection_manager
         self.result = None
     
     def show(self):
         """Show dialog for deleting a connection"""
         try:
-            connections = self.conn_str_generator.get_all_connection_names()
+            connections = self.credential_manager.get_all_connection_names()
 
             if not connections:
                 messagebox.showinfo("Info", "No connections available to delete")
@@ -87,7 +87,7 @@ class NewConnectionDialog:
     def __init__(self, parent):
         self.root = parent.root
         self.parent = parent
-        self.conn_str_generator = parent.conn_str_generator
+        self.credential_manager = parent.credential_manager
         self.connection_manager = parent.connection_manager
         self.result = False
     
@@ -103,7 +103,7 @@ class NewConnectionDialog:
         # Add storage method indicator at the top
         storage_label = tk.Label(
             dialog,
-            text=f"Storage: {'Environment Variables' if self.conn_str_generator.use_env_vars else 'Windows Credential Manager'}",
+            text=f"Storage: {'Environment Variables' if self.credential_manager.use_env_vars else 'Windows Credential Manager'}",
             fg="blue"
         )
         storage_label.pack(pady=(5, 0))
@@ -342,7 +342,7 @@ class NewConnectionDialog:
                     if not password:
                         messagebox.showerror("Error", "Password is required")
                         return
-                    self.conn_str_generator.save_oracle_odbc_user_credentials(conn_name, host, user, password)
+                    self.credential_manager.save_oracle_odbc_user_credentials(conn_name, host, user, password)
 
                 elif db_type == "OracleDB":
                     odb_host = odb_host_var.get().strip()
@@ -367,7 +367,7 @@ class NewConnectionDialog:
                     except ValueError:
                         messagebox.showerror("Error", "Port must be a number")
                         return
-                    self.conn_str_generator.save_oracledb_credentials(conn_name, odb_host, port_int, odb_sid,
+                    self.credential_manager.save_oracledb_credentials(conn_name, odb_host, port_int, odb_sid,
                                              odb_user, odb_pwd)
 
                 elif db_type == "PostgreSQL":
@@ -395,7 +395,7 @@ class NewConnectionDialog:
                     except ValueError:
                         messagebox.showerror("Error", "Port must be a number")
                         return
-                    self.conn_str_generator.save_postgresql_credentials(conn_name, pg_host, port_int, pg_db,
+                    self.credential_manager.save_postgresql_credentials(conn_name, pg_host, port_int, pg_db,
                                                pg_user, pg_pwd, pg_ssl, pg_cert)
 
                 elif db_type == "MSSQL":
@@ -426,7 +426,7 @@ class NewConnectionDialog:
                     except ValueError:
                         messagebox.showerror("Error", "Port must be a number")
                         return
-                    self.conn_str_generator.save_mssql_credentials(
+                    self.credential_manager.save_mssql_credentials(
                         conn_name, ms_host, port_int, ms_db,
                         ms_user, ms_pwd, ms_auth, ms_driver, ms_enc, ms_trust
                     )
@@ -436,7 +436,7 @@ class NewConnectionDialog:
                     if not db_path:
                         messagebox.showerror("Error", "Database file path is required")
                         return
-                    self.conn_str_generator.save_sqlite_credentials(conn_name, db_path)
+                    self.credential_manager.save_sqlite_credentials(conn_name, db_path)
 
                 messagebox.showinfo("Success", f"Connection '{conn_name}' saved successfully")
                 self.parent.populate_existing_connections_menu()

@@ -709,7 +709,7 @@ class PanelDatabaseTree:
         query_get_col_names = queries.get_col_names(schema, table_or_view)
         result = self.query_manager.execute_query(query_get_col_names)
         if result['success'] == True:
-            col_names =  [row[0] for row in result['rows']]
+            col_names = queries.extract_col_names(result['rows'])
             return queries.get_first_x_rows(schema, table_or_view, limit, col_names)
         else:
             raise Exception(f"No columns found for table or view: {schema}.{table_or_view} !")

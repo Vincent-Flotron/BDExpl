@@ -200,7 +200,7 @@ class DBExp:
         self.query_manager = None
 
         # Connection
-        self.conn_str_generator = CredentialManager(False)
+        self.credential_manager = CredentialManager(False)
 
         # Setup theme and UI
         self.theme = Theme(self.root)
@@ -218,15 +218,22 @@ class DBExp:
     def setup_ui(self):
         """Create the three-panel interface"""
         # Main container with PanedWindow for resizable panels
-        main_paned = ttk.PanedWindow(self.root, orient=tk.HORIZONTAL)
+        main_container = ttk.Frame(self.root)
+        main_container.pack(fill=tk.BOTH, expand=True)
+
+        # Create status bar first to ensure it's always visible
+        self.status_bar_panel = StatusBarPanel(main_container, text="Not connected", style='Status.TLabel')
+
+        # Main paned window for the rest of the UI
+        main_paned = ttk.PanedWindow(main_container, orient=tk.HORIZONTAL)
         main_paned.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
-        self.query_result_panel     = PanelQueryResult(self.root)
+        self.query_result_panel     = PanelQueryResult(self.root, self.status_bar_panel)
         self.query_manager          = QueryManager(self.db_connection, self.query_result_panel)
         self.sql_query_editor_panel = PanelSQLQueryEditor(self.query_result_panel, self.db_connection, self.query_manager)
 
         # Left Panel: DB Treeview
-        self.database_tree_panel = PanelDatabaseTree(main_paned, self.db_connection, self.sql_query_editor_panel, self.query_manager)
+        self.database_tree_panel    = PanelDatabaseTree(main_paned, self.db_connection, self.sql_query_editor_panel, self.query_manager)
         self.database_tree_panel.setup()
 
         # Right container for SQL Query and Query Result
@@ -239,16 +246,13 @@ class DBExp:
         # Bottom Panel: Query Result
         self.query_result_panel.setup(right_paned, self.config)
 
-        # Status bar
-        self.status_bar_panel = StatusBarPanel(self.root, text="Not connected", style='Status.TLabel')
-
         # Connection manager
         self.connection_manager = ConnectionManager(
             self.root,
             self.db_connection,
             self.database_tree_panel,
             self.status_bar_panel,
-            self.conn_str_generator
+            self.credential_manager
         )
 
     def load_config(self) -> dict:
@@ -299,7 +303,7 @@ class DBExp:
         conn_menu.add_cascade(label="Storage Method", menu=storage_menu)
 
         # Storage method options
-        self.storage_method_var = tk.StringVar(value="credman" if not self.conn_str_generator.use_env_vars else "envvars")
+        self.storage_method_var = tk.StringVar(value="credman" if not self.credential_manager.use_env_vars else "envvars")
         storage_menu.add_radiobutton(
             label="Windows Credential Manager",
             variable=self.storage_method_var,
@@ -351,12 +355,12 @@ class DBExp:
         new_use_env_vars = (current_method == "envvars")
 
         # If already using the selected method, do nothing
-        if self.conn_str_generator.use_env_vars == new_use_env_vars:
+        if self.credential_manager.use_env_vars == new_use_env_vars:
             return
 
 
         # Create new connection string generator with the new storage method
-        self.conn_str_generator.set_use_env_vars(use_env_vars=new_use_env_vars)
+        self.credential_manager.set_use_env_vars(use_env_vars=new_use_env_vars)
 
         # Update the menu to show the new storage method is active
         self.storage_method_var.set(current_method)
@@ -383,7 +387,7 @@ class DBExp:
     def populate_existing_connections_menu(self):
         """Populate the existing connections menu with available connections"""
         try:
-            connections = self.conn_str_generator.get_all_connection_names()
+            connections = self.credential_manager.get_all_connection_names()
 
             # Clear existing items
             self.existing_connections_menu.delete(0, tk.END)

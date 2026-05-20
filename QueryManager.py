@@ -13,6 +13,10 @@ class Queries(ABC):
         pass
 
     @abstractmethod
+    def extract_col_names(rows):
+        pass
+
+    @abstractmethod
     def get_first_x_rows(schema, table, limit, colnames):
         pass
 
@@ -149,6 +153,11 @@ class QueriesOracle(Queries):
         """
         return query
     
+    @staticmethod
+    def extract_col_names(rows):
+        col_names = [row[0] for row in rows]
+        return col_names
+
     @staticmethod
     def get_first_x_rows(schema, table, limit, colnames):
         fields = ",\n  ".join(colnames)
@@ -542,9 +551,14 @@ class QueriesSQLite(Queries):
         return query
 
     @staticmethod
+    def extract_col_names(rows):
+        col_names = [row[1] for row in rows]
+        return col_names
+
+    @staticmethod
     def get_first_x_rows(schema, table, limit, colnames):
-        fields = ",\n  ".join(colnames)
-        return f"SELECT\n  {fields}\nFROM {table}\nLIMIT {limit}"
+        columns = ",\n  ".join([f"[{col}]" for col in colnames])
+        return f"SELECT\n  {columns}\nFROM {table}\nLIMIT {limit}"
 
     @staticmethod
     def get_all_schemas_with_their_table_count():
@@ -825,6 +839,11 @@ class QueriesPostgreSQL(Queries):
             ORDER BY ordinal_position
         """
         return query
+
+    @staticmethod
+    def extract_col_names(rows):
+        col_names = [row[0] for row in rows]
+        return col_names
 
     @staticmethod
     def get_first_x_rows(schema, table, limit, colnames):
@@ -1175,7 +1194,7 @@ class QueriesMSSQL(Queries):
     def get_col_names(schema, table):
         """Get column names for a table in Microsoft SQL Server."""
         query = f"""
-            SELECT name
+            SELECT c.name
             FROM sys.columns c
             JOIN sys.objects o ON c.object_id = o.object_id
             JOIN sys.schemas s ON o.schema_id = s.schema_id
@@ -1183,6 +1202,11 @@ class QueriesMSSQL(Queries):
             ORDER BY c.column_id
         """
         return query
+
+    @staticmethod
+    def extract_col_names(rows):
+        col_names = [row[0] for row in rows]
+        return col_names
 
     @staticmethod
     def get_first_x_rows(schema, table, limit, colnames):

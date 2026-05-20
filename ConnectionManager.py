@@ -14,13 +14,13 @@ else:
 class ConnectionManager:
     """Manages database connections and related UI operations"""
 
-    def __init__(self, root, db_connection, database_tree_panel, status_bar_panel, conn_str_generator):
+    def __init__(self, root, db_connection, database_tree_panel, status_bar_panel, credential_manager):
         self.root = root
         self.db_connection = db_connection
         self.database_tree_panel = database_tree_panel
         self.status_bar_panel = status_bar_panel
         self.connection_name: Optional[str] = None
-        self.conn_str_generator = conn_str_generator
+        self.credential_manager = credential_manager
 
     def connect_with_credman(self, connection_name: str):
         """Connect using Windows Credential Manager via CredentialManager.py"""
@@ -28,10 +28,10 @@ class ConnectionManager:
         self.disconnect()
 
         try:
-            conn_type = self.conn_str_generator.get_connection_type(connection_name)
+            conn_type = self.credential_manager.get_connection_type_offline(connection_name)
 
             if conn_type == "Oracle":
-                conn_str = self.conn_str_generator.get_conn_string(connection_name)
+                conn_str = self.credential_manager.get_conn_string(connection_name)
                 if pyodbc:
                     self.db_connection.current_connection = pyodbc.connect(conn_str)
                 else:
@@ -41,14 +41,14 @@ class ConnectionManager:
                 self.status_bar_panel.set_status(f"Connected via: {connection_name}")
                 self.database_tree_panel.load_database_objects()
             elif conn_type == "SQLite":
-                db_path = self.conn_str_generator.get_sqlite_conn_string(connection_name)
+                db_path = self.credential_manager.get_sqlite_conn_string(connection_name)
                 self.db_connection.current_connection = sqlite3.connect(db_path)
                 self.db_connection.current_connection_type = "SQLite"
                 self.connection_name = connection_name
                 self.status_bar_panel.set_status(f"Connected via: {connection_name} (SQLite)")
                 self.database_tree_panel.load_database_objects()
             elif conn_type == "OracleDB":
-                params = self.conn_str_generator.get_oracledb_conn_params(connection_name)
+                params = self.credential_manager.get_oracledb_conn_params(connection_name)
                 self.db_connection.current_connection = oracledb.connect(
                     user=params["user"],
                     password=params["password"],
@@ -61,7 +61,7 @@ class ConnectionManager:
                 self.status_bar_panel.set_status(f"Connected via: {connection_name} (OracleDB)")
                 self.database_tree_panel.load_database_objects()
             elif conn_type == "PostgreSQL":
-                params = self.conn_str_generator.get_postgresql_conn_params(connection_name)
+                params = self.credential_manager.get_postgresql_conn_params(connection_name)
                 ssl_args = {"sslmode": params["sslmode"]}
                 if params.get("sslrootcert"):
                     ssl_args["sslrootcert"] = params["sslrootcert"]
@@ -78,7 +78,7 @@ class ConnectionManager:
                 self.status_bar_panel.set_status(f"Connected via: {connection_name} (PostgreSQL)")
                 self.database_tree_panel.load_database_objects()
             elif conn_type == "MSSQL":
-                params = self.conn_str_generator.get_mssql_conn_params(connection_name)
+                params = self.credential_manager.get_mssql_conn_params(connection_name)
                 server = f"{params['host']},{params['port']}" if params.get("port") else params["host"]
                 if params.get("auth_type") == "Windows":
                     conn_str = (
@@ -139,7 +139,7 @@ class ConnectionManager:
     def delete_connection(self, connection_name: str):
         """Delete a connection from Windows Credential Manager"""
         try:
-            self.conn_str_generator.delete_connection_credentials(connection_name)
+            self.credential_manager.delete_connection_credentials(connection_name)
 
             # If the deleted connection is the currently active one, disconnect
             if self.connection_name == connection_name:

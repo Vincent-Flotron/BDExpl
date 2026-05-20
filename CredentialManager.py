@@ -401,7 +401,7 @@ class CredentialManager:
         for cred_type in cred_types:
             self._delete_cred(f"{prefix}_{cred_type}")
 
-    def get_connection_type(self, connection_name: str, use_root_name: bool = True):
+    def get_connection_type_offline(self, connection_name: str, use_root_name: bool = True):
         """Get the type of connection"""
         self._validate_connection_name(connection_name)
         get_cred = self._get_cred_func()
