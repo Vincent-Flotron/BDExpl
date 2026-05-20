@@ -50,11 +50,12 @@ class Helper:
             container,
             yscrollcommand=tree_scroll_y.set,
             xscrollcommand=tree_scroll_x.set,
+            show=show,
             style='Treeview'
         )
         if columns:
             tree['columns'] = columns
-            tree['show'] = show
+
         tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         tree_scroll_y.config(command=tree.yview)
