@@ -5,27 +5,28 @@ import re
 class SQLText(Text):
     """A Text widget with SQL syntax highlighting using regex."""
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, panel_sql_query_editor, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.bind("<KeyRelease>", self.on_key_release)
+        self.panel_sql_query_editor = panel_sql_query_editor
+        self.bind("<KeyRelease>",      self.on_key_release)
         self.bind("<ButtonRelease-1>", self.on_key_release)
-        self.bind("<Configure>", self.on_key_release)
+        self.bind("<Configure>",       self.on_key_release)
 
         # Bind Tab key to insert 2 spaces instead
-        self.bind("<Tab>", self.indent_selection_right)
-        self.bind("<Shift-Tab>", self.indent_selection_left)
+        self.bind("<Tab>",             self.indent_selection_right)
+        self.bind("<Shift-Tab>",       self.indent_selection_left)
 
         # Bind Enter key to align with previous line
-        self.bind("<Return>", self.align_with_previous_line)
+        self.bind("<Return>",          self.align_with_previous_line)
 
         # Track if CTRL+K was pressed before CTRL+C or CTRL+U
         self.ctrl_k_pressed = False
-        self.bind("<Control-k>", self.set_ctrl_k_flag)
-        self.bind("<Control-c>", self.handle_ctrl_c_comment)
-        self.bind("<Control-u>", self.handle_ctrl_u_uncomment)
+        self.bind("<Control-k>",       self.set_ctrl_k_flag)
+        self.bind("<Control-c>",       self.handle_ctrl_c_comment)
+        self.bind("<Control-u>",       self.handle_ctrl_u_uncomment)
 
         # Reset the flag on any other key press
-        self.bind("<Key>", self.reset_ctrl_k_flag, add="+")
+        self.bind("<Key>",             self.reset_ctrl_k_flag, add="+")
 
         # Define regex patterns for SQL syntax
         self.sql_keywords = r"\b(ALL|ALTER|ALTER\s+SESSION|ALTER\s+SYSTEM|ANALYZE|AND|ANY|AS|AUDIT|AUTONOMOUS\s+TRANSACTION|BEGIN|"\
@@ -168,20 +169,28 @@ class SQLText(Text):
         return None
 
     def comment_selection(self, event=None):
-        """Add SQL line comments (--) to selected lines."""
+        """Add SQL line comments (--) to lines.
+        - With selection: comment all selected lines
+        - Without selection: comment current line at cursor position
+        """
+        self.panel_sql_query_editor.insert_edit_separator_in_actual_tab() # for undo/redo
         try:
+            # Get current cursor position
+            cursor_pos   = self.index(tk.INSERT)
+            current_line = int(cursor_pos.split('.')[0])
+
             # Check if there's a selection
             if self.tag_ranges("sel"):
                 # Get the selection range - convert Tcl_Obj to strings
                 sel_range = [str(self.index(pos)) for pos in self.tag_ranges("sel")]
                 start_pos = sel_range[0]
-                end_pos = sel_range[1]
+                end_pos   = sel_range[1]
 
                 # Get the selected text
                 selected_text = self.get(start_pos, end_pos)
 
                 # Add -- to the beginning of each line
-                lines = selected_text.split('\n')
+                lines     = selected_text.split('\n')
                 new_lines = []
                 for line in lines:
                     new_lines.append('-- ' + line)
@@ -195,27 +204,49 @@ class SQLText(Text):
                 new_end_pos = self.index(f"{start_pos}+{len(new_text)} chars")
                 self.tag_add("sel", start_pos, new_end_pos)
                 self.tag_raise("sel")
+            else:
+                # No selection - comment current line only
+                line_start = f"{current_line}.0"
+                line_end   = f"{current_line}.end"
+                line_text  = self.get(line_start, line_end)
 
-                return "break"
+                # Add comment to the beginning of the line
+                self.replace(line_start, line_end, '-- ' + line_text)
+
+                # Move cursor to maintain relative position
+                cursor_col = int(cursor_pos.split('.')[1])
+                self.mark_set(tk.INSERT, f"{current_line}.{cursor_col + 3}")
+
+            return "break"
         except tk.TclError:
             pass
+        finally:
+            self.panel_sql_query_editor.insert_edit_separator_in_actual_tab() # for undo/redo
         return "break"
 
     def uncomment_selection(self, event=None):
-        """Remove SQL line comments (--) from selected lines."""
+        """Remove SQL line comments (--) from lines.
+        - With selection: uncomment all selected lines
+        - Without selection: uncomment current line at cursor position
+        """
+        self.panel_sql_query_editor.insert_edit_separator_in_actual_tab() # for undo/redo
         try:
+            # Get current cursor position
+            cursor_pos   = self.index(tk.INSERT)
+            current_line = int(cursor_pos.split('.')[0])
+
             # Check if there's a selection
             if self.tag_ranges("sel"):
                 # Get the selection range
                 sel_range = self.tag_ranges("sel")
                 start_pos = sel_range[0]
-                end_pos = sel_range[1]
+                end_pos   = sel_range[1]
 
                 # Get the selected text
                 selected_text = self.get(start_pos, end_pos)
 
                 # Remove -- from the beginning of each line
-                lines = selected_text.split('\n')
+                lines     = selected_text.split('\n')
                 new_lines = []
                 for line in lines:
                     # Remove "-- " or "--" from the start of the line
@@ -235,10 +266,35 @@ class SQLText(Text):
                 new_end_pos = self.index(f"{start_pos}+{len(new_text)} chars")
                 self.tag_add("sel", start_pos, new_end_pos)
                 self.tag_raise("sel")
+            else:
+                # No selection - uncomment current line only
+                line_start = f"{current_line}.0"
+                line_end   = f"{current_line}.end"
+                line_text  = self.get(line_start, line_end)
 
-                return "break"
+                # Remove comment from the beginning of the line
+                if line_text.startswith('-- '):
+                    new_line = line_text[3:]
+                    self.replace(line_start, line_end, new_line)
+
+                    # Move cursor to maintain relative position
+                    cursor_col = int(cursor_pos.split('.')[1])
+                    if cursor_col >= 3:  # Only adjust if cursor was after the comment
+                        self.mark_set(tk.INSERT, f"{current_line}.{cursor_col - 3}")
+                elif line_text.startswith('--'):
+                    new_line = line_text[2:]
+                    self.replace(line_start, line_end, new_line)
+
+                    # Move cursor to maintain relative position
+                    cursor_col = int(cursor_pos.split('.')[1])
+                    if cursor_col >= 2:  # Only adjust if cursor was after the comment
+                        self.mark_set(tk.INSERT, f"{current_line}.{cursor_col - 2}")
+
+            return "break"
         except tk.TclError:
             pass
+        finally:
+            self.panel_sql_query_editor.insert_edit_separator_in_actual_tab() # for undo/redo
         return "break"
 
     def on_key_release(self, event=None):
@@ -248,36 +304,36 @@ class SQLText(Text):
     def highlight(self):
         """Apply SQL syntax highlighting using regex."""
         self.mark_set("range_start", "1.0")
-        self.tag_remove("keyword", "1.0", "end")
-        self.tag_remove("operator", "1.0", "end")
-        self.tag_remove("function", "1.0", "end")
-        self.tag_remove("string", "1.0", "end")
-        self.tag_remove("string2", "1.0", "end")
-        self.tag_remove("comment", "1.0", "end")
+        self.tag_remove("keyword",   "1.0", "end")
+        self.tag_remove("operator",  "1.0", "end")
+        self.tag_remove("function",  "1.0", "end")
+        self.tag_remove("string",    "1.0", "end")
+        self.tag_remove("string2",   "1.0", "end")
+        self.tag_remove("comment",   "1.0", "end")
 
         text = self.get("1.0", "end-1c")
 
         if len(text.strip()) > 1:
             # Highlight keywords
-            self.highlight_pattern(self.sql_keywords, "keyword", self.colors["keyword"])
+            self.highlight_pattern(self.sql_keywords,        "keyword",  self.colors["keyword"])
 
             # Highlight operators
-            self.highlight_pattern(self.sql_operators, "operator", self.colors["operator"])
+            self.highlight_pattern(self.sql_operators,       "operator", self.colors["operator"])
 
             # Highlight functions
-            self.highlight_pattern(self.sql_functions, "function", self.colors["function"])
+            self.highlight_pattern(self.sql_functions,       "function", self.colors["function"])
 
             # Highlight strings
-            self.highlight_pattern(self.sql_string_pattern, "string", self.colors["string"])
-            self.highlight_pattern(self.sql_string_pattern2, "string2", self.colors["string2"])
+            self.highlight_pattern(self.sql_string_pattern,  "string",   self.colors["string"])
+            self.highlight_pattern(self.sql_string_pattern2, "string2",  self.colors["string2"])
 
             # Highlight comments
-            self.highlight_pattern(self.sql_comment_pattern, "comment", self.colors["comment"], regex=True)
+            self.highlight_pattern(self.sql_comment_pattern, "comment",  self.colors["comment"])
 
             # Highlight numbers
-            self.highlight_pattern(self.sql_number_pattern, "number", self.colors["number"], regex=True)
+            self.highlight_pattern(self.sql_number_pattern,  "number",   self.colors["number"])
 
-    def highlight_pattern(self, pattern, tag, color, regex=True):
+    def highlight_pattern(self, pattern, tag, color):
         """Highlight a specific pattern in the text."""
         self.mark_set("range_start", "1.0")
         text = self.get("1.0", "end-1c")
@@ -288,31 +344,41 @@ class SQLText(Text):
         matches_iter = re.finditer(pattern, text, re.IGNORECASE | re.MULTILINE)
         for match in matches_iter:
             start_pos = f"1.0 + {match.start()} chars"
-            end_pos = f"1.0 + {match.end()} chars"
+            end_pos   = f"1.0 + {match.end()} chars"
 
             self.tag_add(tag, start_pos, end_pos)
             self.tag_config(tag, foreground=color)
 
     def insert_spaces(self, event):
         """Insert 2 spaces instead of a tab character."""
+        self.panel_sql_query_editor.insert_edit_separator_in_actual_tab() # for undo/redo
         self.insert("insert", "  ")
+        self.panel_sql_query_editor.insert_edit_separator_in_actual_tab() # for undo/redo
         return "break"  # Prevent default tab behavior
 
     def indent_selection_left(self, event):
-        """Indent selected text to the left (shift + tab)."""
+        """Indent text to the left (shift + tab).
+        - With selection: unindent all selected lines
+        - Without selection: unindent current line at cursor position
+        """
+        self.panel_sql_query_editor.insert_edit_separator_in_actual_tab() # for undo/redo
         try:
+            # Get current cursor position
+            cursor_pos   = self.index(tk.INSERT)
+            current_line = int(cursor_pos.split('.')[0])
+
             # Check if there's a selection
             if self.tag_ranges("sel"):
                 # Get the selection range
                 sel_range = self.tag_ranges("sel")
                 start_pos = sel_range[0]
-                end_pos = sel_range[1]
+                end_pos   = sel_range[1]
 
                 # Get the selected text
                 selected_text = self.get(start_pos, end_pos)
 
                 # Remove 2 spaces from the beginning of each line
-                lines = selected_text.split('\n')
+                lines     = selected_text.split('\n')
                 new_lines = []
                 for line in lines:
                     if line.startswith('  '):
@@ -329,27 +395,44 @@ class SQLText(Text):
                 new_end_pos = self.index(f"{start_pos}+{len(new_text)} chars")
                 self.tag_add("sel", start_pos, new_end_pos)
                 self.tag_raise("sel")
+            else:
+                # No selection - unindent current line only
+                line_start = f"{current_line}.0"
+                line_end   = f"{current_line}.end"
+                line_text  = self.get(line_start, line_end)
 
-                return "break"
+                # Remove 2 spaces from beginning if present
+                if line_text.startswith('  '):
+                    new_line = line_text[2:]
+                    self.replace(line_start, line_end, new_line)
+
+                    # Move cursor to same relative position
+                    cursor_col = int(cursor_pos.split('.')[1])
+                    if cursor_col > 1:  # Don't go before line start
+                        self.mark_set(tk.INSERT, f"{current_line}.{cursor_col-2}")
+
+            return "break"
         except tk.TclError:
             pass
-        return "break"
+        finally:
+            self.panel_sql_query_editor.insert_edit_separator_in_actual_tab() # for undo/redo
     
     def indent_selection_right(self, event):
         """Indent selected text to the right (tab)."""
+        self.panel_sql_query_editor.insert_edit_separator_in_actual_tab() # for undo/redo
         try:
             # Check if there's a selection
             if self.tag_ranges("sel"):
                 # Get the selection range
                 sel_range = self.tag_ranges("sel")
                 start_pos = sel_range[0]
-                end_pos = sel_range[1]
+                end_pos   = sel_range[1]
 
                 # Get the selected text
                 selected_text = self.get(start_pos, end_pos)
 
                 # Add 2 spaces to the beginning of each line
-                lines = selected_text.split('\n')
+                lines     = selected_text.split('\n')
                 new_lines = []
                 for line in lines:
                     new_lines.append('  ' + line)
@@ -370,4 +453,6 @@ class SQLText(Text):
                 
         except tk.TclError:
             pass
+        finally:
+            self.panel_sql_query_editor.insert_edit_separator_in_actual_tab() # for undo/redo
         return "break"

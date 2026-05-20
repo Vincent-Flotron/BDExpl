@@ -188,33 +188,12 @@ class PanelQueryResult:
 
     def display_message(self, message: str):
         """Display a plain message in the result panel."""
-        self._reset_state()
-
         self.result_tree.delete(*self.result_tree.get_children())
         self.result_tree['columns'] = ['Message']
         self.result_tree.column('#0', width=0, stretch=tk.NO)
         self.result_tree.column('Message', width=800)
         self.result_tree.heading('Message', text='Message')
         self.result_tree.insert('', 'end', values=[message])
-
-    def _reset_state(self):
-        """Clear all sort / search / data state (used by error & message displays)."""
-        self._all_rows           = []
-        self._all_unique_columns = []
-        self._sort_col           = None
-        self._sort_reverse       = False
-
-        if self._clear_sort_btn:
-            self._clear_sort_btn.config(state='disabled')
-        if self._match_info:
-            self._match_info.config(text="")
-        if self._search_var:
-            # Suppress the trace temporarily by using the underlying tk variable
-            self._search_var.set("")
-        if self._cb_inner is not None:
-            self._rebuild_search_checkboxes()
-        if hasattr(self, 'result_info'):
-            self.result_info.config(text="")
 
     # ─────────────────────────────────────────────────────────────────
     # COLUMN WIDTHS

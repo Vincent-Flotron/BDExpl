@@ -20,16 +20,16 @@ class Theme:
     def setup(self):
         """Configure a professional light theme with improved styling"""
         # Color palette
-        bg_color = '#f5f7fa'  # Lighter background
-        primary_color = '#4a90e2'  # Softer blue
+        bg_color        = '#f5f7fa'  # Lighter background
+        primary_color   = '#4a90e2'  # Softer blue
         secondary_color = '#d0d9e3'  # Light gray-blue
-        text_color = '#333333'  # Darker text for better readability
-        accent_color = '#357abd'  # Slightly darker blue for accents
-        border_color = '#d1d5db'  # Subtle border color
+        text_color      = '#333333'  # Darker text for better readability
+        accent_color    = '#357abd'  # Slightly darker blue for accents
+        border_color    = '#d1d5db'  # Subtle border color
         highlight_color = '#e5e7eb'  # For highlighted elements
-        success_color = '#2ecc71'  # Green for success messages
-        error_color = '#e74c3c'  # Red for errors
-        refresh_color = '#666633'  # Custom color for refresh button
+        success_color   = '#2ecc71'  # Green for success messages
+        error_color     = '#e74c3c'  # Red for errors
+        refresh_color   = '#666633'  # Custom color for refresh button
 
         self.style = ttk.Style()
         self.style.theme_use('clam')  # Best theme for custom styling
@@ -221,8 +221,8 @@ class DBExp:
         main_paned = ttk.PanedWindow(self.root, orient=tk.HORIZONTAL)
         main_paned.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
-        self.query_result_panel = PanelQueryResult(self.root)
-        self.query_manager = QueryManager(self.db_connection, self.query_result_panel)
+        self.query_result_panel     = PanelQueryResult(self.root)
+        self.query_manager          = QueryManager(self.db_connection, self.query_result_panel)
         self.sql_query_editor_panel = PanelSQLQueryEditor(self.query_result_panel, self.db_connection, self.query_manager)
 
         # Left Panel: DB Treeview
@@ -329,17 +329,17 @@ class DBExp:
         # File menu
         file_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="File", menu=file_menu)
-        file_menu.add_command(label="New SQL", command=self.sql_query_editor_panel.new_sql_tab)
+        file_menu.add_command(label="New SQL",     command=self.sql_query_editor_panel.new_sql_tab)
         file_menu.add_command(label="Open SQL...", command=self.sql_query_editor_panel.open_sql_file)
-        file_menu.add_command(label="Save", command=self.sql_query_editor_panel.save_current_sql)
-        file_menu.add_command(label="Save As...", command=self.sql_query_editor_panel.save_sql_as)
+        file_menu.add_command(label="Save",        command=self.sql_query_editor_panel.save_current_sql)
+        file_menu.add_command(label="Save As...",  command=self.sql_query_editor_panel.save_sql_as)
         file_menu.add_separator()
         file_menu.add_command(label="Exit", command=self.root.quit)
 
         # Query menu
         query_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Query", menu=query_menu)
-        query_menu.add_command(label="Execute (F5)", command=self.sql_query_editor_panel.execute)
+        query_menu.add_command(label="Execute (F5)",      command=self.sql_query_editor_panel.execute)
         query_menu.add_command(label="Execute Selection", command=self.sql_query_editor_panel.execute_selection)
 
         # Populate existing connections menu
@@ -440,7 +440,7 @@ def main():
         print(f"Could not load icon: {e}")
 
     # Graceful shutdown on signals
-    signal.signal(signal.SIGINT, lambda sig, frame: app.shutdown())
+    signal.signal(signal.SIGINT,  lambda sig, frame: app.shutdown())
     signal.signal(signal.SIGTERM, lambda sig, frame: app.shutdown())
 
     root.mainloop()

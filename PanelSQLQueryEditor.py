@@ -10,7 +10,6 @@ class PanelSQLQueryEditor:
         self.zoom_level          = 100  # Default zoom level
         self.last_created_tab_id = None
 
-
     def setup(self, parent, root, theme):
         """Panel 2: SQL Query Editor with tabs"""
         self.parent = parent
@@ -54,7 +53,7 @@ class PanelSQLQueryEditor:
         ttk.Button(toolbar, text="Open", command=self.open_sql_file, style='TButton').pack(side=tk.LEFT, padx=2)
         ttk.Button(toolbar, text="Save", command=self.save_current_sql, style='TButton').pack(side=tk.LEFT, padx=2)
         ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=5)
-        ttk.Button(toolbar, text="Execute (F5)", command=self.execute, style='TButton').pack(side=tk.LEFT, padx=2)
+        ttk.Button(toolbar, text="Execute (F5)",      command=self.execute, style='TButton').pack(side=tk.LEFT, padx=2)
         ttk.Button(toolbar, text="Execute Selection", command=self.execute_selection, style='TButton').pack(side=tk.LEFT, padx=2)
 
         self.sql_notebook = ttk.Notebook(editor_frame, style='TNotebook')
@@ -181,6 +180,13 @@ class PanelSQLQueryEditor:
         """Get the type of the current database connection"""
         return self.db_connection.get_connection_type()
 
+    def insert_edit_separator_in_actual_tab(self):
+        tab_id, info = self.get_current_sql_tab()
+        if not info:
+            return
+        widget = info["widget"]
+        widget.edit_separator()
+
     def insert_at_cursor(self, text):
         """Insert text at the current cursor position in the active editor"""
         tab_id, info = self.get_current_sql_tab()
@@ -188,7 +194,9 @@ class PanelSQLQueryEditor:
             return
 
         widget = info["widget"]
+        widget.edit_separator()
         widget.insert(tk.INSERT, text)
+        widget.edit_separator()
         widget.see(tk.INSERT)  # Scroll to make the insertion point visible
         widget.focus_set()     # Set focus back to the editor
 
@@ -230,9 +238,9 @@ class PanelSQLQueryEditor:
                 if text_width > max_width:
                     max_width = text_width
             default_width = 150
-            width_limit = 300
-            width = max(max_width, default_width)
-            width = min(width, width_limit)
+            width_limit   = 300
+            width         = max(max_width, default_width)
+            width         = min(width, width_limit)
             tree.column(col, width=width)
 
         tree.update_idletasks()
@@ -299,10 +307,10 @@ class PanelSQLQueryEditor:
     def show_table_keys(self, schema: str, table: str):
         """Fetch and display table or view keys (primary and foreign) in a new tab."""
         try:
-            cursor = self.db_connection.current_connection.cursor()
+            cursor  = self.db_connection.current_connection.cursor()
             queries = self.get_queries_instance()
 
-            cursor = self.query_manager.cursor_execute(queries.get_table_keys(schema, table), cursor)
+            cursor   = self.query_manager.cursor_execute(queries.get_table_keys(schema, table), cursor)
             raw_rows = cursor.fetchall()
             cursor.close()
 
@@ -330,13 +338,13 @@ class PanelSQLQueryEditor:
     def show_table_structure(self, schema: str, table: str):
         """Fetch and display table or view structure in a new tab."""
         try:
-            cursor = self.db_connection.current_connection.cursor()
+            cursor  = self.db_connection.current_connection.cursor()
             queries = self.get_queries_instance()
-            cursor = self.query_manager.cursor_execute(queries.get_table_structure(schema, table), cursor)
+            cursor  = self.query_manager.cursor_execute(queries.get_table_structure(schema, table), cursor)
             columns = [desc[0] for desc in cursor.description]
-            rows = cursor.fetchall()
+            rows    = cursor.fetchall()
 
-            tree = self._create_result_tab(f"{table} (Structure)", columns, rows)
+            tree    = self._create_result_tab(f"{table} (Structure)", columns, rows)
 
             context_menu = self._create_context_menu(
                 tree,
@@ -356,11 +364,11 @@ class PanelSQLQueryEditor:
     def show_table_indexes(self, schema: str, table: str, index_name: str | None = None):
         """Fetch and display table indexes in a new tab."""
         try:
-            cursor = self.db_connection.current_connection.cursor()
+            cursor  = self.db_connection.current_connection.cursor()
             queries = self.get_queries_instance()
-            cursor = self.query_manager.cursor_execute(queries.get_table_indexes(schema, table), cursor)
+            cursor  = self.query_manager.cursor_execute(queries.get_table_indexes(schema, table), cursor)
             columns = [desc[0] for desc in cursor.description]
-            rows = cursor.fetchall()
+            rows    = cursor.fetchall()
             cursor.close()
 
             if not rows:
@@ -395,16 +403,17 @@ class PanelSQLQueryEditor:
         text_scroll.pack(side=tk.RIGHT, fill=tk.Y)
 
         text_widget = SQLText(
+            self,
             content_frame,
             wrap=tk.NONE,
             yscrollcommand=text_scroll.set,
             undo=True,
-            maxundo=-1,
+            maxundo=1000,
             **self.theme.sql_editor_style
         )
 
-        text_widget.bind("<Control-z>", lambda e: (self.undo(), "break"))
-        text_widget.bind("<Control-y>", lambda e: (self.redo(), "break"))
+        text_widget.bind("<Control-z>",       lambda e: (self.undo(), "break"))
+        text_widget.bind("<Control-y>",       lambda e: (self.redo(), "break"))
         text_widget.bind("<Control-Shift-Z>", lambda e: (self.redo(), "break"))
 
         text_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -445,15 +454,6 @@ class PanelSQLQueryEditor:
         self.last_created_tab_id = tab_id
 
         return tab_id
-
-    def close_tab(self, tab_id):
-        """Close the specified tab"""
-        if tab_id in self.sql_files:
-            if self.sql_files[tab_id]["modified"]:
-                if not messagebox.askyesno("Unsaved Changes", "This file has unsaved changes. Close anyway?"):
-                    return
-            self.sql_notebook.forget(self.sql_files[tab_id]["frame"])
-            del self.sql_files[tab_id]
 
     def close_current_tab(self, event):
         """Close the current tab when middle mouse button is pressed"""
@@ -500,6 +500,15 @@ class PanelSQLQueryEditor:
             except tk.TclError:
                 pass
 
+    def add_undo_cyclic_separator(self):
+        """Undo the last action in the current SQL tab"""
+        _, info = self.get_current_sql_tab()
+        if info:
+            try:
+                info["widget"].after(500, lambda: info["widget"].edit_separator())
+            except tk.TclError:
+                pass
+
     def redo(self):
         """Redo the last undone action in the current SQL tab"""
         _, info = self.get_current_sql_tab()
@@ -511,6 +520,7 @@ class PanelSQLQueryEditor:
 
     def mark_modified(self, tab_id):
         """Mark tab as modified and update tab name"""
+        self.add_undo_cyclic_separator() # increase the group splitting for the undo, redo functionality
         if tab_id not in self.sql_files:
             return
 
