@@ -3,11 +3,12 @@ from Panels import *
 
 class PanelSQLQueryEditor:
     def __init__(self, query_result_panel, db_connection, query_manager):
-        self.query_result_panel = query_result_panel
-        self.db_connection = db_connection
-        self.query_manager = query_manager
-        self.tab_results = {}  # Store results for each tab
-        self.zoom_level = 100  # Default zoom level
+        self.query_result_panel  = query_result_panel
+        self.db_connection       = db_connection
+        self.query_manager       = query_manager
+        self.tab_results         = {}  # Store results for each tab
+        self.zoom_level          = 100  # Default zoom level
+        self.last_created_tab_id = None
 
 
     def setup(self, parent, root, theme):
@@ -103,7 +104,8 @@ class PanelSQLQueryEditor:
     def on_tab_changed(self, event):
         """Handle tab change event to display the corresponding result"""
         tab_id, info = self.get_current_sql_tab()
-        if tab_id and tab_id in self.tab_results:
+        tabHasJustBeenCreated = self.last_created_tab_id and self.last_created_tab_id == tab_id
+        if not tabHasJustBeenCreated and tab_id and tab_id in self.tab_results:
             result_data = self.tab_results[tab_id]
             if result_data["type"] == "results":
                 self.query_result_panel.display_results(
@@ -115,6 +117,7 @@ class PanelSQLQueryEditor:
                 self.query_result_panel.display_message(result_data["message"])
             elif result_data["type"] == "error":
                 self.query_result_panel.display_error(result_data["error"])
+        self.last_created_tab_id = tab_id
 
     def add_sql_helper_buttons(self, parent_frame):
         """Add buttons for inserting common SQL clauses"""
@@ -438,6 +441,8 @@ class PanelSQLQueryEditor:
         }
 
         text_widget.bind('<<Modified>>', lambda e: self.mark_modified(tab_id))
+
+        self.last_created_tab_id = tab_id
 
         return tab_id
 

@@ -829,7 +829,7 @@ class QueriesPostgreSQL(Queries):
     @staticmethod
     def get_first_x_rows(schema, table, limit, colnames):
         fields = ",\n  ".join(f'"{col}"' for col in colnames)
-        return f'SELECT\n  {fields}\nFROM "{schema}"."{table}"\n LIMIT {limit}'
+        return f'SELECT\n  {fields}\nFROM "{schema}"."{table}"\nLIMIT {limit}'
 
     @staticmethod
     def get_all_schemas_with_their_table_count():
