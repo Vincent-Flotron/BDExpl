@@ -133,20 +133,25 @@ class PanelQueryResult:
         # Seed max widths from header labels so they're never under-sized
         max_widths = [len(col) * 8 for col in unique_columns]
 
-        row_count = 0
-        for row in rows:
-            # None → ''; everything else (datetime, Decimal, …) → str().
-            # All branches of the original isinstance chain ended in str() anyway.
-            formatted_row = tuple('' if v is None else str(v) for v in row)
+        # ── 1. Format all rows up-front ───────────────────────────────────────────
+        formatted_rows = [
+            tuple('' if v is None else str(v) for v in row)
+            for row in rows
+        ]
+        row_count = len(formatted_rows)
 
-            # Accumulate widths now — avoids a full second pass over the Treeview later
-            for i, cell in enumerate(formatted_row):
-                w = len(cell) * 8
-                if w > max_widths[i]:
-                    max_widths[i] = w
+        # ── 2. Column-wise width pass (one max() per column, not one branch per cell)
+        if formatted_rows:
+            for i, col_cells in enumerate(zip(*formatted_rows)):
+                col_max = max(len(c) for c in col_cells) * 8
+                if col_max > max_widths[i]:
+                    max_widths[i] = col_max
 
-            self.result_tree.insert('', 'end', values=formatted_row)
-            row_count += 1
+        # ── 3. Bulk-insert via direct Tcl call ────────────────────────────────────
+        _tk_call   = self.result_tree.tk.call
+        _tree_path = self.result_tree._w
+        for formatted_row in formatted_rows:
+            _tk_call(_tree_path, 'insert', '', 'end', '-values', formatted_row)
 
         # Apply widths directly — no Treeview re-query needed
         for col, w in zip(unique_columns, max_widths):
