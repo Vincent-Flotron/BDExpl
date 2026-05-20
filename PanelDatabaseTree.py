@@ -44,12 +44,12 @@ class PanelDatabaseTree:
 
         # "Everywhere" checkbox
         self.search_everywhere_var = tk.BooleanVar(value=False)
-        everywhere_cb = ttk.Checkbutton(
-            search_frame, text="everywhere",
+        in_every_schema_cb = ttk.Checkbutton(
+            search_frame, text="In every schema",
             variable=self.search_everywhere_var,
             command=self._update_search_checkboxes_state
         )
-        everywhere_cb.pack(side=tk.LEFT, padx=(4, 0))
+        in_every_schema_cb.pack(side=tk.LEFT, padx=(4, 0))
 
         # Object-type filter checkboxes
         type_frame = ttk.Frame(left_frame, style='TFrame')
@@ -72,15 +72,15 @@ class PanelDatabaseTree:
             var.trace_add("write", self._reset_search_session)
 
         self._cb_tables = ttk.Checkbutton(type_frame, text="tables",
-                                          variable=self.search_tables_var, state='disabled')
+                                          variable=self.search_tables_var, state='enabled')
         self._cb_views  = ttk.Checkbutton(type_frame, text="views",
-                                          variable=self.search_views_var,  state='disabled')
+                                          variable=self.search_views_var,  state='enabled')
         self._cb_procs  = ttk.Checkbutton(type_frame, text="procedures",
-                                          variable=self.search_procedures_var, state='disabled')
+                                          variable=self.search_procedures_var, state='enabled')
         self._cb_funcs  = ttk.Checkbutton(type_frame, text="functions",
-                                          variable=self.search_functions_var,  state='disabled')
+                                          variable=self.search_functions_var,  state='enabled')
         self._cb_pkgs   = ttk.Checkbutton(type_frame, text="packages",
-                                          variable=self.search_packages_var,   state='disabled')
+                                          variable=self.search_packages_var,   state='enabled')
 
         self._type_checkboxes = [
             self._cb_tables, self._cb_views,
@@ -956,8 +956,6 @@ class PanelDatabaseTree:
             else:
                 state = 'disabled'
 
-        for cb in self._type_checkboxes:
-            cb.config(state=state)
 
     def _ensure_schema_loaded(self, schema_node):
         """Force-load procedures/functions/packages/views for a schema if not yet expanded."""
