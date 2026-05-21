@@ -88,6 +88,7 @@ class PanelQueryResult:
         # Remove the result_info label from here since we'll use the status bar
         commands = [
             ("Copy Selected",       self.copy_selected_rows),
+            ("Copy All",            self.copy_all_rows),
             ("Export to CSV",       self.export_to_csv),
             ("Reset Column Widths", self.reset_column_widths),
         ]
@@ -259,6 +260,32 @@ class PanelQueryResult:
         ]
         self.root.clipboard_clear()
         self.root.clipboard_append('\n'.join(lines))
+        self.root.update()
+
+    def copy_all_rows(self):
+        """Copy all rows to clipboard (tab-separated) including column headers."""
+        all_items = self.result_tree.get_children()
+        if not all_items:
+            return
+
+        # Get column headers
+        columns = self.result_tree['columns']
+
+        # Create header line
+        header_line = '\t'.join(str(col) for col in columns)
+
+        # Create data lines
+        lines = [
+            '\t'.join(
+                str(v)
+                for v in self.result_tree.item(item)['values']
+            )
+            for item in all_items
+        ]
+
+        # Combine header and data
+        self.root.clipboard_clear()
+        self.root.clipboard_append(header_line + '\n' + '\n'.join(lines))
         self.root.update()
 
     def export_to_csv(self):
