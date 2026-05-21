@@ -25,7 +25,7 @@ def main():
     args = parser.parse_args()
 
 
-    connStrGen = CredentialManager()
+    connStrGen = CredentialManager(True if args.cred_man == "env_var" else False)
     if args.db_type == ORACLE_DRIVER:
         params = connStrGen.get_conn_string(args.connection_name)
     elif args.db_type == ORACLE_DRIVERLESS:

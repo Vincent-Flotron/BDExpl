@@ -3,5 +3,6 @@ venv
 build
 DBExpl.spec
 BDExpl.7z
+dist/BDExpl.exe
 cars.db
 test_database.db
