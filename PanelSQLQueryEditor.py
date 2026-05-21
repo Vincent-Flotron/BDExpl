@@ -192,6 +192,25 @@ class PanelSQLQueryEditor:
         widget.see(tk.INSERT)  # Scroll to make the insertion point visible
         widget.focus_set()     # Set focus back to the editor
 
+    def insert_order_by(self, col_name, direction):
+        """Append 'ORDER BY <col_name> <direction>' at the end of the active SQL tab."""
+        tab_id, info = self.get_current_sql_tab()
+        if not info:
+            return
+
+        widget = info["widget"]
+        widget.edit_separator()
+
+        # Get existing content so we can decide whether to prepend a newline
+        current_text = widget.get("1.0", "end-1c")
+        prefix = "\n" if current_text and not current_text.endswith("\n") else ""
+
+        widget.insert(tk.END, f"{prefix}ORDER BY {col_name} {direction}")
+        widget.edit_separator()
+        widget.see(tk.END)
+        widget.focus_set()
+# --------
+
     def display_error(self, error: str):
         """Display error in result panel"""
         self.query_result_panel.display_error(error)

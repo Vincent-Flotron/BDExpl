@@ -231,6 +231,7 @@ class DBExp:
         self.query_result_panel     = PanelQueryResult(self.root, self.status_bar_panel)
         self.query_manager          = QueryManager(self.db_connection, self.query_result_panel)
         self.sql_query_editor_panel = PanelSQLQueryEditor(self.query_result_panel, self.db_connection, self.query_manager)
+        self.query_result_panel.set_sql_query_editor(self.sql_query_editor_panel)
 
         # Left Panel: DB Treeview
         self.database_tree_panel    = PanelDatabaseTree(main_paned, self.db_connection, self.sql_query_editor_panel, self.query_manager)

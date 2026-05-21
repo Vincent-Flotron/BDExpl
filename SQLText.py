@@ -125,26 +125,33 @@ class SQLText(Text):
         total_lines = int(self.index('end-1c').split('.')[0])
 
         # Dynamically size the canvas width to fit the digit count + padding
-        font_size   = int(10 * (self.zoom_level / 100))
+        font_size = int(10 * (self.zoom_level / 100))
         digit_count = len(str(total_lines))
         # ~7px per digit at size 10, scaled + 12px padding
         canvas_width = int(digit_count * 7 * (self.zoom_level / 100)) + 12
         self.line_numbers.config(width=canvas_width)
 
         first_visible_line = int(self.index("@0,0").split('.')[0])
-        last_visible_line  = int(self.index("@0," + str(self.winfo_height())).split('.')[0])
+        last_visible_line = int(self.index("@0," + str(self.winfo_height())).split('.')[0])
+
+        # Get the text widget's font metrics for better alignment
+        font = ('Consolas', font_size)
+        font_metrics = self.tk.call("font", "metrics", font)
+
+        # Extract line spacing
+        line_spacing_match = re.search(r'-linespace\s+(\d+)', str(font_metrics))
+        line_height = int(line_spacing_match.group(1)) if line_spacing_match else 9  # Default to 9 if not found
 
         for line in range(first_visible_line, min(last_visible_line + 1, total_lines + 1)):
             bbox = self.bbox(f"{line}.0")
-            if not bbox:
-                continue
-            y = bbox[1]
+            y = bbox[1] + line_height / 2  # Small adjustment for better vertical alignment
+
             self.line_numbers.create_text(
-                canvas_width - 4, y,   # ← draw relative to actual width, not hardcoded 35
+                canvas_width - 4, y,
                 text=str(line),
                 anchor="e",
                 fill="#666666",
-                font=('Consolas', font_size)
+                font=font
             )
 
     def set_zoom(self, zoom_level):

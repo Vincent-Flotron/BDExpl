@@ -2,10 +2,15 @@ from Panels import *
 
 class PanelQueryResult:
     def __init__(self, root, status_bar_panel):
-        self.root             = root
-        self.current_codepage = 'utf-8'
-        self.zoom_level       = 100
-        self.status_bar_panel = status_bar_panel
+        self.root                    = root
+        self.current_codepage        = 'utf-8'
+        self.zoom_level              = 100
+        self.status_bar_panel        = status_bar_panel
+        self.panel_sql_query_editor  = None   # set later via set_sql_query_editor()
+
+    def set_sql_query_editor(self, panel_sql_query_editor):
+        """Wire up the SQL editor panel so ORDER BY clicks can insert text there."""
+        self.panel_sql_query_editor = panel_sql_query_editor
 
     def zoom_in(self):
         """Increase the zoom level."""
@@ -244,7 +249,32 @@ class PanelQueryResult:
         pass
 
     def show_result_context_menu(self, event):
-        self.result_context_menu.post(event.x_root, event.y_root)
+        region = self.result_tree.identify_region(event.x, event.y)
+        if region == "heading":
+            col_id = self.result_tree.identify_column(event.x)
+            if col_id and col_id != '#0':
+                col_name = self.result_tree.heading(col_id)['text']
+                self._show_order_by_menu(event, col_name)
+        else:
+            self.result_context_menu.post(event.x_root, event.y_root)
+
+    def _show_order_by_menu(self, event, col_name):
+        """Show a small context menu to insert ORDER BY ASC/DESC into the SQL editor."""
+        menu = tk.Menu(self.root, tearoff=0)
+        menu.add_command(
+            label=f"ORDER BY {col_name} ASC",
+            command=lambda: self._insert_order_by(col_name, "ASC")
+        )
+        menu.add_command(
+            label=f"ORDER BY {col_name} DESC",
+            command=lambda: self._insert_order_by(col_name, "DESC")
+        )
+        menu.post(event.x_root, event.y_root)
+
+    def _insert_order_by(self, col_name, direction):
+        """Delegate the ORDER BY insertion to the SQL editor panel."""
+        if self.panel_sql_query_editor:
+            self.panel_sql_query_editor.insert_order_by(col_name, direction)
 
     def copy_selected_rows(self):
         """Copy selected rows to clipboard (tab-separated)."""
