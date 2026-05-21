@@ -8,9 +8,31 @@ class SQLText(Text):
     def __init__(self, panel_sql_query_editor, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.panel_sql_query_editor = panel_sql_query_editor
-        self.bind("<KeyRelease>",      self.on_key_release)
-        self.bind("<ButtonRelease-1>", self.on_key_release)
-        self.bind("<Configure>",       self.on_key_release)
+
+        # Create a frame to hold the line numbers and text widget
+        self.container = tk.Frame(self.master)
+        self.container.pack(side=tk.LEFT, fill=tk.Y)
+
+        # Create canvas for line numbers
+        self.line_numbers = tk.Canvas(
+            self.container,
+            width=40,
+            bg='#f0f0f0',
+            highlightthickness=0
+        )
+        self.line_numbers.pack(side=tk.LEFT, fill=tk.Y)
+
+        # Re-pack the main text widget
+        self.pack_forget()
+        self.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+
+        # Bind events - REMOVE DUPLICATE BINDINGS
+        self.bind("<KeyRelease>",      self.on_content_changed)
+        self.bind("<ButtonRelease-1>", self.on_content_changed)
+        self.bind("<Configure>",       self.on_content_changed)
+        self.bind("<MouseWheel>",      self.on_scroll)
+        self.bind("<Button-4>",        self.on_scroll)  # Linux scroll up
+        self.bind("<Button-5>",        self.on_scroll)  # Linux scroll down
 
         # Bind Tab key to insert 2 spaces instead
         self.bind("<Tab>",             self.indent_selection_right)
@@ -64,24 +86,73 @@ class SQLText(Text):
 
         # Define colors for syntax highlighting
         self.colors = {
-            'keyword': 'blue',
+            'keyword':  'blue',
             'operator': 'purple',
             'function': 'darkorange',
-            'string': 'green',
-            'string2': 'green',
-            'comment': 'gray',
+            'string':   'green',
+            'string2':  'green',
+            'comment':  'gray',
             'number': '#098658'
         }
 
         # Initialize zoom level
         self.zoom_level = 100  # Default 100%
 
+        # Draw line numbers initially
+        self.draw_line_numbers()
+
+    def on_content_changed(self, event=None):
+        """Handle key release for both syntax highlighting and line numbers."""
+        self.on_key_release(event)  # Call the original method for syntax highlighting
+        self.draw_line_numbers()    # Update line numbers
+
+    def on_scroll(self, event):
+        """Handle scroll events."""
+        if event.delta:
+            self.yview_scroll(-1*(event.delta//120), "units")
+        elif event.num == 4:  # Linux scroll up
+            self.yview_scroll(-1, "units")
+        elif event.num == 5:  # Linux scroll down
+            self.yview_scroll(1, "units")
+
+        self.draw_line_numbers()
+        return "break"
+
+    def draw_line_numbers(self):
+        """Draw line numbers on the canvas."""
+        self.line_numbers.delete("all")
+
+        total_lines = int(self.index('end-1c').split('.')[0])
+
+        # Dynamically size the canvas width to fit the digit count + padding
+        font_size   = int(10 * (self.zoom_level / 100))
+        digit_count = len(str(total_lines))
+        # ~7px per digit at size 10, scaled + 12px padding
+        canvas_width = int(digit_count * 7 * (self.zoom_level / 100)) + 12
+        self.line_numbers.config(width=canvas_width)
+
+        first_visible_line = int(self.index("@0,0").split('.')[0])
+        last_visible_line  = int(self.index("@0," + str(self.winfo_height())).split('.')[0])
+
+        for line in range(first_visible_line, min(last_visible_line + 1, total_lines + 1)):
+            bbox = self.bbox(f"{line}.0")
+            if not bbox:
+                continue
+            y = bbox[1]
+            self.line_numbers.create_text(
+                canvas_width - 4, y,   # ← draw relative to actual width, not hardcoded 35
+                text=str(line),
+                anchor="e",
+                fill="#666666",
+                font=('Consolas', font_size)
+            )
 
     def set_zoom(self, zoom_level):
         """Set the zoom level for the text widget."""
-        self.zoom_level = max(50, min(200, zoom_level))  # Clamp between 50% and 200%
-        font_size = int(10 * (self.zoom_level / 100))  # Base size is 10
+        self.zoom_level = max(50, min(200, zoom_level))
+        font_size = int(10 * (self.zoom_level / 100))
         self.configure(font=('Consolas', font_size))
+        self.draw_line_numbers()
         return self.zoom_level
 
     def zoom_in(self):

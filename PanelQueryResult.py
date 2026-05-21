@@ -163,16 +163,7 @@ class PanelQueryResult:
     def display_error(self, error: str):
         """Display error in result panel"""
 
-        # Extract error name and text using regex
-        match = re.search(r"\('(.*?)', '(.*?)'\)", str(error))
-        if match:
-            error_name = match.group(1)
-            error_text = match.group(2)
-            # Remove escape sequences and extra whitespace
-            error_text = error_text.replace('\\x00', '').replace('\\n', '\n').replace('\\r', '\r')
-            error = f"{error_name}: {error_text}"
-        else:
-            error = str(error)
+        error = error.replace('\\x00', '').replace('\\n', '\n').replace('\\r', '\r')
 
         # Store the cleaned error text
         self.raw_error_text = error
@@ -180,10 +171,17 @@ class PanelQueryResult:
         # Display the cleaned error
         self.result_tree.delete(*self.result_tree.get_children())
         self.result_tree['columns'] = ['Error']
-        self.result_tree.column('#0', width=0, stretch=tk.NO)
+        self.result_tree.column('#0',    width=0,  stretch=tk.NO)
         self.result_tree.column('Error', width=800)
         self.result_tree.heading('Error', text='SQL Error')
-        self.result_tree.insert('', 'end', values=[error])
+
+        # Configure monospace font for error display
+        style = ttk.Style()
+        style.configure('Error.Treeview', font=('Courier New', 10))  # Monospace font
+        self.result_tree.configure(style='Error.Treeview')
+
+        for err in error.splitlines():
+            self.result_tree.insert('', 'end', values=[err])
 
         # Update status bar
         self.status_bar_panel.set_query_result_status("Error executing query")
@@ -192,7 +190,7 @@ class PanelQueryResult:
         """Display a plain message in the result panel."""
         self.result_tree.delete(*self.result_tree.get_children())
         self.result_tree['columns'] = ['Message']
-        self.result_tree.column('#0', width=0, stretch=tk.NO)
+        self.result_tree.column('#0',      width=0,   stretch=tk.NO)
         self.result_tree.column('Message', width=800)
         self.result_tree.heading('Message', text='Message')
         self.result_tree.insert('', 'end', values=[message])
@@ -254,7 +252,7 @@ class PanelQueryResult:
             return
         lines = [
             '\t'.join(
-                str(v).replace('▶ ', '') if isinstance(v, str) and v.startswith('▶ ') else str(v)
+                str(v)
                 for v in self.result_tree.item(item)['values']
             )
             for item in selected
@@ -282,7 +280,7 @@ class PanelQueryResult:
                     writer.writerow(self.result_tree['columns'])
                     for item in self.result_tree.get_children():
                         row = [
-                            str(v).replace('▶ ', '') if isinstance(v, str) and v.startswith('▶ ') else str(v)
+                            str(v)
                             for v in self.result_tree.item(item)['values']
                         ]
                         writer.writerow(row)
