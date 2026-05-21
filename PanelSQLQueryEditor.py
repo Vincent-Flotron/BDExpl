@@ -163,16 +163,8 @@ class PanelSQLQueryEditor:
             return
 
         # Get the current connection type
-        conn_type = self.get_connection_type()
-
-        if conn_type == "Oracle" or conn_type == "OracleDB":
-            clause = f"FETCH FIRST {limit} ROWS ONLY"
-        elif conn_type == "PostgreSQL":
-            clause = f"LIMIT {limit}"
-        elif conn_type == "SQLite":
-            clause = f"LIMIT {limit}"
-        else:
-            clause = f"LIMIT {limit}"  # Default to standard SQL
+        queries = self.get_queries_instance()
+        clause  = queries.limit_results_to(limit)
 
         self.insert_at_cursor(clause)
 
@@ -610,8 +602,10 @@ class PanelSQLQueryEditor:
         except Exception as e:
             messagebox.showerror("Error", f"Failed to save file: {str(e)}")
 
-    def execute(self):
+    def execute(self, selection_only=False):
         """Execute SQL query from current tab"""
+
+        sql = None
         if not self.db_connection.current_connection:
             messagebox.showwarning("Not Connected", "Please connect to a database first")
             return
@@ -620,32 +614,32 @@ class PanelSQLQueryEditor:
         if not info:
             return
 
-        sql = info["widget"].get('1.0', 'end-1c').strip()
-        if not sql:
-            return
-
-        self.run_query(sql)
+        if selection_only:
+            try:
+                sql = info["widget"].get(tk.SEL_FIRST, tk.SEL_LAST).strip()
+            except tk.TclError:
+                messagebox.showwarning("No Selection", "Please select SQL text to execute")
+        else:
+            sql = info["widget"].get('1.0', 'end-1c').strip()
+            
+        if sql:
+            self.run_query(sql)
 
     def execute_selection(self):
         """Execute selected SQL text"""
-        if not self.db_connection.current_connection:
-            messagebox.showwarning("Not Connected", "Please connect to a database first")
-            return
-
-        tab_id, info = self.get_current_sql_tab()
-        if not info:
-            return
-
-        try:
-            sql = info["widget"].get(tk.SEL_FIRST, tk.SEL_LAST).strip()
-            if sql:
-                self.query_manager.run_query(sql)
-        except tk.TclError:
-            messagebox.showwarning("No Selection", "Please select SQL text to execute")
+        self.execute(selection_only=True)
 
 
     def run_query(self, sql: str):
         """Execute SQL and display results"""
+        # Clear previous results first
+        self.query_result_panel.display_message("Executing query...")
+
+        # Add a small delay to ensure the user sees the clearing
+        self.root.after(150, lambda: self._execute_query_after_delay(sql))
+
+    def _execute_query_after_delay(self, sql: str):
+        """Execute the query after a small delay"""
         result = self.query_manager.execute_query(sql)
 
         # Get current tab

@@ -136,6 +136,10 @@ class Queries(ABC):
     def get_view_comment(self, schema, view_name):
         pass
 
+    @abstractmethod
+    def limit_results_to(self, limit_value):
+        pass
+
 # ======================================================================
 # ORACLE QUERIES
 # ======================================================================
@@ -538,6 +542,10 @@ class QueriesOracle(Queries):
                     AND comments IS NOT NULL
                 """
 
+    @staticmethod
+    def limit_results_to(limit_value):
+        return f"FETCH FIRST {limit_value} ROWS ONLY"
+
 # ======================================================================
 # SQLITE QUERIES
 # ======================================================================
@@ -821,7 +829,9 @@ class QueriesSQLite(Queries):
         # SQLite doesn't have view comments in the same way as Oracle
         return "SELECT NULL AS comments WHERE 0=1"
 
-       
+    @staticmethod
+    def limit_results_to(limit_value):
+        return  f"LIMIT {limit_value}"
 
 # ======================================================================
 # POSTGRESQL QUERIES
@@ -1182,6 +1192,9 @@ class QueriesPostgreSQL(Queries):
             ) AS comments
         """
 
+    @staticmethod
+    def limit_results_to(limit_value):
+        return  f"LIMIT {limit_value}"
 
 # ======================================================================
 # MICROSOFT SQL SERVER QUERIES
@@ -1599,6 +1612,9 @@ class QueriesMSSQL(Queries):
               AND ep.minor_id   = 0
         """
 
+    @staticmethod
+    def limit_results_to(limit_value):
+        return  f"SELECT TOP({limit_value})"
 
 # ======================================================================
 # QUERY MANAGER
