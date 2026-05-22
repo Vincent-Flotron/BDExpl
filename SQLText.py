@@ -64,7 +64,8 @@ class SQLText(Text):
             + r"RETURN|REVOKE|RIGHT\s+JOIN|RIGHT\s+OUTER\s+JOIN|ROLE|ROLLBACK|ROWID|ROWNUM|SAVEPOINT|SELECT|"\
             + r"SET\s+ROLE|SET\s+TRANSACTION|SHUTDOWN|SOME|START\s+WITH|STARTUP|SUBPARTITION|SYSDATE|SYSTIMESTAMP|THEN|"\
             + r"TRUNCATE|TYPE|UNION|UNION\s+ALL|UNIQUE|UNLIMITED|UPDATE|USER|USING|WHEN|"\
-            + r"WHERE|WHILE|WITH|TABLE|VALUES|ADD|REFERENCES|SET|SERIAL|TIMESTAMP|WITHOUT +TIME +ZONE|VARCHAR|NUMERIC|BIGINT|LIMIT|ON|VIEW|INTO)\b"
+            + r"WHERE|WHILE|WITH|TABLE|VALUES|ADD|REFERENCES|SET|"\
+            + r"LIMIT|ON|VIEW|INTO)\b"
 
         self.sql_operators = r"=|!=|<>|<=|>=|<|>|\+|-|\*|/|%"
 
@@ -75,9 +76,12 @@ class SQLText(Text):
             + r"LENGTH|LISTAGG|LN|LOCALTIMESTAMP|LOG|LOWER|LPAD|LTRIM|MAX|MIN|"\
             + r"MOD|MONTHS_BETWEEN|NEXT_DAY|NULLIF|NUMTODSINTERVAL|NUMTOYMINTERVAL|NVL|NVL2|POWER|RANK|"\
             + r"RANK|RAWTOHEX|REGEXP_INSTR|REGEXP_REPLACE|REGEXP_SUBSTR|REPLACE|ROUND|ROW_NUMBER|ROW_NUMBER|RPAD|"\
-            + r"RTRIM|SIN|SOUNDEX|SQRT|STDDEV|SUBSTR|SUM|SUM|SUM|SYSDATE|"\
+            + r"RTRIM|SIN|SOUNDEX|SQRT|STDDEV|SUBSTR|SUM|SUM|SUM|"\
             + r"TAN|THEN|TO_CHAR|TO_CHAR|TO_DATE|TO_DATE|TO_NUMBER|TO_TIMESTAMP|TO_TIMESTAMP|TRIM|"\
             + r"TRUNC|UID|UPPER|USER|VARIANCE|VSIZE)\b"
+
+        self.sql_type = r"\b(TIMESTAMPG|TIMESTAMP|SERIAL|VARCHAR|NUMERIC|BIGINT|(INTEGER|TEXT|TIMESTAMPG|SERIAL|VARCHAR|NUMERIC|BIGINT) +NOT +NULL|"\
+            + r"TEXT|INTEGER|DATE|TIME +ZONE|WITHOUT +TIME +ZONE)\b"
 
         self.sql_string_pattern  = r"'[^']*'"
         self.sql_string_pattern2 = r'"[^"]*"'
@@ -89,6 +93,7 @@ class SQLText(Text):
             'keyword':  'blue',
             'operator': 'purple',
             'function': 'darkorange',
+            'type':   "#B86920",
             'string':   'green',
             'string2':  'green',
             'comment':  'gray',
@@ -400,6 +405,9 @@ class SQLText(Text):
 
             # Highlight functions
             self.highlight_pattern(self.sql_functions,       "function", self.colors["function"])
+
+            # Highlight types
+            self.highlight_pattern(self.sql_type,            "function", self.colors["type"])
 
             # Highlight strings
             self.highlight_pattern(self.sql_string_pattern,  "string",   self.colors["string"])
