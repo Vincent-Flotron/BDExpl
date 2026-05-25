@@ -196,7 +196,7 @@ class PanelSQLQueryEditor:
         widget.on_content_changed()
 
     def insert_order_by(self, col_name, direction):
-        """Append 'ORDER BY <col_name> <direction>' at the end of the active SQL tab."""
+        """Insert 'ORDER BY <col_name> <direction>' before LIMIT clause or at end."""
         tab_id, info = self.get_current_sql_tab()
         if not info:
             return
@@ -204,18 +204,43 @@ class PanelSQLQueryEditor:
         widget = info["widget"]
         widget.edit_separator()
 
-        # Get existing content so we can decide whether to prepend a newline
         current_text = widget.get("1.0", "end-1c")
-        prefix = "\n" if current_text and not current_text.endswith("\n") else ""
+        
+        # Pattern to match LIMIT or FETCH FIRST clauses
+        import re
+        limit_pattern = r'(LIMIT\s+\d+|FETCH\s+FIRST\s+\d+\s+ROWS\s+ONLY)'
+        match = re.search(limit_pattern, current_text, re.IGNORECASE)
+        
+        if match:
+            # Find the position of the match
+            match_start = match.start()
+            # Find the start of the line containing the match
+            line_start = current_text.rfind('\n', 0, match_start) + 1
+            if line_start == 0:
+                line_start = 0
+            
+            # Insert one line before the LIMIT clause
+            insert_pos = f"1.0+{line_start}c"
+            prefix = "\n" if line_start > 0 and current_text[line_start-1] != '\n' else ""
+            
+            self.insert_edit_separator_in_actual_tab()
+            widget.insert(insert_pos, f"{prefix}ORDER BY {col_name} {direction}\n")
+            widget.edit_separator()
+            widget.see(insert_pos)
+            widget.focus_set()
+            self.insert_edit_separator_in_actual_tab()
+            widget.on_content_changed()
+        else:
+            # Append at the end (existing behavior)
+            prefix = "\n" if current_text and not current_text.endswith("\n") else ""
 
-        self.insert_edit_separator_in_actual_tab() # for undo/redo
-        widget.insert(tk.END, f"{prefix}ORDER BY {col_name} {direction}")
-        widget.edit_separator()
-        widget.see(tk.END)
-        widget.focus_set()
-        self.insert_edit_separator_in_actual_tab() # for undo/redo
-        widget.on_content_changed()
-# --------
+            self.insert_edit_separator_in_actual_tab()
+            widget.insert(tk.END, f"{prefix}ORDER BY {col_name} {direction}")
+            widget.edit_separator()
+            widget.see(tk.END)
+            widget.focus_set()
+            self.insert_edit_separator_in_actual_tab()
+            widget.on_content_changed()
 
     def display_error(self, error: str):
         """Display error in result panel"""
