@@ -196,7 +196,7 @@ class PanelSQLQueryEditor:
         widget.on_content_changed()
 
     def insert_order_by(self, col_name, direction):
-        """Insert 'ORDER BY <col_name> <direction>' before LIMIT clause or at end."""
+        """Insert/replace 'ORDER BY <col_name> <direction>' before LIMIT clause or at end."""
         tab_id, info = self.get_current_sql_tab()
         if not info:
             return
@@ -206,20 +206,51 @@ class PanelSQLQueryEditor:
 
         current_text = widget.get("1.0", "end-1c")
         
-        # Pattern to match LIMIT or FETCH FIRST clauses
+        # Pattern to match existing ORDER BY clauses (to replace)
         import re
-        limit_pattern = r'(LIMIT\s+\d+|FETCH\s+FIRST\s+\d+\s+ROWS\s+ONLY)'
-        match = re.search(limit_pattern, current_text, re.IGNORECASE)
+        order_by_pattern = r'ORDER\s+BY\s+[A-Za-z0-9_\s\n,]*?(?:ASC|DESC)?'
+        order_by_match = re.search(order_by_pattern, current_text, re.IGNORECASE)
         
-        if match:
-            # Find the position of the match
-            match_start = match.start()
-            # Find the start of the line containing the match
+        # Pattern to match LIMIT or FETCH FIRST clauses
+        limit_pattern = r'(LIMIT\s+\d+|FETCH\s+FIRST\s+\d+\s+ROWS\s+ONLY)'
+        limit_match = re.search(limit_pattern, current_text, re.IGNORECASE)
+        
+        if order_by_match:
+            # Replace existing ORDER BY clause
+            insert_start = order_by_match.start()
+            insert_end = order_by_match.end()
+            
+            # Find the start of the line containing ORDER BY
+            line_start = current_text.rfind('\n', 0, insert_start) + 1
+            if line_start == 0:
+                line_start = 0
+            
+            # Check if there's content before ORDER BY on the same line
+            prefix = "\n" if line_start > 0 and current_text[line_start-1] != '\n' else ""
+            
+            # Find where the line ends
+            line_end = current_text.find('\n', insert_end)
+            if line_end == -1:
+                line_end = len(current_text)
+            
+            # Replace the entire ORDER BY line
+            new_text = f"{prefix}ORDER BY {col_name} {direction}"
+            
+            self.insert_edit_separator_in_actual_tab()
+            widget.delete(f"1.0+{line_start}c", f"1.0+{line_end}c")
+            widget.insert(f"1.0+{line_start}c", new_text)
+            widget.edit_separator()
+            widget.see(f"1.0+{line_start}c")
+            widget.focus_set()
+            self.insert_edit_separator_in_actual_tab()
+            widget.on_content_changed()
+        elif limit_match:
+            # Insert before LIMIT clause
+            match_start = limit_match.start()
             line_start = current_text.rfind('\n', 0, match_start) + 1
             if line_start == 0:
                 line_start = 0
             
-            # Insert one line before the LIMIT clause
             insert_pos = f"1.0+{line_start}c"
             prefix = "\n" if line_start > 0 and current_text[line_start-1] != '\n' else ""
             
@@ -231,7 +262,7 @@ class PanelSQLQueryEditor:
             self.insert_edit_separator_in_actual_tab()
             widget.on_content_changed()
         else:
-            # Append at the end (existing behavior)
+            # Append at the end
             prefix = "\n" if current_text and not current_text.endswith("\n") else ""
 
             self.insert_edit_separator_in_actual_tab()
