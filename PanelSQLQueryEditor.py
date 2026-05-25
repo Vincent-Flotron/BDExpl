@@ -187,10 +187,13 @@ class PanelSQLQueryEditor:
 
         widget = info["widget"]
         widget.edit_separator()
+        self.insert_edit_separator_in_actual_tab() # for undo/redo
         widget.insert(tk.INSERT, text)
         widget.edit_separator()
         widget.see(tk.INSERT)  # Scroll to make the insertion point visible
         widget.focus_set()     # Set focus back to the editor
+        self.insert_edit_separator_in_actual_tab() # for undo/redo
+        widget.on_content_changed()
 
     def insert_order_by(self, col_name, direction):
         """Append 'ORDER BY <col_name> <direction>' at the end of the active SQL tab."""
@@ -205,10 +208,13 @@ class PanelSQLQueryEditor:
         current_text = widget.get("1.0", "end-1c")
         prefix = "\n" if current_text and not current_text.endswith("\n") else ""
 
+        self.insert_edit_separator_in_actual_tab() # for undo/redo
         widget.insert(tk.END, f"{prefix}ORDER BY {col_name} {direction}")
         widget.edit_separator()
         widget.see(tk.END)
         widget.focus_set()
+        self.insert_edit_separator_in_actual_tab() # for undo/redo
+        widget.on_content_changed()
 # --------
 
     def display_error(self, error: str):
