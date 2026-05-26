@@ -133,6 +133,14 @@ class Queries(ABC):
         pass
 
     @abstractmethod
+    def table_exists(schema, table):
+        pass
+
+    @abstractmethod
+    def get_clone_sql(schema, table, new_table):
+        pass
+
+    @abstractmethod
     def get_view_comment(self, schema, view_name):
         pass
 
@@ -541,6 +549,18 @@ class QueriesOracle(Queries):
                     AND table_name = '{view_name}'
                     AND comments IS NOT NULL
                 """
+    
+    @staticmethod
+    def table_exists(schema, table):
+        return f"""
+            SELECT COUNT(*)
+            FROM all_tables
+            WHERE owner = '{schema}' AND table_name = '{table}'
+        """
+
+    @staticmethod
+    def get_clone_sql(schema, table, new_table):
+        return f"CREATE TABLE {new_table} AS SELECT * FROM {schema}.{table}"
 
     @staticmethod
     def limit_results_to(limit_value):
@@ -828,6 +848,16 @@ class QueriesSQLite(Queries):
     def get_view_comment(schema, view_name):
         # SQLite doesn't have view comments in the same way as Oracle
         return "SELECT NULL AS comments WHERE 0=1"
+
+    @staticmethod
+    def table_exists(schema, table):
+        # SQLite doesn't use schemas in the same way, table name is unique in the DB
+        return f"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='{table}'"
+
+    @staticmethod
+    def get_clone_sql(schema, table, new_table):
+        # SQLite ignores schema parameter for table creation
+        return f"CREATE TABLE {new_table} AS SELECT * FROM {table}"
 
     @staticmethod
     def limit_results_to(limit_value):
@@ -1191,6 +1221,18 @@ class QueriesPostgreSQL(Queries):
                 'pg_class'
             ) AS comments
         """
+
+    @staticmethod
+    def table_exists(schema, table):
+        return f"""
+            SELECT COUNT(*)
+            FROM information_schema.tables
+            WHERE table_schema = '{schema}' AND table_name = '{table}'
+        """
+
+    @staticmethod
+    def get_clone_sql(schema, table, new_table):
+        return f"CREATE TABLE {schema}.{new_table} AS SELECT * FROM {schema}.{table}"
 
     @staticmethod
     def limit_results_to(limit_value):
@@ -1611,6 +1653,21 @@ class QueriesMSSQL(Queries):
               AND ep.name       = 'MS_Description'
               AND ep.minor_id   = 0
         """
+
+    @staticmethod
+    def table_exists(schema, table):
+        return f"""
+            SELECT COUNT(*)
+            FROM sys.tables t
+            JOIN sys.schemas s ON t.schema_id = s.schema_id
+            WHERE s.name = '{schema}' AND t.name = '{table}'
+        """
+
+    @staticmethod
+    def get_clone_sql(schema, table, new_table):
+        # SQL Server uses SELECT INTO for cloning
+        return f"SELECT * INTO {schema}.{new_table} FROM {schema}.{table}"
+
 
     @staticmethod
     def limit_results_to(limit_value):

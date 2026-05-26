@@ -119,17 +119,18 @@ class PanelDatabaseTree:
 
         # Context menu for tables
         table_commands = [
-            ("View first 100 rows", lambda: self.view_table_data(100)),
+            ("View first 100 rows",  lambda: self.view_table_data(100)),
             ("View first 1000 rows", lambda: self.view_table_data(1000)),
-            ("View Structure", lambda: self.sql_query_editor_panel.show_table_structure(
+            ("View Structure",       lambda: self.sql_query_editor_panel.show_table_structure(
                 *self.db_tree.item(self.db_tree.selection()[0])['values'][0:3:2]
             )),
-            ("View Indexes", lambda: self.sql_query_editor_panel.show_table_indexes(
+            ("View Indexes",         lambda: self.sql_query_editor_panel.show_table_indexes(
                 *self.db_tree.item(self.db_tree.selection()[0])['values'][0:3:2]
             )),
-            ("View Keys", lambda: self.sql_query_editor_panel.show_table_keys(
+            ("View Keys",            lambda: self.sql_query_editor_panel.show_table_keys(
                 *self.db_tree.item(self.db_tree.selection()[0])['values'][0:3:2]
-            ))
+            )),
+            ("Clone Table",          lambda: self.clone_table())
         ]
         self.table_context_menu = Helper.create_context_menu(self.db_tree, table_commands)
 
@@ -158,6 +159,52 @@ class PanelDatabaseTree:
         self.db_tree.bind("<<TreeviewSelect>>", lambda e: self._update_search_checkboxes_state())
         self.db_tree.bind("<<TreeviewSelect>>", self._update_breadcrumbs)
 
+
+
+    def clone_table(self):
+        """Clone the selected table with a unique name (_clone1, _clone2, etc.)"""
+        selected = self.db_tree.selection()
+        if not selected:
+            return
+
+        values = self.db_tree.item(selected[0])['values']
+        if len(values) < 3 or values[1] != 'table':
+            return
+
+        schema = values[0]
+        original_table = values[2]
+        queries = self.get_queries_instance()
+
+        # Generate unique name
+        base_name = original_table
+        counter = 1
+        new_table = f"{base_name}_clone{counter}"
+
+        try:
+            cursor = self.db_connection.current_connection.cursor()
+            
+            # Check if table exists, increment counter if so
+            while True:
+                cursor = self.query_manager.cursor_execute(queries.table_exists(schema, new_table), cursor)
+                count = cursor.fetchone()[0]
+                if count == 0:
+                    break
+                counter += 1
+                new_table = f"{base_name}_clone{counter}"
+
+            # Execute clone SQL
+            clone_sql = queries.get_clone_sql(schema, original_table, new_table)
+            cursor = self.query_manager.cursor_execute(clone_sql, cursor)
+            self.db_connection.current_connection.commit()
+            
+            messagebox.showinfo("Success", f"Table '{original_table}' cloned to '{new_table}'")
+            
+            # Refresh tree
+            self.load_database_objects()
+            
+            cursor.close()
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to clone table: {str(e)}")
 
     def zoom_in(self):
         """Increase the zoom level."""
