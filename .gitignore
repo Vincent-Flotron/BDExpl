@@ -7,3 +7,5 @@ dist
 cars.db
 test_database.db
 version_info.txt
+temp.bmp
+copy_exe.ps1

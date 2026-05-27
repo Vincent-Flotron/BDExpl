@@ -75,7 +75,7 @@ Set-Content -Path "version_info.txt" -Value $versionInfoContent -Encoding UTF8
 
 # Create executable with version info
 Write-Host "Building executable..."
-pyinstaller --onefile --windowed --hidden-import=win32timezone --collect-all cryptography --version-file=version_info.txt DBExpl.py
+pyinstaller --onefile --windowed --hidden-import=win32timezone --collect-all cryptography --version-file=version_info.txt --icon=resources\icon.ico DBExpl.py
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host "Build successful!"
