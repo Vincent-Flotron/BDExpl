@@ -333,12 +333,17 @@ class PanelSQLQueryEditor:
 
         return tree
 
-    def _create_context_menu(self, tree, copy_command, export_command):
+    def _create_context_menu(self, tree, copy_command, export_command, copy_all_command=None):
         """Helper: Create a context menu for a treeview."""
         commands = [
             ("Copy Selected", copy_command),
-            ("Export to CSV", export_command)
         ]
+
+        if copy_all_command:
+            commands.append(("Copy All", copy_all_command))
+
+        commands.append(("Export to CSV", export_command))
+
         context_menu = Helper.create_context_menu(tree, commands)
         return context_menu
 
@@ -377,6 +382,25 @@ class PanelSQLQueryEditor:
         self.root.clipboard_append('\n'.join(selected_values))
         self.root.update()
 
+    def _copy_all_to_clipboard(self, tree):
+        """Helper: Copy all rows (including headers) to clipboard in tabular format"""
+        columns = list(tree["columns"])
+        selected_values = []
+
+        # Add header row to copied data
+        header_values = ['\t'.join(str(col) for col in columns)]
+        selected_values.extend(header_values)
+
+        # Add all data rows
+        for item in tree.get_children():
+            values = tree.item(item)['values']
+            formatted_row = '\t'.join(str(value) for value in values)
+            selected_values.append(formatted_row)
+
+        self.root.clipboard_clear()
+        self.root.clipboard_append('\n'.join(selected_values))
+        self.root.update()
+
     def show_table_keys(self, schema: str, table: str):
         """Fetch and display table or view keys (primary and foreign) in a new tab."""
         try:
@@ -400,7 +424,8 @@ class PanelSQLQueryEditor:
             context_menu = self._create_context_menu(
                 tree,
                 lambda: self._copy_selected_rows(tree),
-                lambda: self._export_to_csv(tree, f"{table}_keys")
+                lambda: self._export_to_csv(tree, f"{table}_keys"),
+                lambda: self._copy_all_to_clipboard(tree)
             )
             tree.bind("<Button-3>", lambda event: context_menu.post(event.x_root, event.y_root))
 
@@ -422,7 +447,8 @@ class PanelSQLQueryEditor:
             context_menu = self._create_context_menu(
                 tree,
                 lambda: self._copy_selected_rows(tree),
-                lambda: self._export_to_csv(tree, f"{table}_structure")
+                lambda: self._export_to_csv(tree, f"{table}_structure"),
+                lambda: self._copy_all_to_clipboard(tree)
             )
             tree.bind("<Button-3>", lambda event: context_menu.post(event.x_root, event.y_root))
 
@@ -453,7 +479,8 @@ class PanelSQLQueryEditor:
             context_menu = self._create_context_menu(
                 tree,
                 lambda: self._copy_selected_rows(tree),
-                lambda: self._export_to_csv(tree, f"{table}_indexes")
+                lambda: self._export_to_csv(tree, f"{table}_indexes"),
+                lambda: self._copy_all_to_clipboard(tree)
             )
             tree.bind("<Button-3>", lambda event: context_menu.post(event.x_root, event.y_root))
 

@@ -80,6 +80,10 @@ pyinstaller --onefile --windowed --hidden-import=win32timezone --collect-all cry
 if ($LASTEXITCODE -eq 0) {
     Write-Host "Build successful!"
     Write-Host "Check DBExpl.exe properties for version and author info (in Comments field)"
+    
+    # Display new version
+    Write-Host "`nPrevious version     : $currentVersion"
+    Write-Host "New compiled version : $newVersion"
 }
 else {
     Write-Error "Build failed with exit code $LASTEXITCODE"
