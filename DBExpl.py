@@ -12,6 +12,7 @@ from ConnectionManager   import ConnectionManager
 from CredentialManager   import CredentialManager
 from QueryManager        import QueryManager
 from ConnectionDialogs   import DeleteConnectionDialog, NewConnectionDialog
+from version             import VERSION
 
 class Theme:
     def __init__(self, root):
@@ -185,7 +186,7 @@ class DBExp:
 
     def __init__(self, root):
         self.root = root
-        self.root.title("DBExp - Database Explorer")
+        self.root.title(f"DBExp - Database Explorer v{VERSION}")
         self.root.geometry("1600x1000")
 
         self.root.protocol("WM_DELETE_WINDOW", self.shutdown)
