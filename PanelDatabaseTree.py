@@ -697,65 +697,80 @@ class PanelDatabaseTree:
 
 
     def show_tree_context_menu(self, event):
-        item = self.db_tree.identify_row(event.y)
-        if not item:
+        clicked_item = self.db_tree.identify_row(event.y)
+        if not clicked_item:
             return
 
-        self.db_tree.selection_set(item)
-        values = self.db_tree.item(item)['values']
+        slected_items = self.db_tree.selection()
+        # Only reset selection if the right-clicked clicked_item isn't already selected
+        if clicked_item not in self.db_tree.selection():
+            self.db_tree.selection_set(clicked_item)
+
+        values = self.db_tree.item(clicked_item)['values']
 
         if not values:
             return
 
         obj_type = values[1]
 
-        try:
-            # -------------------------------
-            # TABLES & VIEWS
-            # -------------------------------
-            if obj_type == 'table':
-                self.table_context_menu.post(event.x_root, event.y_root)
+        selection_contains_same_types = True
+        last_item_type  = None
+        for item in slected_items:
+            item_type = self.db_tree.item(clicked_item)['values'][1]
+            if    last_item_type \
+              and item_type != last_item_type:
+                selection_contains_same_types = False
 
-            elif obj_type == 'view':
-                self.view_context_menu.post(event.x_root, event.y_root)
 
-            # -------------------------------
-            # STANDALONE OBJECTS
-            # -------------------------------
-            elif obj_type == 'procedure':
-                self.view_procedure_content(values[0], values[2])
+        if selection_contains_same_types:
+            try:
+                # -------------------------------
+                # TABLES & VIEWS
+                # -------------------------------
+                if obj_type == 'table':
+                    self.table_context_menu.post(event.x_root, event.y_root)
 
-            elif obj_type == 'function':
-                self.view_function_content(values[0], values[2])
+                elif obj_type == 'view':
+                    self.view_context_menu.post(event.x_root, event.y_root)
 
-            elif obj_type == 'trigger':
-                self.view_trigger_content(values[0], values[2])
+                # -------------------------------
+                # STANDALONE OBJECTS
+                # -------------------------------
+                elif obj_type == 'procedure':
+                    self.view_procedure_content(values[0], values[2])
 
-            # -------------------------------
-            # PACKAGES
-            # -------------------------------
-            elif obj_type == 'package':
-                # Right-click on package → show full body
-                self.view_package_content(values[0], values[2])
+                elif obj_type == 'function':
+                    self.view_function_content(values[0], values[2])
 
-            elif obj_type in ('package_procedure', 'package_function'):
-                schema = values[0]
-                package_name = self.db_tree.item(self.db_tree.parent(item))['text']
-                package_name = package_name.split(' (')[0]  # clean label
+                elif obj_type == 'trigger':
+                    self.view_trigger_content(values[0], values[2])
 
-                routine_name = values[2]
-                overload = values[3] if len(values) > 3 else None
+                # -------------------------------
+                # PACKAGES
+                # -------------------------------
+                elif obj_type == 'package':
+                    # Right-click on package → show full body
+                    self.view_package_content(values[0], values[2])
 
-                self.view_package_function_or_procedure_content(
-                    schema,
-                    package_name,
-                    routine_name,
-                    overload
-                )
+                elif obj_type in ('package_procedure', 'package_function'):
+                    schema = values[0]
+                    package_name = self.db_tree.item(self.db_tree.parent(clicked_item))['text']
+                    package_name = package_name.split(' (')[0]  # clean label
 
-        except Exception as e:
-            messagebox.showerror("Error", str(e))
+                    routine_name = values[2]
+                    overload = values[3] if len(values) > 3 else None
 
+                    self.view_package_function_or_procedure_content(
+                        schema,
+                        package_name,
+                        routine_name,
+                        overload
+                    )
+
+            except Exception as e:
+                messagebox.showerror("Error", str(e))
+        else:
+            messagebox.showerror("Error", "please select same types")
 
 
     def show_view_comment(self, schema: str, view: str):
