@@ -149,6 +149,10 @@ class Queries(ABC):
         pass
 
     @abstractmethod
+    def count_records_sql(schema, table):
+        pass
+
+    @abstractmethod
     def delete_view_sql(schema, view):
         pass
 
@@ -583,6 +587,10 @@ class QueriesOracle(Queries):
         return f"TRUNCATE TABLE {schema}.{table}"
 
     @staticmethod
+    def count_records_sql(schema, table):
+        return f"SELECT COUNT(*) FROM {schema}.{table}"
+
+    @staticmethod
     def delete_view_sql(schema, view):
         return f"DROP VIEW {schema}.{view} PURGE"
     
@@ -891,6 +899,10 @@ class QueriesSQLite(Queries):
     @staticmethod
     def empty_table_sql(schema, table):
         return f"DELETE FROM {table}"
+
+    @staticmethod
+    def count_records_sql(schema, table):
+        return f"SELECT COUNT(*) FROM {table}"
 
     @staticmethod
     def delete_view_sql(schema, view):
@@ -1278,6 +1290,10 @@ class QueriesPostgreSQL(Queries):
     @staticmethod
     def empty_table_sql(schema, table):
         return f"TRUNCATE TABLE {schema}.{table}"
+
+    @staticmethod
+    def count_records_sql(schema, table):
+        return f"SELECT COUNT(*) FROM \"{schema}\".\"{table}\""
 
     @staticmethod
     def delete_view_sql(schema, view):
@@ -1724,6 +1740,10 @@ class QueriesMSSQL(Queries):
     @staticmethod
     def empty_table_sql(schema, table):
         return f"TRUNCATE TABLE [{schema}].[{table}]"
+
+    @staticmethod
+    def count_records_sql(schema, table):
+        return f"SELECT COUNT(*) FROM [{schema}].[{table}]"
 
     @staticmethod
     def delete_view_sql(schema, view):

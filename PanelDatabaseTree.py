@@ -132,6 +132,7 @@ class PanelDatabaseTree:
             )),
             ("Clone Table",          lambda: self.clone_table()),
             ("-------------------------", None),
+            ("Count Records",        lambda: self.count_records()),
             ("Empty Table",          lambda: self.empty_table()),
             ("Delete Table",         lambda: self.delete_table())
         ]
@@ -154,6 +155,7 @@ class PanelDatabaseTree:
                 *self.db_tree.item(self.db_tree.selection()[0])['values'][0:3:2]
             )),
             ("-------------------------", None),
+            ("Count Records", lambda: self.count_records()),
             ("Delete View", lambda: self.delete_view())
         ]
         self.view_context_menu = Helper.create_context_menu(self.db_tree, view_commands)
@@ -211,6 +213,50 @@ class PanelDatabaseTree:
         except Exception as e:
             messagebox.showerror("Error", f"Failed to clone table: {str(e)}")
 
+
+    def count_records(self):
+        """Count and display records in the selected table or view, updating the tree node."""
+        selected = self.db_tree.selection()
+        if not selected:
+            messagebox.showwarning("No Selection", "Please select a table or view")
+            return
+
+        values = self.db_tree.item(selected[0])['values']
+        if len(values) < 3:
+            return
+
+        schema   = values[0]
+        obj_type = values[1]
+        obj_name = values[2]
+
+        if obj_type not in ('table', 'view'):
+            messagebox.showwarning("Invalid Selection", "Please select a table or view")
+            return
+
+        try:
+            cursor  = self.db_connection.current_connection.cursor()
+            queries = self.get_queries_instance()
+
+            # Get the count SQL
+            count_sql = queries.count_records_sql(schema, obj_name)
+
+            # Execute the count SQL through QueryManager
+            cursor = self.query_manager.cursor_execute(count_sql, cursor)
+            result = cursor.fetchone()
+            count  = result[0] if result else 0
+
+            cursor.close()
+
+            # Update the tree node text to show the count
+            current_text = self.db_tree.item(selected[0])['text']
+            # Extract the base name (remove any existing count like " (100 rows)")
+            base_name = current_text.split(' (')[0]
+            new_text = f"{base_name} ({count} rows)"
+
+            self.db_tree.item(selected[0], text=new_text)
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to count records: {str(e)}")
 
     def empty_table(self):
         """Empty the selected table (remove all rows)."""
