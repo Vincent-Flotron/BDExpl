@@ -121,6 +121,7 @@ class PanelDatabaseTree:
         table_commands = [
             ("View first 100 rows",  lambda: self.view_table_data(100)),
             ("View first 1000 rows", lambda: self.view_table_data(1000)),
+            ("-------------------------", None),
             ("View Structure",       lambda: self.sql_query_editor_panel.show_table_structure(
                 *self.db_tree.item(self.db_tree.selection()[0])['values'][0:3:2]
             )),
@@ -130,9 +131,11 @@ class PanelDatabaseTree:
             ("View Keys",            lambda: self.sql_query_editor_panel.show_table_keys(
                 *self.db_tree.item(self.db_tree.selection()[0])['values'][0:3:2]
             )),
+            ("-------------------------", None),
             ("Clone Table",          lambda: self.clone_table()),
             ("-------------------------", None),
             ("Count Records",        lambda: self.count_records()),
+            ("-------------------------", None),
             ("Empty Table",          lambda: self.empty_table()),
             ("Delete Table",         lambda: self.delete_table())
         ]
@@ -140,29 +143,31 @@ class PanelDatabaseTree:
 
         # Context menu for views
         view_commands = [
-            ("View first 100 rows", lambda: self.view_view_data(100)),
+            ("View first 100 rows",  lambda: self.view_view_data(100)),
             ("View first 1000 rows", lambda: self.view_view_data(1000)),
-            ("View Structure", lambda: self.show_view_structure(
+            ("-------------------------", None),
+            ("View Structure",       lambda: self.show_view_structure(
                 *self.db_tree.item(self.db_tree.selection()[0])['values'][0:3:2]
             )),
-            ("View Query", lambda: self.view_view_query(
+            ("View Query",           lambda: self.view_view_query(
                 *self.db_tree.item(self.db_tree.selection()[0])['values'][0:3:2]
             )),
-            ("View Dependencies", lambda: self.show_view_dependencies(
+            ("View Dependencies",    lambda: self.show_view_dependencies(
                 *self.db_tree.item(self.db_tree.selection()[0])['values'][0:3:2]
             )),
-            ("View Comment", lambda: self.show_view_comment(
+            ("View Comment",         lambda: self.show_view_comment(
                 *self.db_tree.item(self.db_tree.selection()[0])['values'][0:3:2]
             )),
             ("-------------------------", None),
-            ("Count Records", lambda: self.count_records()),
-            ("Delete View", lambda: self.delete_view())
+            ("Count Records",        lambda: self.count_records()),
+            ("-------------------------", None),
+            ("Delete View",          lambda: self.delete_view())
         ]
         self.view_context_menu = Helper.create_context_menu(self.db_tree, view_commands)
 
-        self.db_tree.bind("<Button-3>", self.show_tree_context_menu)
-        self.db_tree.bind("<Double-1>", lambda e: self.view_table_data(100))
-        self.db_tree.bind("<<TreeviewOpen>>", self.on_tree_expand)
+        self.db_tree.bind("<Button-3>",         self.show_tree_context_menu)
+        self.db_tree.bind("<Double-1>",         lambda e: self.view_table_data(100))
+        self.db_tree.bind("<<TreeviewOpen>>",   self.on_tree_expand)
         self.db_tree.bind("<<TreeviewSelect>>", lambda e: self._update_search_checkboxes_state())
         self.db_tree.bind("<<TreeviewSelect>>", self._update_breadcrumbs)
 
@@ -250,8 +255,7 @@ class PanelDatabaseTree:
 
                 # Update the tree node text to show the count
                 current_text = self.db_tree.item(item)['text']
-                base_name    = current_text.split(' (')[0]
-                new_text     = f"{base_name} ({count} rows)"
+                new_text     = TextManip.update_spaced_line(current_text, f"{count:\u00A0>9,} rows".replace(",", "'"), 2, 28)
                 self.db_tree.item(item, text=new_text)
 
             if invalid_selection_found:
@@ -1411,7 +1415,7 @@ class PanelDatabaseTree:
         while temp_id:
             item_text = self.db_tree.item(temp_id)['text']
             # Clean the text (e.g. "schema (2823 tables)" -> "schema")
-            clean_text = item_text.split(' (')[0]
+            clean_text = item_text.split(' (')[0].split(' '*4)[0]
             path_items.insert(0, (temp_id, clean_text))
             temp_id = self.db_tree.parent(temp_id)
 

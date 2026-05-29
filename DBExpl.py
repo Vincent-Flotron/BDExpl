@@ -161,6 +161,9 @@ class Theme:
                     padding=2,
                     background=error_color,
                     foreground='white')
+        
+        # Monospace font
+        self.style.configure('Error.Treeview', font=('Courier New', 10))  # Monospace font
 
         # Configure custom style for SQL editor text
         self.sql_editor_style = {

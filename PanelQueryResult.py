@@ -182,8 +182,6 @@ class PanelQueryResult:
         self.result_tree.heading('Error', text='SQL Error')
 
         # Configure monospace font for error display
-        style = ttk.Style()
-        style.configure('Error.Treeview', font=('Courier New', 10))  # Monospace font
         self.result_tree.configure(style='Error.Treeview')
 
         for err in error.splitlines():

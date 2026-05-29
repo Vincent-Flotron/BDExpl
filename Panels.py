@@ -53,6 +53,8 @@ class Helper:
             show=show,
             style='Treeview'
         )
+        tree.configure(style='Error.Treeview')
+
         if columns:
             tree['columns'] = columns
 
@@ -70,11 +72,48 @@ class Helper:
             menu.add_command(label=label, command=command)
         return menu
 
-PORTION_LEN = 150
+
+class TextManip:
+    PORTION_LEN = 150
+
+    def update_spaced_line(previous_line, new_text, portion_nb, portion_len=None):
+        if not portion_len:
+            portion_len = TextManip.PORTION_LEN
+        reg_portions = re.compile(r"^(.*?)(?:( {4,})(.*?))?(?:( {4,})(.*?))?$")
+        matches = reg_portions.match(previous_line)
+        if not matches:
+            return  previous_line
+
+        new_spaces = TextManip.make_spaces(new_text, portion_len)
+        groups     = matches.groups()
+
+        if portion_nb == 1:
+            new_line = (new_text          + new_spaces        +
+                        (groups[2] or "") + (groups[3] or "") +
+                        (groups[4] or "")                     )
+        elif portion_nb == 2:
+            if len((groups[0] or "") + (groups[1] or "")) < portion_len:
+                prev_spaces = TextManip.make_spaces((groups[0] or ""), portion_len)
+            else:
+                prev_spaces = (groups[1] or "")
+            new_line = ((groups[0] or "") + prev_spaces       +
+                        new_text          + new_spaces        +
+                        (groups[4] or "")                     )
+        elif portion_nb == 3:
+            new_line = ((groups[0] or "") + (groups[1] or "") +
+                        (groups[2] or "") + (groups[3] or "") +
+                         new_text                             )
+        else:
+            return  previous_line
+        
+        return new_line
+
+    def make_spaces(text, portion_len):
+        text_len = len(text)
+        spaces   = " "*(portion_len - text_len)
+        return spaces
 
 class StatusBarPanel:
-
-
     def __init__(self, root, text, style):
         # Create a container frame to hold the status bar
         self.container = ttk.Frame(root)
@@ -98,33 +137,11 @@ class StatusBarPanel:
     def set_status(self, new_status):
         self.update_bar(new_status, 1)
 
+
     def update_bar(self, new_status, portion_nb):
         actual_bar_text = self.status_bar.cget("text")
-        reg_portions = re.compile(r"^(.*?)(?:( {4,})(.*?))?(?:( {4,})(.*?))?$")
-        matches = reg_portions.match(actual_bar_text)
-        if not matches:
-            return  # or handle error case
-
-        new_status_len = len(new_status)
-        spaces         = " "*(PORTION_LEN - new_status_len)
-        groups         = matches.groups()
-
-        if portion_nb == 1:
-            new_bar_text = (new_status        + spaces            +
-                            (groups[2] or "") + (groups[3] or "") +
-                            (groups[4] or "")                     )
-        elif portion_nb == 2:
-            new_bar_text = ((groups[0] or "") + (groups[1] or "") +
-                            new_status        + spaces            +
-                            (groups[4] or "")                     )
-        elif portion_nb == 3:
-            new_bar_text = ((groups[0] or "") + (groups[1] or "") +
-                            (groups[2] or "") + (groups[3] or "") +
-                            new_status                            )
-        else:
-            return  # invalid portion number
-
-        self.status_bar.config(text=new_bar_text)
+        new_line = TextManip.update_spaced_line(actual_bar_text, new_status, portion_nb)
+        self.status_bar.config(text=new_line)
             
     
     def set_query_result_status(self, new_query_result_status):
