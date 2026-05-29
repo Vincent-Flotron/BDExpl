@@ -130,7 +130,10 @@ class PanelDatabaseTree:
             ("View Keys",            lambda: self.sql_query_editor_panel.show_table_keys(
                 *self.db_tree.item(self.db_tree.selection()[0])['values'][0:3:2]
             )),
-            ("Clone Table",          lambda: self.clone_table())
+            ("Clone Table",          lambda: self.clone_table()),
+            ("-------------------------", None),
+            ("Empty Table",          lambda: self.empty_table()),
+            ("Delete Table",         lambda: self.delete_table())
         ]
         self.table_context_menu = Helper.create_context_menu(self.db_tree, table_commands)
 
@@ -149,7 +152,9 @@ class PanelDatabaseTree:
             )),
             ("View Comment", lambda: self.show_view_comment(
                 *self.db_tree.item(self.db_tree.selection()[0])['values'][0:3:2]
-            ))
+            )),
+            ("-------------------------", None),
+            ("Delete View", lambda: self.delete_view())
         ]
         self.view_context_menu = Helper.create_context_menu(self.db_tree, view_commands)
 
@@ -171,13 +176,13 @@ class PanelDatabaseTree:
         if len(values) < 3 or values[1] != 'table':
             return
 
-        schema = values[0]
+        schema         = values[0]
         original_table = values[2]
-        queries = self.get_queries_instance()
+        queries        = self.get_queries_instance()
 
         # Generate unique name
         base_name = original_table
-        counter = 1
+        counter   = 1
         new_table = f"{base_name}_clone{counter}"
 
         try:
@@ -186,7 +191,7 @@ class PanelDatabaseTree:
             # Check if table exists, increment counter if so
             while True:
                 cursor = self.query_manager.cursor_execute(queries.table_exists(schema, new_table), cursor)
-                count = cursor.fetchone()[0]
+                count  = cursor.fetchone()[0]
                 if count == 0:
                     break
                 counter += 1
@@ -194,7 +199,7 @@ class PanelDatabaseTree:
 
             # Execute clone SQL
             clone_sql = queries.get_clone_sql(schema, original_table, new_table)
-            cursor = self.query_manager.cursor_execute(clone_sql, cursor)
+            cursor    = self.query_manager.cursor_execute(clone_sql, cursor)
             self.db_connection.current_connection.commit()
             
             messagebox.showinfo("Success", f"Table '{original_table}' cloned to '{new_table}'")
@@ -205,6 +210,151 @@ class PanelDatabaseTree:
             cursor.close()
         except Exception as e:
             messagebox.showerror("Error", f"Failed to clone table: {str(e)}")
+
+
+    def empty_table(self):
+        """Empty the selected table (remove all rows)."""
+        selected = self.db_tree.selection()
+        if not selected:
+            messagebox.showwarning("No Selection", "Please select a table to empty")
+            return
+
+        values = self.db_tree.item(selected[0])['values']
+        if len(values) < 3 or values[1] != 'table':
+            messagebox.showwarning("Not a Table", "Selected item is not a table")
+            return
+
+        schema = values[0]
+        table_name = values[2]
+
+        confirm = messagebox.askyesno(
+            "Confirm Empty",
+            f"Are you sure you want to permanently remove all rows from table '{table_name}' in schema '{schema}'?\n"
+            "This action cannot be undone."
+        )
+
+        if not confirm:
+            return
+
+        try:
+            cursor = self.db_connection.current_connection.cursor()
+            queries = self.get_queries_instance()
+
+            # Get the empty SQL
+            empty_sql = queries.empty_table_sql(schema, table_name)
+
+            # Execute the empty SQL through QueryManager
+            self.query_manager.cursor_execute(empty_sql, cursor)
+
+            # Commit the transaction
+            self.db_connection.current_connection.commit()
+            messagebox.showinfo("Success", f"Table '{table_name}' emptied successfully")
+
+            # Refresh the tree (optional, but good practice to update counts if displayed)
+            self.load_database_objects()
+
+            cursor.close()
+
+        except Exception as e:
+            self.db_connection.current_connection.rollback()
+            messagebox.showerror("Error", f"Failed to empty table: {str(e)}")
+
+
+    def delete_table(self):
+        """Delete the selected table."""
+        selected = self.db_tree.selection()
+        if not selected:
+            messagebox.showwarning("No Selection", "Please select a table to delete")
+            return
+
+        values = self.db_tree.item(selected[0])['values']
+        if len(values) < 3 or values[1] != 'table':
+            messagebox.showwarning("Not a Table", "Selected item is not a table")
+            return
+
+        schema = values[0]
+        table_name = values[2]
+
+        confirm = messagebox.askyesno(
+            "Confirm Delete",
+            f"Are you sure you want to permanently delete table '{table_name}' in schema '{schema}'?\n"
+            "This action cannot be undone."
+        )
+
+        if not confirm:
+            return
+
+        try:
+            cursor = self.db_connection.current_connection.cursor()
+            queries = self.get_queries_instance()
+
+            # Get the delete SQL
+            delete_sql = queries.delete_table_sql(schema, table_name)
+
+            # Execute the delete SQL through QueryManager
+            self.query_manager.cursor_execute(delete_sql, cursor)
+
+            # Commit the transaction
+            self.db_connection.current_connection.commit()
+            messagebox.showinfo("Success", f"Table '{table_name}' deleted successfully")
+
+            # Refresh the tree
+            self.load_database_objects()
+
+            cursor.close()
+
+        except Exception as e:
+            self.db_connection.current_connection.rollback()
+            messagebox.showerror("Error", f"Failed to delete table: {str(e)}")
+
+
+    def delete_view(self):
+        """Delete the selected view."""
+        selected = self.db_tree.selection()
+        if not selected:
+            messagebox.showwarning("No Selection", "Please select a view to delete")
+            return
+
+        values = self.db_tree.item(selected[0])['values']
+        if len(values) < 3 or values[1] != 'view':
+            messagebox.showwarning("Not a View", "Selected item is not a view")
+            return
+
+        schema = values[0]
+        view_name = values[2]
+
+        confirm = messagebox.askyesno(
+            "Confirm Delete",
+            f"Are you sure you want to permanently delete view '{view_name}' in schema '{schema}'?\n"
+            "This action cannot be undone."
+        )
+
+        if not confirm:
+            return
+
+        try:
+            cursor = self.db_connection.current_connection.cursor()
+            queries = self.get_queries_instance()
+
+            # Get the delete SQL
+            delete_sql = queries.delete_view_sql(schema, view_name)
+
+            # Execute the delete SQL through QueryManager
+            self.query_manager.cursor_execute(delete_sql, cursor)
+
+            # Commit the transaction
+            self.db_connection.current_connection.commit()
+            messagebox.showinfo("Success", f"View '{view_name}' deleted successfully")
+
+            # Refresh the tree
+            self.load_database_objects()
+
+            cursor.close()
+
+        except Exception as e:
+            self.db_connection.current_connection.rollback()
+            messagebox.showerror("Error", f"Failed to delete view: {str(e)}")
+
 
     def zoom_in(self):
         """Increase the zoom level."""

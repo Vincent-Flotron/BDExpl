@@ -141,6 +141,18 @@ class Queries(ABC):
         pass
 
     @abstractmethod
+    def delete_table_sql(schema, table):
+        pass
+
+    @abstractmethod
+    def empty_table_sql(schema, table):
+        pass
+
+    @abstractmethod
+    def delete_view_sql(schema, view):
+        pass
+
+    @abstractmethod
     def get_view_comment(self, schema, view_name):
         pass
 
@@ -563,6 +575,18 @@ class QueriesOracle(Queries):
         return f"CREATE TABLE {new_table} AS SELECT * FROM {schema}.{table}"
 
     @staticmethod
+    def delete_table_sql(schema, table):
+        return f"DROP TABLE {schema}.{table} PURGE"
+
+    @staticmethod
+    def empty_table_sql(schema, table):
+        return f"TRUNCATE TABLE {schema}.{table}"
+
+    @staticmethod
+    def delete_view_sql(schema, view):
+        return f"DROP VIEW {schema}.{view} PURGE"
+    
+    @staticmethod
     def limit_results_to(limit_value):
         return f"FETCH FIRST {limit_value} ROWS ONLY"
 
@@ -859,6 +883,19 @@ class QueriesSQLite(Queries):
         # SQLite ignores schema parameter for table creation
         return f"CREATE TABLE {new_table} AS SELECT * FROM {table}"
 
+    # Add to QueriesSQLite class
+    @staticmethod
+    def delete_table_sql(schema, table):
+        return f"DROP TABLE {table}"  # Schema is handled by sqlite_master
+
+    @staticmethod
+    def empty_table_sql(schema, table):
+        return f"DELETE FROM {table}"
+
+    @staticmethod
+    def delete_view_sql(schema, view):
+        return f"DROP VIEW {view}"
+    
     @staticmethod
     def limit_results_to(limit_value):
         return  f"LIMIT {limit_value}"
@@ -1233,6 +1270,18 @@ class QueriesPostgreSQL(Queries):
     @staticmethod
     def get_clone_sql(schema, table, new_table):
         return f"CREATE TABLE {schema}.{new_table} AS SELECT * FROM {schema}.{table}"
+
+    @staticmethod
+    def delete_table_sql(schema, table):
+        return f"DROP TABLE IF EXISTS {schema}.{table} CASCADE"
+
+    @staticmethod
+    def empty_table_sql(schema, table):
+        return f"TRUNCATE TABLE {schema}.{table}"
+
+    @staticmethod
+    def delete_view_sql(schema, view):
+        return f"DROP VIEW IF EXISTS {schema}.{view} CASCADE"
 
     @staticmethod
     def limit_results_to(limit_value):
@@ -1668,6 +1717,18 @@ class QueriesMSSQL(Queries):
         # SQL Server uses SELECT INTO for cloning
         return f"SELECT * INTO {schema}.{new_table} FROM {schema}.{table}"
 
+    @staticmethod
+    def delete_table_sql(schema, table):
+        return f"DROP TABLE [{schema}].[{table}]"
+
+    @staticmethod
+    def empty_table_sql(schema, table):
+        return f"TRUNCATE TABLE [{schema}].[{table}]"
+
+    @staticmethod
+    def delete_view_sql(schema, view):
+        return f"DROP VIEW [{schema}].[{view}]"
+        
 
     @staticmethod
     def limit_results_to(limit_value):
