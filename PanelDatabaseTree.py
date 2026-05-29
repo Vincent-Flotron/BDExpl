@@ -213,50 +213,61 @@ class PanelDatabaseTree:
         except Exception as e:
             messagebox.showerror("Error", f"Failed to clone table: {str(e)}")
 
-
     def count_records(self):
-        """Count and display records in the selected table or view, updating the tree node."""
-        selected = self.db_tree.selection()
-        if not selected:
-            messagebox.showwarning("No Selection", "Please select a table or view")
+        """Count and display records for all selected tables or views, updating their tree nodes."""
+        selected_items = self.db_tree.selection()
+        if not selected_items:
+            messagebox.showwarning("No Selection", "Please select at least one table or view")
             return
 
-        values = self.db_tree.item(selected[0])['values']
-        if len(values) < 3:
-            return
-
-        schema   = values[0]
-        obj_type = values[1]
-        obj_name = values[2]
-
-        if obj_type not in ('table', 'view'):
-            messagebox.showwarning("Invalid Selection", "Please select a table or view")
-            return
-
+        cursor = None
         try:
             cursor  = self.db_connection.current_connection.cursor()
             queries = self.get_queries_instance()
+            
+            # Track if we skipped any invalid selections to notify the user later
+            invalid_selection_found = False
 
-            # Get the count SQL
-            count_sql = queries.count_records_sql(schema, obj_name)
+            for item in selected_items:
+                values = self.db_tree.item(item)['values']
+                if len(values) < 3:
+                    continue
+                    
+                schema   = values[0]
+                obj_type = values[1]
+                obj_name = values[2]
+                
+                # Skip items that aren't tables or views
+                if obj_type not in ('table', 'view'):
+                    invalid_selection_found = True
+                    continue
 
-            # Execute the count SQL through QueryManager
-            cursor = self.query_manager.cursor_execute(count_sql, cursor)
-            result = cursor.fetchone()
-            count  = result[0] if result else 0
+                # Get and execute the count SQL
+                count_sql = queries.count_records_sql(schema, obj_name)
+                cursor    = self.query_manager.cursor_execute(count_sql, cursor)
+                result    = cursor.fetchone()
+                count     = result[0] if result else 0
 
-            cursor.close()
+                # Update the tree node text to show the count
+                current_text = self.db_tree.item(item)['text']
+                base_name    = current_text.split(' (')[0]
+                new_text     = f"{base_name} ({count} rows)"
+                self.db_tree.item(item, text=new_text)
 
-            # Update the tree node text to show the count
-            current_text = self.db_tree.item(selected[0])['text']
-            # Extract the base name (remove any existing count like " (100 rows)")
-            base_name = current_text.split(' (')[0]
-            new_text = f"{base_name} ({count} rows)"
-
-            self.db_tree.item(selected[0], text=new_text)
+            if invalid_selection_found:
+                messagebox.showwarning("Invalid Selection", "Some selected items were skipped because they are not tables or views.")
 
         except Exception as e:
             messagebox.showerror("Error", f"Failed to count records: {str(e)}")
+            
+        finally:
+            # Ensures the cursor is closed at the very end, regardless of success or exceptions
+            if cursor:
+                try:
+                    cursor.close()
+                except Exception:
+                    pass
+
 
     def empty_table(self):
         """Empty the selected table (remove all rows)."""
