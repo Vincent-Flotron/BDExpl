@@ -1763,9 +1763,9 @@ class QueryManager:
     Executes SQL and dispatches results to the UI.
     """
 
-    def __init__(self, db_connection, query_result_panel):
+    def __init__(self, db_connection, panel_query_result):
         self.db_connection = db_connection
-        self.query_result_panel = query_result_panel
+        self.panel_query_result = panel_query_result
 
     def _clean_sql(self, sql: str) -> str:
         """
@@ -1860,12 +1860,12 @@ class QueryManager:
 
     #     if result["success"]:
     #         if "columns" in result:
-    #             self.query_result_panel.display_results(
+    #             self.panel_query_result.display_results(
     #                 result["columns"],
     #                 result["rows"],
     #                 result["description"],
     #             )
     #         else:
-    #             self.query_result_panel.display_message(result["message"])
+    #             self.panel_query_result.display_message(result["message"])
     #     else:
-    #         self.query_result_panel.display_error(result["error"])
+    #         self.panel_query_result.display_error(result["error"])

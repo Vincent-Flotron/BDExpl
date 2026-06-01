@@ -113,7 +113,7 @@ class TextManip:
         spaces   = " "*(portion_len - text_len)
         return spaces
 
-class StatusBarPanel:
+class PanelStatusBar:
     def __init__(self, root, text, style):
         # Create a container frame to hold the status bar
         self.container = ttk.Frame(root)

@@ -4,7 +4,7 @@ import json
 import os
 import signal
 from DBConnection        import DBConnection
-from Panels              import StatusBarPanel
+from Panels              import PanelStatusBar
 from PanelSQLQueryEditor import PanelSQLQueryEditor
 from PanelDatabaseTree   import PanelDatabaseTree
 from PanelQueryResult    import PanelQueryResult
@@ -226,37 +226,37 @@ class DBExp:
         main_container.pack(fill=tk.BOTH, expand=True)
 
         # Create status bar first to ensure it's always visible
-        self.status_bar_panel = StatusBarPanel(main_container, text="Not connected", style='Status.TLabel')
+        self.panel_status_bar = PanelStatusBar(main_container, text="Not connected", style='Status.TLabel')
 
         # Main paned window for the rest of the UI
         main_paned = ttk.PanedWindow(main_container, orient=tk.HORIZONTAL)
         main_paned.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
-        self.query_result_panel     = PanelQueryResult(self.root, self.status_bar_panel)
-        self.query_manager          = QueryManager(self.db_connection, self.query_result_panel)
-        self.sql_query_editor_panel = PanelSQLQueryEditor(self.query_result_panel, self.db_connection, self.query_manager)
-        self.query_result_panel.set_sql_query_editor(self.sql_query_editor_panel)
+        self.panel_query_result     = PanelQueryResult(self.root, self.panel_status_bar)
+        self.query_manager          = QueryManager(self.db_connection, self.panel_query_result)
+        self.panel_sql_query_editor = PanelSQLQueryEditor(self.panel_query_result, self.db_connection, self.query_manager)
+        self.panel_query_result.set_sql_query_editor(self.panel_sql_query_editor)
 
         # Left Panel: DB Treeview
-        self.database_tree_panel    = PanelDatabaseTree(main_paned, self.db_connection, self.sql_query_editor_panel, self.query_manager)
-        self.database_tree_panel.setup()
+        self.panel_database_tree    = PanelDatabaseTree(main_paned, self.db_connection, self.panel_sql_query_editor, self.query_manager)
+        self.panel_database_tree.setup()
 
         # Right container for SQL Query and Query Result
         right_paned = ttk.PanedWindow(main_paned, orient=tk.VERTICAL)
         main_paned.add(right_paned, weight=3)
 
         # Middle Panel: SQL Query Editor
-        self.sql_query_editor_panel.setup(right_paned, self.root, self.theme)
+        self.panel_sql_query_editor.setup(right_paned, self.root, self.theme)
 
         # Bottom Panel: Query Result
-        self.query_result_panel.setup(right_paned, self.config)
+        self.panel_query_result.setup(right_paned, self.config)
 
         # Connection manager
         self.connection_manager = ConnectionManager(
             self.root,
             self.db_connection,
-            self.database_tree_panel,
-            self.status_bar_panel,
+            self.panel_database_tree,
+            self.panel_status_bar,
             self.credential_manager
         )
 
@@ -273,26 +273,26 @@ class DBExp:
     def save_config(self):
         """Save persistent configuration"""
         # Save zoom settings
-        if hasattr(self, 'database_tree_panel'):
-            self.config["database_tree_zoom"] = self.database_tree_panel.zoom_level
-        if hasattr(self, 'sql_query_editor_panel'):
-            self.config["query_editor_zoom"] = self.sql_query_editor_panel.zoom_level
-        if hasattr(self, 'query_result_panel'):
-            self.config["query_result_zoom"] = self.query_result_panel.zoom_level
+        if hasattr(self, 'panel_database_tree'):
+            self.config["database_tree_zoom"] = self.panel_database_tree.zoom_level
+        if hasattr(self, 'panel_sql_query_editor'):
+            self.config["query_editor_zoom"] = self.panel_sql_query_editor.zoom_level
+        if hasattr(self, 'panel_query_result'):
+            self.config["query_result_zoom"] = self.panel_query_result.zoom_level
 
         with open(self.CONFIG_FILE, 'w') as f:
             json.dump(self.config, f)
 
     def apply_saved_zoom_settings(self):
         """Apply saved zoom settings to all panels"""
-        if hasattr(self, 'database_tree_panel') and "database_tree_zoom" in self.config:
-            self.database_tree_panel.set_zoom(self.config["database_tree_zoom"])
+        if hasattr(self, 'panel_database_tree') and "database_tree_zoom" in self.config:
+            self.panel_database_tree.set_zoom(self.config["database_tree_zoom"])
 
-        if hasattr(self, 'sql_query_editor_panel') and "query_editor_zoom" in self.config:
-            self.sql_query_editor_panel.set_zoom(self.config["query_editor_zoom"])
+        if hasattr(self, 'panel_sql_query_editor') and "query_editor_zoom" in self.config:
+            self.panel_sql_query_editor.set_zoom(self.config["query_editor_zoom"])
 
-        if hasattr(self, 'query_result_panel') and "query_result_zoom" in self.config:
-            self.query_result_panel.set_zoom(self.config["query_result_zoom"])
+        if hasattr(self, 'panel_query_result') and "query_result_zoom" in self.config:
+            self.panel_query_result.set_zoom(self.config["query_result_zoom"])
 
     def setup_menu(self):
         """Create menu bar"""
@@ -335,18 +335,18 @@ class DBExp:
         # File menu
         file_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="File", menu=file_menu)
-        file_menu.add_command(label="New SQL",     command=self.sql_query_editor_panel.new_sql_tab)
-        file_menu.add_command(label="Open SQL...", command=self.sql_query_editor_panel.open_sql_file)
-        file_menu.add_command(label="Save",        command=self.sql_query_editor_panel.save_current_sql)
-        file_menu.add_command(label="Save As...",  command=self.sql_query_editor_panel.save_sql_as)
+        file_menu.add_command(label="New SQL",     command=self.panel_sql_query_editor.new_sql_tab)
+        file_menu.add_command(label="Open SQL...", command=self.panel_sql_query_editor.open_sql_file)
+        file_menu.add_command(label="Save",        command=self.panel_sql_query_editor.save_current_sql)
+        file_menu.add_command(label="Save As...",  command=self.panel_sql_query_editor.save_sql_as)
         file_menu.add_separator()
         file_menu.add_command(label="Exit", command=self.root.quit)
 
         # Query menu
         query_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Query", menu=query_menu)
-        query_menu.add_command(label="Execute (F5)",      command=self.sql_query_editor_panel.execute)
-        query_menu.add_command(label="Execute Selection", command=self.sql_query_editor_panel.execute_selection)
+        query_menu.add_command(label="Execute (F5)",      command=self.panel_sql_query_editor.execute)
+        query_menu.add_command(label="Execute Selection", command=self.panel_sql_query_editor.execute_selection)
 
         # Populate existing connections menu
         self.populate_existing_connections_menu()
@@ -413,7 +413,7 @@ class DBExp:
 
     def close_keys_tab(self, frame):
         print("close_keys_tab")
-        self.sql_query_editor_panel.close_keys_tab(frame)
+        self.panel_sql_query_editor.close_keys_tab(frame)
 
     def shutdown(self, *args):
         """Gracefully shutdown application and close DB connections"""

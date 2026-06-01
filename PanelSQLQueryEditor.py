@@ -2,8 +2,8 @@ from Panels import *
 
 
 class PanelSQLQueryEditor:
-    def __init__(self, query_result_panel, db_connection, query_manager):
-        self.query_result_panel  = query_result_panel
+    def __init__(self, panel_query_result, db_connection, query_manager):
+        self.panel_query_result  = panel_query_result
         self.db_connection       = db_connection
         self.query_manager       = query_manager
         self.tab_results         = {}  # Store results for each tab
@@ -107,15 +107,15 @@ class PanelSQLQueryEditor:
         if not tabHasJustBeenCreated and tab_id and tab_id in self.tab_results:
             result_data = self.tab_results[tab_id]
             if result_data["type"] == "results":
-                self.query_result_panel.display_results(
+                self.panel_query_result.display_results(
                     result_data["columns"],
                     result_data["rows"],
                     result_data["description"]
                 )
             elif result_data["type"] == "message":
-                self.query_result_panel.display_message(result_data["message"])
+                self.panel_query_result.display_message(result_data["message"])
             elif result_data["type"] == "error":
-                self.query_result_panel.display_error(result_data["error"])
+                self.panel_query_result.display_error(result_data["error"])
         self.last_created_tab_id = tab_id
 
     def add_sql_helper_buttons(self, parent_frame):
@@ -275,7 +275,7 @@ class PanelSQLQueryEditor:
 
     def display_error(self, error: str):
         """Display error in result panel"""
-        self.query_result_panel.display_error(error)
+        self.panel_query_result.display_error(error)
 
     def _create_result_tab(self, title, columns, rows):
         """Helper: Create a result tab with a treeview."""
@@ -741,7 +741,7 @@ class PanelSQLQueryEditor:
     def run_query(self, sql: str):
         """Execute SQL and display results"""
         # Clear previous results first
-        self.query_result_panel.display_message("Executing query...")
+        self.panel_query_result.display_message("Executing query...")
 
         # Add a small delay to ensure the user sees the clearing
         self.root.after(150, lambda: self._execute_query_after_delay(sql))
@@ -764,7 +764,7 @@ class PanelSQLQueryEditor:
                     "rows": result["rows"],
                     "description": result["description"]
                 }
-                self.query_result_panel.display_results(
+                self.panel_query_result.display_results(
                     result["columns"],
                     result["rows"],
                     result["description"],
@@ -775,14 +775,14 @@ class PanelSQLQueryEditor:
                     "type": "message",
                     "message": result["message"]
                 }
-                self.query_result_panel.display_message(result["message"])
+                self.panel_query_result.display_message(result["message"])
         else:
             # Store the error for this tab
             self.tab_results[tab_id] = {
                 "type": "error",
                 "error": result["error"]
             }
-            self.query_result_panel.display_error(result["error"])
+            self.panel_query_result.display_error(result["error"])
 
     def close_tab(self, tab_id):
         """Close the specified tab"""
@@ -800,9 +800,9 @@ class PanelSQLQueryEditor:
             # Clear the result panel if this was the current tab
             current_tab = self.sql_notebook.select()
             if not current_tab:
-                self.query_result_panel.display_message("No query results to display")
+                self.panel_query_result.display_message("No query results to display")
 
     def display_message(self, message: str):
         """Display message in result panel"""
-        self.query_result_panel.display_message(message)
+        self.panel_query_result.display_message(message)
 

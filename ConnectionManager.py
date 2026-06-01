@@ -14,11 +14,11 @@ else:
 class ConnectionManager:
     """Manages database connections and related UI operations"""
 
-    def __init__(self, root, db_connection, database_tree_panel, status_bar_panel, credential_manager):
+    def __init__(self, root, db_connection, panel_database_tree, panel_status_bar, credential_manager):
         self.root = root
         self.db_connection = db_connection
-        self.database_tree_panel = database_tree_panel
-        self.status_bar_panel = status_bar_panel
+        self.panel_database_tree = panel_database_tree
+        self.panel_status_bar = panel_status_bar
         self.connection_name: Optional[str] = None
         self.credential_manager = credential_manager
 
@@ -38,15 +38,15 @@ class ConnectionManager:
                     raise Exception("pyodbc module is not available")
                 self.db_connection.current_connection_type = "Oracle"
                 self.connection_name = connection_name
-                self.status_bar_panel.set_status(f"Connected via: {connection_name}")
-                self.database_tree_panel.load_database_objects()
+                self.panel_status_bar.set_status(f"Connected via: {connection_name}")
+                self.panel_database_tree.load_database_objects()
             elif conn_type == "SQLite":
                 db_path = self.credential_manager.get_sqlite_conn_string(connection_name)
                 self.db_connection.current_connection = sqlite3.connect(db_path)
                 self.db_connection.current_connection_type = "SQLite"
                 self.connection_name = connection_name
-                self.status_bar_panel.set_status(f"Connected via: {connection_name} (SQLite)")
-                self.database_tree_panel.load_database_objects()
+                self.panel_status_bar.set_status(f"Connected via: {connection_name} (SQLite)")
+                self.panel_database_tree.load_database_objects()
             elif conn_type == "OracleDB":
                 params = self.credential_manager.get_oracledb_conn_params(connection_name)
                 self.db_connection.current_connection = oracledb.connect(
@@ -58,8 +58,8 @@ class ConnectionManager:
                 )
                 self.db_connection.current_connection_type = "OracleDB"
                 self.connection_name = connection_name
-                self.status_bar_panel.set_status(f"Connected via: {connection_name} (OracleDB)")
-                self.database_tree_panel.load_database_objects()
+                self.panel_status_bar.set_status(f"Connected via: {connection_name} (OracleDB)")
+                self.panel_database_tree.load_database_objects()
             elif conn_type == "PostgreSQL":
                 params = self.credential_manager.get_postgresql_conn_params(connection_name)
                 ssl_args = {"sslmode": params["sslmode"]}
@@ -75,8 +75,8 @@ class ConnectionManager:
                 )
                 self.db_connection.current_connection_type = "PostgreSQL"
                 self.connection_name = connection_name
-                self.status_bar_panel.set_status(f"Connected via: {connection_name} (PostgreSQL)")
-                self.database_tree_panel.load_database_objects()
+                self.panel_status_bar.set_status(f"Connected via: {connection_name} (PostgreSQL)")
+                self.panel_database_tree.load_database_objects()
             elif conn_type == "MSSQL":
                 params = self.credential_manager.get_mssql_conn_params(connection_name)
                 server = f"{params['host']},{params['port']}" if params.get("port") else params["host"]
@@ -105,8 +105,8 @@ class ConnectionManager:
                     raise Exception("pyodbc module is not available")
                 self.db_connection.current_connection_type = "MSSQL"
                 self.connection_name = connection_name
-                self.status_bar_panel.set_status(f"Connected via: {connection_name} (SQL Server)")
-                self.database_tree_panel.load_database_objects()
+                self.panel_status_bar.set_status(f"Connected via: {connection_name} (SQL Server)")
+                self.panel_database_tree.load_database_objects()
             else:
                 messagebox.showerror("Connection Error", f"Unknown connection type: {conn_type}")
 
@@ -133,8 +133,8 @@ class ConnectionManager:
             self.db_connection.current_connection = None
             self.db_connection.current_connection_type = None
             self.connection_name = None
-            self.status_bar_panel.set_status("Not connected")
-            self.database_tree_panel.clear_tree()
+            self.panel_status_bar.set_status("Not connected")
+            self.panel_database_tree.clear_tree()
 
     def test_connection_from_params(self, db_type: str, params: dict) -> tuple[bool, str]:
         """

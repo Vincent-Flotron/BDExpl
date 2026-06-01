@@ -2,10 +2,10 @@ from Panels import *
 
 
 class PanelDatabaseTree:
-    def __init__(self, parent, db_connection, sql_query_editor_panel, query_manager):
+    def __init__(self, parent, db_connection, panel_sql_query_editor, query_manager):
         self.parent = parent
         self.db_connection = db_connection
-        self.sql_query_editor_panel = sql_query_editor_panel
+        self.panel_sql_query_editor = panel_sql_query_editor
         self.queries = None  # Will be set based on connection type
         self.query_manager = query_manager
         self.zoom_level = 100  # Default zoom level
@@ -122,13 +122,13 @@ class PanelDatabaseTree:
             ("View first 100 rows",  lambda: self.view_table_data(100)),
             ("View first 1000 rows", lambda: self.view_table_data(1000)),
             ("-------------------------", None),
-            ("View Structure",       lambda: self.sql_query_editor_panel.show_table_structure(
+            ("View Structure",       lambda: self.panel_sql_query_editor.show_table_structure(
                 *self.db_tree.item(self.db_tree.selection()[0])['values'][0:3:2]
             )),
-            ("View Indexes",         lambda: self.sql_query_editor_panel.show_table_indexes(
+            ("View Indexes",         lambda: self.panel_sql_query_editor.show_table_indexes(
                 *self.db_tree.item(self.db_tree.selection()[0])['values'][0:3:2]
             )),
-            ("View Keys",            lambda: self.sql_query_editor_panel.show_table_keys(
+            ("View Keys",            lambda: self.panel_sql_query_editor.show_table_keys(
                 *self.db_tree.item(self.db_tree.selection()[0])['values'][0:3:2]
             )),
             ("-------------------------", None),
@@ -489,19 +489,19 @@ class PanelDatabaseTree:
             table_or_view = values[2]
             sql = self.get_first_x_rows(schema, table_or_view, limit)
 
-            tab_id = self.sql_query_editor_panel.new_sql_tab()
-            self.sql_query_editor_panel.set_text_without_undo(
-                self.sql_query_editor_panel.sql_files[tab_id]["widget"],
+            tab_id = self.panel_sql_query_editor.new_sql_tab()
+            self.panel_sql_query_editor.set_text_without_undo(
+                self.panel_sql_query_editor.sql_files[tab_id]["widget"],
                 sql
             )
-            self.sql_query_editor_panel.sql_files[tab_id]["modified"] = False
+            self.panel_sql_query_editor.sql_files[tab_id]["modified"] = False
 
             tab_name = f"{table_or_view} ({limit} rows)"
-            self.sql_query_editor_panel.sql_notebook.tab(
-                self.sql_query_editor_panel.sql_files[tab_id]["frame"],
+            self.panel_sql_query_editor.sql_notebook.tab(
+                self.panel_sql_query_editor.sql_files[tab_id]["frame"],
                 text=tab_name
             )
-            self.sql_query_editor_panel.run_query(sql)
+            self.panel_sql_query_editor.run_query(sql)
 
     def load_table_children(self, table_node, schema, table):
         """Load indexes, keys, and triggers for a table"""
@@ -647,12 +647,12 @@ class PanelDatabaseTree:
                 messagebox.showinfo("Info", f"No dependencies found for view {view}.")
                 return
 
-            tree = self.sql_query_editor_panel._create_result_tab(f"{view} (Dependencies)", columns, rows)
+            tree = self.panel_sql_query_editor._create_result_tab(f"{view} (Dependencies)", columns, rows)
 
-            context_menu = self.sql_query_editor_panel._create_context_menu(
+            context_menu = self.panel_sql_query_editor._create_context_menu(
                 tree,
-                lambda: self.sql_query_editor_panel._copy_selected_rows(tree),
-                lambda: self.sql_query_editor_panel._export_to_csv(tree, f"{view}_dependencies")
+                lambda: self.panel_sql_query_editor._copy_selected_rows(tree),
+                lambda: self.panel_sql_query_editor._export_to_csv(tree, f"{view}_dependencies")
             )
             tree.bind("<Button-3>", lambda event: context_menu.post(event.x_root, event.y_root))
 
@@ -673,15 +673,15 @@ class PanelDatabaseTree:
                 # Combine all lines of the view
                 view_body = '\n'.join([row[0] for row in result])
 
-                tab_id = self.sql_query_editor_panel.new_sql_tab()
-                self.sql_query_editor_panel.set_text_without_undo(
-                    self.sql_query_editor_panel.sql_files[tab_id]["widget"],
+                tab_id = self.panel_sql_query_editor.new_sql_tab()
+                self.panel_sql_query_editor.set_text_without_undo(
+                    self.panel_sql_query_editor.sql_files[tab_id]["widget"],
                     view_body
                 )
-                self.sql_query_editor_panel.sql_files[tab_id]["modified"] = False
+                self.panel_sql_query_editor.sql_files[tab_id]["modified"] = False
                 tab_name = f"{view_name} (View)"
-                self.sql_query_editor_panel.sql_notebook.tab(
-                    self.sql_query_editor_panel.sql_files[tab_id]["frame"],
+                self.panel_sql_query_editor.sql_notebook.tab(
+                    self.panel_sql_query_editor.sql_files[tab_id]["frame"],
                     text=tab_name
                 )
         except Exception as e:
@@ -697,12 +697,12 @@ class PanelDatabaseTree:
             columns = [desc[0] for desc in cursor.description]
             rows = cursor.fetchall()
 
-            tree = self.sql_query_editor_panel._create_result_tab(f"{view} (Structure)", columns, rows)
+            tree = self.panel_sql_query_editor._create_result_tab(f"{view} (Structure)", columns, rows)
 
-            context_menu = self.sql_query_editor_panel._create_context_menu(
+            context_menu = self.panel_sql_query_editor._create_context_menu(
                 tree,
-                lambda: self.sql_query_editor_panel._copy_selected_rows(tree),
-                lambda: self.sql_query_editor_panel._export_to_csv(tree, f"{view}_structure")
+                lambda: self.panel_sql_query_editor._copy_selected_rows(tree),
+                lambda: self.panel_sql_query_editor._export_to_csv(tree, f"{view}_structure")
             )
             tree.bind("<Button-3>", lambda event: context_menu.post(event.x_root, event.y_root))
 
@@ -799,15 +799,15 @@ class PanelDatabaseTree:
 
             if result and result[0]:
                 comment = result[0]
-                tab_id = self.sql_query_editor_panel.new_sql_tab()
-                self.sql_query_editor_panel.set_text_without_undo(
-                    self.sql_query_editor_panel.sql_files[tab_id]["widget"],
+                tab_id = self.panel_sql_query_editor.new_sql_tab()
+                self.panel_sql_query_editor.set_text_without_undo(
+                    self.panel_sql_query_editor.sql_files[tab_id]["widget"],
                     comment
                 )
-                self.sql_query_editor_panel.sql_files[tab_id]["modified"] = False
+                self.panel_sql_query_editor.sql_files[tab_id]["modified"] = False
                 tab_name = f"{view} (Comment)"
-                self.sql_query_editor_panel.sql_notebook.tab(
-                    self.sql_query_editor_panel.sql_files[tab_id]["frame"],
+                self.panel_sql_query_editor.sql_notebook.tab(
+                    self.panel_sql_query_editor.sql_files[tab_id]["frame"],
                     text=tab_name
                 )
             else:
@@ -829,22 +829,22 @@ class PanelDatabaseTree:
                 # Combine all lines of the view query
                 view_query = '\n'.join([row[0] for row in result])
 
-                tab_id = self.sql_query_editor_panel.new_sql_tab()
-                self.sql_query_editor_panel.set_text_without_undo(
-                    self.sql_query_editor_panel.sql_files[tab_id]["widget"],
+                tab_id = self.panel_sql_query_editor.new_sql_tab()
+                self.panel_sql_query_editor.set_text_without_undo(
+                    self.panel_sql_query_editor.sql_files[tab_id]["widget"],
                     view_query
                 )
-                self.sql_query_editor_panel.sql_files[tab_id]["modified"] = False
+                self.panel_sql_query_editor.sql_files[tab_id]["modified"] = False
                 tab_name = f"{view} (Query)"
-                self.sql_query_editor_panel.sql_notebook.tab(
-                    self.sql_query_editor_panel.sql_files[tab_id]["frame"],
+                self.panel_sql_query_editor.sql_notebook.tab(
+                    self.panel_sql_query_editor.sql_files[tab_id]["frame"],
                     text=tab_name
                 )
             else:
                 messagebox.showinfo("Info", f"No query found for view {view}.")
         except Exception as e:
             # Passer l'erreur brute au panneau de résultats
-            self.sql_query_editor_panel.display_message(str(e))
+            self.panel_sql_query_editor.display_message(str(e))
 
 
     def load_package_children(self, package_node, schema, package_name):
@@ -963,19 +963,19 @@ class PanelDatabaseTree:
             sql = self.get_first_x_rows(schema, view, limit)
 
 
-            tab_id = self.sql_query_editor_panel.new_sql_tab()
-            self.sql_query_editor_panel.set_text_without_undo(
-                self.sql_query_editor_panel.sql_files[tab_id]["widget"],
+            tab_id = self.panel_sql_query_editor.new_sql_tab()
+            self.panel_sql_query_editor.set_text_without_undo(
+                self.panel_sql_query_editor.sql_files[tab_id]["widget"],
                 sql
             )
-            self.sql_query_editor_panel.sql_files[tab_id]["modified"] = False
+            self.panel_sql_query_editor.sql_files[tab_id]["modified"] = False
 
             tab_name = f"{view} ({limit} rows)"
-            self.sql_query_editor_panel.sql_notebook.tab(
-                self.sql_query_editor_panel.sql_files[tab_id]["frame"],
+            self.panel_sql_query_editor.sql_notebook.tab(
+                self.panel_sql_query_editor.sql_files[tab_id]["frame"],
                 text=tab_name
             )
-            self.sql_query_editor_panel.run_query(sql)
+            self.panel_sql_query_editor.run_query(sql)
 
     def get_first_x_rows(self, schema, table_or_view, limit):
         queries = self.get_queries_instance()
@@ -998,15 +998,15 @@ class PanelDatabaseTree:
             cursor.close()
 
             if result:
-                tab_id = self.sql_query_editor_panel.new_sql_tab()
-                self.sql_query_editor_panel.set_text_without_undo(
-                    self.sql_query_editor_panel.sql_files[tab_id]["widget"],
+                tab_id = self.panel_sql_query_editor.new_sql_tab()
+                self.panel_sql_query_editor.set_text_without_undo(
+                    self.panel_sql_query_editor.sql_files[tab_id]["widget"],
                     result[0]
                 )
-                self.sql_query_editor_panel.sql_files[tab_id]["modified"] = False
+                self.panel_sql_query_editor.sql_files[tab_id]["modified"] = False
                 tab_name = f"{trigger_name} (Trigger)"
-                self.sql_query_editor_panel.sql_notebook.tab(
-                    self.sql_query_editor_panel.sql_files[tab_id]["frame"],
+                self.panel_sql_query_editor.sql_notebook.tab(
+                    self.panel_sql_query_editor.sql_files[tab_id]["frame"],
                     text=tab_name
                 )
         except Exception as e:
@@ -1027,15 +1027,15 @@ class PanelDatabaseTree:
                 # Combine all lines of the procedure
                 procedure_body = ''.join(row[1] for row in result if row[1])
 
-                tab_id = self.sql_query_editor_panel.new_sql_tab()
-                self.sql_query_editor_panel.set_text_without_undo(
-                    self.sql_query_editor_panel.sql_files[tab_id]["widget"],
+                tab_id = self.panel_sql_query_editor.new_sql_tab()
+                self.panel_sql_query_editor.set_text_without_undo(
+                    self.panel_sql_query_editor.sql_files[tab_id]["widget"],
                     procedure_body
                 )
-                self.sql_query_editor_panel.sql_files[tab_id]["modified"] = False
+                self.panel_sql_query_editor.sql_files[tab_id]["modified"] = False
                 tab_name = f"{procedure_name} (Procedure)"
-                self.sql_query_editor_panel.sql_notebook.tab(
-                    self.sql_query_editor_panel.sql_files[tab_id]["frame"],
+                self.panel_sql_query_editor.sql_notebook.tab(
+                    self.panel_sql_query_editor.sql_files[tab_id]["frame"],
                     text=tab_name
                 )
         except Exception as e:
@@ -1054,15 +1054,15 @@ class PanelDatabaseTree:
                 # Combine all lines of the function
                 function_body = ''.join(row[1] for row in result if row[1])
 
-                tab_id = self.sql_query_editor_panel.new_sql_tab()
-                self.sql_query_editor_panel.set_text_without_undo(
-                    self.sql_query_editor_panel.sql_files[tab_id]["widget"],
+                tab_id = self.panel_sql_query_editor.new_sql_tab()
+                self.panel_sql_query_editor.set_text_without_undo(
+                    self.panel_sql_query_editor.sql_files[tab_id]["widget"],
                     function_body
                 )
-                self.sql_query_editor_panel.sql_files[tab_id]["modified"] = False
+                self.panel_sql_query_editor.sql_files[tab_id]["modified"] = False
                 tab_name = f"{function_name} (Function)"
-                self.sql_query_editor_panel.sql_notebook.tab(
-                    self.sql_query_editor_panel.sql_files[tab_id]["frame"],
+                self.panel_sql_query_editor.sql_notebook.tab(
+                    self.panel_sql_query_editor.sql_files[tab_id]["frame"],
                     text=tab_name
                 )
         except Exception as e:
@@ -1096,16 +1096,16 @@ class PanelDatabaseTree:
 
             package_source = ''.join(row[1] for row in rows if row[1])
 
-            tab_id = self.sql_query_editor_panel.new_sql_tab()
-            self.sql_query_editor_panel.set_text_without_undo(
-                self.sql_query_editor_panel.sql_files[tab_id]["widget"],
+            tab_id = self.panel_sql_query_editor.new_sql_tab()
+            self.panel_sql_query_editor.set_text_without_undo(
+                self.panel_sql_query_editor.sql_files[tab_id]["widget"],
                 package_source
             )
 
-            self.sql_query_editor_panel.sql_files[tab_id]["modified"] = False
+            self.panel_sql_query_editor.sql_files[tab_id]["modified"] = False
 
-            self.sql_query_editor_panel.sql_notebook.tab(
-                self.sql_query_editor_panel.sql_files[tab_id]["frame"],
+            self.panel_sql_query_editor.sql_notebook.tab(
+                self.panel_sql_query_editor.sql_files[tab_id]["frame"],
                 text=f"{package_name}{title_suffix}"
             )
 
@@ -1154,19 +1154,19 @@ class PanelDatabaseTree:
                 return
 
             # 3️⃣ Open in editor
-            tab_id = self.sql_query_editor_panel.new_sql_tab()
-            self.sql_query_editor_panel.set_text_without_undo(
-                self.sql_query_editor_panel.sql_files[tab_id]["widget"],
+            tab_id = self.panel_sql_query_editor.new_sql_tab()
+            self.panel_sql_query_editor.set_text_without_undo(
+                self.panel_sql_query_editor.sql_files[tab_id]["widget"],
                 procedure_body
             )
 
-            self.sql_query_editor_panel.sql_files[tab_id]["modified"] = False
+            self.panel_sql_query_editor.sql_files[tab_id]["modified"] = False
 
             overload_text = f" (Overload {overload})" if overload is not None else ""
             tab_name = f"{package_name}.{procedure_name}{overload_text}"
 
-            self.sql_query_editor_panel.sql_notebook.tab(
-                self.sql_query_editor_panel.sql_files[tab_id]["frame"],
+            self.panel_sql_query_editor.sql_notebook.tab(
+                self.panel_sql_query_editor.sql_files[tab_id]["frame"],
                 text=tab_name
             )
 
@@ -1191,16 +1191,16 @@ class PanelDatabaseTree:
                 messagebox.showinfo("Info", f"No parameters found for {package_name}.{procedure_name}.")
                 return
 
-            tree = self.sql_query_editor_panel._create_result_tab(
+            tree = self.panel_sql_query_editor._create_result_tab(
                 f"{package_name}.{procedure_name} (Parameters)",
                 columns,
                 rows
             )
 
-            context_menu = self.sql_query_editor_panel._create_context_menu(
+            context_menu = self.panel_sql_query_editor._create_context_menu(
                 tree,
-                lambda: self.sql_query_editor_panel._copy_selected_rows(tree),
-                lambda: self.sql_query_editor_panel._export_to_csv(tree, f"{package_name}_{procedure_name}_parameters")
+                lambda: self.panel_sql_query_editor._copy_selected_rows(tree),
+                lambda: self.panel_sql_query_editor._export_to_csv(tree, f"{package_name}_{procedure_name}_parameters")
             )
             tree.bind("<Button-3>", lambda event: context_menu.post(event.x_root, event.y_root))
 

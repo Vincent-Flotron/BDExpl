@@ -1,11 +1,11 @@
 from Panels import *
 
 class PanelQueryResult:
-    def __init__(self, root, status_bar_panel):
+    def __init__(self, root, panel_status_bar):
         self.root                    = root
         self.current_codepage        = 'utf-8'
         self.zoom_level              = 100
-        self.status_bar_panel        = status_bar_panel
+        self.panel_status_bar        = panel_status_bar
         self.panel_sql_query_editor  = None   # set later via set_sql_query_editor()
 
     def set_sql_query_editor(self, panel_sql_query_editor):
@@ -164,7 +164,7 @@ class PanelQueryResult:
         self.result_tree.update_idletasks()
 
         # Update status bar instead of result_info
-        self.status_bar_panel.set_query_result_status(f"{row_count} row(s) displayed")
+        self.panel_status_bar.set_query_result_status(f"{row_count} row(s) displayed")
 
     def display_error(self, error: str):
         """Display error in result panel"""
@@ -188,7 +188,7 @@ class PanelQueryResult:
             self.result_tree.insert('', 'end', values=[err])
 
         # Update status bar
-        self.status_bar_panel.set_query_result_status("Error executing query")
+        self.panel_status_bar.set_query_result_status("Error executing query")
 
     def display_message(self, message: str):
         """Display a plain message in the result panel."""
@@ -200,7 +200,7 @@ class PanelQueryResult:
         self.result_tree.insert('', 'end', values=[message])
 
         # Update status bar
-        self.status_bar_panel.set_query_result_status("Message displayed")
+        self.panel_status_bar.set_query_result_status("Message displayed")
 
     # ─────────────────────────────────────────────────────────────────
     # COLUMN WIDTHS
