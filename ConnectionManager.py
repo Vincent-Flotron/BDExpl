@@ -3,6 +3,7 @@ from typing  import Optional
 import sqlite3
 import psycopg2
 import oracledb
+import threading  # to timeout connection testing
 
 # Conditionally import pyodbc only on Windows
 import sys
@@ -136,71 +137,104 @@ class ConnectionManager:
             self.panel_status_bar.set_status("Not connected")
             self.panel_database_tree.clear_tree()
 
-    def test_connection_from_params(self, db_type: str, params: dict) -> tuple[bool, str]:
+    def test_connection_from_params(self, db_type: str, params: dict, timeout: float = 3.0) -> tuple[bool, str]:
         """
-        Open and immediately close a connection built from raw *params*.
+        Open and immediately close a connection built from raw *params* with a strict timeout.
         Returns (success: bool, message: str).
         The active connection is never touched.
 
-        This is the single place in the codebase that contains the
-        per-driver open logic for testing purposes; dialogs delegate here
-        instead of importing DB drivers themselves.
+        Uses a daemon thread to enforce the timeout, as DB drivers often block
+        the main thread indefinitely during DNS resolution or TCP handshakes.
         """
-        conn = None
-        try:
-            if db_type == "Oracle":
-                if not pyodbc:
-                    return False, "pyodbc is not available on this platform"
-                # Oracle ODBC: params["conn_str"] is the raw DSN
-                ora_conn_str = self.credential_manager.format_to_oracle_driver_conn_str(params["driver"], params["host"], params["user"], params["password"])
-                conn = pyodbc.connect(ora_conn_str)
+        result = {"success": False, "message": "Connection timed out"}
+        exception_msg = None
 
-            elif db_type == "SQLite":
-                conn = sqlite3.connect(params["path"])
-
-            elif db_type == "OracleDB":
-                conn = oracledb.connect(
-                    user=params["user"], password=params["password"],
-                    host=params["host"], port=int(params["port"]), sid=params["sid"],
-                )
-
-            elif db_type == "PostgreSQL":
-                ssl_args = {"sslmode": params["sslmode"]}
-                if params.get("sslrootcert"):
-                    ssl_args["sslrootcert"] = params["sslrootcert"]
-                conn = psycopg2.connect(
-                    host=params["host"], port=int(params["port"]),
-                    dbname=params["database"], user=params["user"],
-                    password=params["password"], **ssl_args,
-                )
-
-            elif db_type == "MSSQL":
-                if not pyodbc:
-                    return False, "pyodbc is not available on this platform"
-                server = f"{params['host']},{params['port']}" if params.get("port") else params["host"]
-                if params.get("auth_type") == "Windows":
-                    cs = (f"DRIVER={params['driver']};SERVER={server};"
-                          f"DATABASE={params['database']};Trusted_Connection=yes;"
-                          f"Encrypt={params['encrypt']};TrustServerCertificate={params['trust_server_cert']};")
-                else:
-                    cs = (f"DRIVER={params['driver']};SERVER={server};"
-                          f"DATABASE={params['database']};UID={params['user']};PWD={params['password']};"
-                          f"Encrypt={params['encrypt']};TrustServerCertificate={params['trust_server_cert']};")
-                conn = pyodbc.connect(cs)
-
-            else:
-                return False, f"Unknown connection type: {db_type}"
-
-            return True, "Connection successful"
-
-        except Exception as e:
-            return False, str(e)
-        finally:
+        def _connect_target():
+            nonlocal exception_msg
+            conn = None
             try:
+                if db_type == "Oracle":
+                    if not pyodbc:
+                        result["message"] = "pyodbc is not available on this platform"
+                        result["success"] = False
+                        return
+                    ora_conn_str = self.credential_manager.format_to_oracle_driver_conn_str(
+                        params["driver"], params["host"], params["user"], params["password"]
+                    )
+                    conn = pyodbc.connect(ora_conn_str) 
+
+                elif db_type == "SQLite":
+                    conn = sqlite3.connect(params["path"])
+
+                elif db_type == "OracleDB":
+                    conn = oracledb.connect(
+                        user=params["user"], password=params["password"],
+                        host=params["host"], port=int(params["port"]), sid=params["sid"]
+                    )
+
+                elif db_type == "PostgreSQL":
+                    ssl_args = {"sslmode": params["sslmode"]}
+                    if params.get("sslrootcert"):
+                        ssl_args["sslrootcert"] = params["sslrootcert"]
+                    conn = psycopg2.connect(
+                        host=params["host"], port=int(params["port"]),
+                        dbname=params["database"], user=params["user"],
+                        password=params["password"], **ssl_args
+                    )
+
+                elif db_type == "MSSQL":
+                    if not pyodbc:
+                        result["message"] = "pyodbc is not available on this platform"
+                        result["success"] = False
+                        return
+                    server = f"{params['host']},{params['port']}" if params.get("port") else params["host"]
+                    if params.get("auth_type") == "Windows":
+                        cs = (f"DRIVER={params['driver']};SERVER={server};"
+                              f"DATABASE={params['database']};Trusted_Connection=yes;"
+                              f"Encrypt={params['encrypt']};TrustServerCertificate={params['trust_server_cert']};")
+                    else:
+                        cs = (f"DRIVER={params['driver']};SERVER={server};"
+                              f"DATABASE={params['database']};UID={params['user']};PWD={params['password']};"
+                              f"Encrypt={params['encrypt']};TrustServerCertificate={params['trust_server_cert']};")
+                    conn = pyodbc.connect(cs)
+
+                else:
+                    result["message"] = f"Unknown connection type: {db_type}"
+                    result["success"] = False
+                    return
+
+                # If we reach here, connection succeeded
+                result["success"] = True
+                result["message"] = "Connection successful"
+
+            except Exception as e:
+                exception_msg = str(e)
+                result["success"] = False
+                result["message"] = str(e)
+            finally:
                 if conn:
-                    conn.close()
-            except Exception:
-                pass
+                    try:
+                        conn.close()
+                    except Exception:
+                        pass
+
+        # Run the connection attempt in a separate thread
+        thread = threading.Thread(target=_connect_target, daemon=True)
+        thread.start()
+        thread.join(timeout=timeout)
+
+        if thread.is_alive():
+            # Thread is still running, meaning we timed out
+            # Note: We cannot forcibly kill the thread in Python, but we ignore its result.
+            # The daemon flag ensures it dies when the main program exits.
+            return False, f"Connection timed out after {timeout} seconds"
+        
+        # Thread finished within time, return the captured result
+        if exception_msg and not result["success"]:
+            return False, result["message"]
+            
+        return result["success"], result["message"]
+
 
     def test_connection(self, connection_name: str) -> tuple[bool, str]:
         """
