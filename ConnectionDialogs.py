@@ -396,11 +396,14 @@ class _ConnectionFormMixin:
 
     # ── test connection (no side-effects on active connection) ────────────────
 
-    def _test_connection(self, db_type, params, status_label):
-        """Delegate to ConnectionManager — no DB driver logic here."""
+    def _test_connection(self, db_type, params, status_label, timeout=3.0):
+        """Delegate to ConnectionManager with custom timeout."""
         status_label.config(text="Testing…", fg="gray")
         status_label.update_idletasks()
-        ok, msg = self.connection_manager.test_connection_from_params(db_type, params)
+        
+        # Pass the timeout argument here
+        ok, msg = self.connection_manager.test_connection_from_params(db_type, params, timeout=timeout)
+        
         status_label.config(
             text=f"✔  {msg}" if ok else f"✘  {msg}",
             fg="#1a7a1a" if ok else "#b00000",
@@ -527,6 +530,19 @@ class ManageConnectionsDialog(_ConnectionFormMixin):
         close_bar.pack(fill=tk.X, padx=6, pady=(0, 6))
         ttk.Button(close_bar, text="Close", command=self._dialog.destroy).pack(side=tk.RIGHT)
 
+        # ── Timeout Setting (Common to all) ────────────────────────────────────
+        timeout_row = tk.Frame(close_bar)
+        timeout_row.pack(fill=tk.X, pady=(10, 4)) # Add some separation
+        
+        tk.Label(timeout_row, text="Connection Timeout (seconds):", width=25, anchor=tk.W).pack(side=tk.LEFT)
+        
+        self._timeout_var = tk.StringVar(value="3") # Default to 3 seconds
+        timeout_entry = tk.Entry(timeout_row, textvariable=self._timeout_var, width=10)
+        timeout_entry.pack(side=tk.LEFT, padx=5)
+        
+        tk.Label(timeout_row, text="(Max wait time)", font=("Helvetica", 8), fg="gray").pack(side=tk.LEFT)
+
+
         # Populate list and disable form until an action is chosen
         self._refresh_list()
         self._set_form_enabled(False)
@@ -647,7 +663,19 @@ class ManageConnectionsDialog(_ConnectionFormMixin):
         except ValueError as e:
             messagebox.showerror("Validation Error", str(e), parent=self._dialog)
             return
-        self._test_connection(db_type, params, self._test_status)
+
+        # Parse timeout value
+        try:
+            timeout_val = float(self._timeout_var.get())
+            if timeout_val <= 0:
+                raise ValueError("Timeout must be positive")
+        except ValueError:
+            messagebox.showerror("Validation Error", "Invalid timeout value. Please enter a positive number.", parent=self._dialog)
+            return
+
+        # Pass the timeout to the manager
+        self._test_connection(db_type, params, self._test_status, timeout=timeout_val)
+
 
     def _action_save(self):
         """Validate, save (overwriting if editing), refresh list."""
