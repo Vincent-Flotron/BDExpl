@@ -437,7 +437,7 @@ class ManageConnectionsDialog(_ConnectionFormMixin):
         # ── top: storage indicator ────────────────────────────────────
         top_bar = tk.Frame(self._dialog, bg="#e8edf3", pady=4)
         top_bar.pack(fill=tk.X)
-        storage_text = ('Environment Variables' if self.credential_manager.use_env_vars
+        storage_text = ('Cred File' if self.credential_manager.use_cred_file_vars
                         else 'Windows Credential Manager')
         tk.Label(top_bar, text=f"Storage: {storage_text}",
                  fg="#336699", bg="#e8edf3", font=("Helvetica", 9, "italic")).pack(side=tk.LEFT, padx=10)

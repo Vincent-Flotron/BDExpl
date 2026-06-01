@@ -1,6 +1,11 @@
 # DBExp — Database Explorer
 
-A Windows desktop application built with Python and Tkinter for exploring and querying Oracle, PostgreSQL, and SQLite databases. Connection credentials are stored securely in the **Windows Credential Manager** — no passwords ever written to disk in plain text.
+A Windows/Linux desktop application built with Python and Tkinter for exploring and querying Oracle, PostgreSQL, and SQLite databases.
+
+**Credential Management Options:**
+1. **Windows Credential Manager** - Primary method for Windows systems, storing credentials securely without plain-text disk storage.
+2. **Environment Cred File** - Alternative for cross-platform use (Linux/Windows):
+   - Stores credentials in `~/dbexp_cred` (Linux/macOS) or `~\dbexp_cred` (Windows)
 
 ---
 
@@ -9,7 +14,7 @@ A Windows desktop application built with Python and Tkinter for exploring and qu
 ### Multi-database support
 DBExp connects to five types of databases:
 
-- **Oracle (ODBC)** — via the `pyodbc` driver using the `{Oracle dans OraClient19Home1}` ODBC driver. Requires Oracle Client 19 installed on the machine.
+- **Oracle (ODBC)** — via the `pyodbc` driver using the `{Oracle dans OraClientXHome1}` ODBC driver. Requires Oracle Client 19 installed on the machine.
 - **Oracle (OracleDB)** — via the `oracledb` Python driver (thin mode, no Oracle Client required), connecting with host, port, and SID.
 - **PostgreSQL** — via `psycopg2`, with full SSL support (modes: `require`, `verify-ca`, `verify-full`, `prefer`, `allow`, `disable`) and optional CA certificate.
 - **Microsoft SQL Server** — via `pyodbc` with any installed MSSQL ODBC driver (tested with "ODBC Driver 17/18 for SQL Server"). Supports both SQL Server Authentication and Windows Authentication, with configurable Encrypt and TrustServerCertificate settings.
@@ -21,7 +26,6 @@ Connections are saved by name into Windows Credential Manager and can be reused 
 From the **Connection** menu you can:
 - **Connect with Existing** — pick a previously saved connection from the list.
 - **Connect with New Credentials** — fill in a form, save the credentials, and immediately connect.
-- **Delete Connection** — permanently remove a saved connection's credentials from Windows Credential Manager.
 - **Disconnect** — close the active database connection.
 
 ### Database object explorer (left panel)
@@ -42,8 +46,8 @@ A multi-tab SQL editor with:
 - **Syntax highlighting** for SQL keywords, string literals, and comments.
 - **Auto-indentation** aligned to the previous line on Enter.
 - **Tab key** inserts spaces (not a hard tab character).
-- **Ctrl+C** (on selected text) toggles line comments (`--`).
-- **Ctrl+U** removes `--` comments from the selection.
+- **Ctrl+K+C** (on selected text) toggles line comments (`--`).
+- **Ctrl+K+U** removes `--` comments from the selection.
 - **Shift+Tab** / **Tab** indent or de-indent the selection.
 - **Ctrl+Z / Ctrl+Y** undo/redo.
 - **F5** executes the full query in the active tab.
@@ -55,28 +59,12 @@ A multi-tab SQL editor with:
 Query results are displayed in a scrollable table. The panel supports:
 - Copying selected rows to the clipboard.
 - Exporting results to CSV.
-- A **codepage selector** for controlling character encoding when copying/exporting.
-- A **Show Labels** toggle.
 
 ### Status bar
 Shows the current connection name and database type, or "Not connected" when idle.
 
 ---
 
-## Project structure
-
-| File                   | Role                  |
-|------------------------|-----------------------|
-| `DBExpl.py`            | Application entry point. Initialises the Tkinter window, assembles all panels, sets up the menu bar, and manages the new/delete connection dialogs. Also defines the `Theme` class that configures all ttk widget styles. |
-| `Panels.py`            | All UI panels: `PanelDatabaseTree` (left tree view), `PanelSQLQueryEditor` (middle editor with tabs), `PanelQueryResult` (bottom results grid), `PanelStatusBar` (bottom bar). Also contains the `Helper` utility for creating scrollable treeviews and context menus. |
-| `SQLText.py`           | Custom `tkinter.Text` subclass that adds SQL syntax highlighting, keyboard shortcuts (comment/uncomment, indent, auto-indent), and undo/redo support. Used as the editor widget inside each SQL tab. |
-| `connection.py`        | `DBConnection` class — holds the active connection object and provides `connect_*` factory methods for each database type. Also has `get_queries_instance()` which returns the right `Queries` subclass based on the connection type. |
-| `ConnectionManager.py` | `ConnectionManager` class — bridges the GUI and the credential store. Reads saved credentials via `CredentialManager`, builds the appropriate connection, updates the status bar, and triggers the tree reload. Also handles disconnect and credential deletion. |
-| `CredentialManager.py` | All interactions with Windows Credential Manager (`win32cred`). Provides `save_*` functions to persist connection parameters, `get_*` functions to retrieve them, `get_all_credentials_names()` to list saved connections, `get_connection_type()` to detect the database engine, and `delete_connection_credentials()` to remove all keys for a given connection. The credential key naming convention is `DBExp_{connection_name}_{FIELD}`. Supports Oracle, OracleDB, PostgreSQL, SQL Server (`MSSQL`), and SQLite. |
-| `QueryManager.py`      | Abstract `Queries` base class and four concrete implementations: `QueriesOracle`, `QueriesSQLite`, `QueriesPostgreSQL`, `QueriesMSSQL`. Each implements the same set of SQL queries adapted to the engine's system catalog (e.g. `ALL_TABLES` for Oracle, `sqlite_master` for SQLite, `information_schema` for PostgreSQL, `sys.*` catalog views for SQL Server). Also contains `QueryManager`, which executes a query against the active connection and returns columns + rows. |
-| `make_exe.ps1`         | PowerShell one-liner that packages the application into a standalone Windows executable using PyInstaller (`--onefile --windowed`), with `win32timezone` included as a hidden import (required by `pywin32`). |
-
----
 
 ## debug_scripts/
 
@@ -106,10 +94,6 @@ Install all at once:
 pip install pyodbc oracledb psycopg2-binary pywin32
 ```
 
-> **SQL Server ODBC driver:** the application defaults to `{ODBC Driver 17 for SQL Server}`. You can select a different driver (e.g. version 18) directly in the "New Connection" dialog. Download the driver from Microsoft if it is not already installed.
-
-> **Oracle ODBC driver:** the application is hardcoded to use the driver named `{Oracle dans OraClient19Home1}`. If your Oracle Client installation uses a different driver name, update `save_odbc_user_credentials()` in `CredentialManager.py`.
-
 ---
 
 ## Running
@@ -128,45 +112,3 @@ This produces a single `DBExpl.exe` in the `dist/` folder via PyInstaller.
 
 ---
 
-## Saving connections programmatically
-
-If you need to pre-populate connections without going through the GUI, import from `CredentialManager` directly:
-
-```python
-from CredentialManager import (
-    save_odbc_user_credentials,
-    save_oracledb_credentials,
-    save_postgresql_credentials,
-    save_sqlite_credentials,
-    save_mssql_credentials,
-)
-
-# Oracle via ODBC
-save_odbc_user_credentials("myoracle", host="MYSERVER", user="scott", password="tiger")
-
-# Oracle via oracledb (no ODBC driver needed)
-save_oracledb_credentials("myoracledb", host="localhost", port=1521, sid="ORCL", user="scott", password="tiger")
-
-# PostgreSQL
-save_postgresql_credentials("mypg", host="localhost", port=5432, database="mydb",
-                           user="postgres", password="secret", sslmode="require")
-
-# SQL Server — SQL Server Authentication
-save_mssql_credentials("mssqldev", host="localhost", port=1433, database="AdventureWorks",
-                      user="sa", password="secret",
-                      auth_type="SQL",
-                      driver="{ODBC Driver 17 for SQL Server}",
-                      encrypt="yes", trust_server_cert="yes")
-
-# SQL Server — Windows Authentication (user/password left empty)
-save_mssql_credentials("mssqlwin", host="MYSERVER", port=1433, database="AdventureWorks",
-                      user="", password="",
-                      auth_type="Windows",
-                      driver="{ODBC Driver 17 for SQL Server}",
-                      encrypt="yes", trust_server_cert="yes")
-
-# SQLite
-save_sqlite_credentials("mydb", db_path=r"C:\data\mydb.sqlite3")
-```
-
-> Connection names must not contain underscores.

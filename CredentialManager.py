@@ -11,71 +11,71 @@ else:
     win32cred = None
 
 class CredentialManager:
-    def __init__(self, use_env_vars):
-        self.use_env_vars = use_env_vars
-        # Initialize environment variable storage in any cases
+    def __init__(self, use_cred_file_vars):
+        self.use_cred_file_vars = use_cred_file_vars
+        # Initialize cred file variable storage in any cases
         self._init_env_storage()
 
-    def set_use_env_vars(self, use_env_vars):
-        self.use_env_vars = use_env_vars
+    def set_use_cred_file_vars(self, use_cred_file_vars):
+        self.use_cred_file_vars = use_cred_file_vars
 
     def _init_env_storage(self):
-        """Initialize environment variable storage file if it doesn't exist"""
+        """Initialize cred file variable storage file if it doesn't exist"""
         if sys.platform == 'win32':
-            self.env_file = os.path.expanduser('~\\.dbexp_env')
+            self.cred_file = os.path.expanduser('~\\.dbexp_cred')
         else:  # Linux/Mac
-            self.env_file = os.path.expanduser('~/.dbexp_env')
+            self.cred_file = os.path.expanduser('~/.dbexp_cred')
 
         # Create file if it doesn't exist
-        if not os.path.exists(self.env_file):
-            with open(self.env_file, 'w') as f:
-                f.write("# DBExp Environment Variables\n")
+        if not os.path.exists(self.cred_file):
+            with open(self.cred_file, 'w') as f:
+                f.write("# DBExp Cred File\n")
 
-    def _load_env_vars(self):
-        """Load environment variables from storage file"""
-        env_vars = {}
-        if os.path.exists(self.env_file):
-            with open(self.env_file, 'r') as f:
+    def _load_cred_file_vars(self):
+        """Load cred file variables from storage file"""
+        cred_file_vars = {}
+        if os.path.exists(self.cred_file):
+            with open(self.cred_file, 'r') as f:
                 for line in f:
                     line = line.strip()
                     if line and not line.startswith('#'):
                         try:
                             key, value = line.split('=', 1)
-                            env_vars[key] = value
+                            cred_file_vars[key] = value
                         except ValueError:
                             continue
-        return env_vars
+        return cred_file_vars
 
-    def _save_env_var(self, name: str, value: str):
-        """Save an environment variable to storage file"""
-        env_vars = self._load_env_vars()
-        env_vars[name] = value
+    def _save_cred_file_var(self, name: str, value: str):
+        """Save an cred file variable to storage file"""
+        cred_file_vars = self._load_cred_file_vars()
+        cred_file_vars[name] = value
 
-        with open(self.env_file, 'w') as f:
-            f.write("# DBExp Environment Variables\n")
-            for key, val in env_vars.items():
+        with open(self.cred_file, 'w') as f:
+            f.write("# DBExp Cred File\n")
+            for key, val in cred_file_vars.items():
                 f.write(f"{key}={val}\n")
 
-    def _get_env_var(self, name: str) -> Optional[str]:
-        """Get an environment variable from storage"""
-        env_vars = self._load_env_vars()
-        return env_vars.get(name)
+    def _get_cred_file_var(self, name: str) -> Optional[str]:
+        """Get an cred file variable from storage"""
+        cred_file_vars = self._load_cred_file_vars()
+        return cred_file_vars.get(name)
 
-    def _delete_env_var(self, name: str):
-        """Delete an environment variable from storage"""
-        env_vars = self._load_env_vars()
-        if name in env_vars:
-            del env_vars[name]
+    def _delete_cred_file_var(self, name: str):
+        """Delete an cred file variable from storage"""
+        cred_file_vars = self._load_cred_file_vars()
+        if name in cred_file_vars:
+            del cred_file_vars[name]
 
-            with open(self.env_file, 'w') as f:
-                f.write("# DBExp Environment Variables\n")
-                for key, val in env_vars.items():
+            with open(self.cred_file, 'w') as f:
+                f.write("# DBExp Cred File\n")
+                for key, val in cred_file_vars.items():
                     f.write(f"{key}={val}\n")
 
     def _get_cred_func(self) -> Callable[[str], Optional[str]]:
         """Return the appropriate credential getter function based on storage method"""
-        if self.use_env_vars:
-            return self._get_env_var
+        if self.use_cred_file_vars:
+            return self._get_cred_file_var
         else:
             if win32cred is None:
                 raise Exception("Windows Credential Manager is only available on Windows systems")
@@ -91,8 +91,8 @@ class CredentialManager:
 
     def _save_cred(self, name: str, value: str):
         """Save a credential using the appropriate storage method"""
-        if self.use_env_vars:
-            self._save_env_var(name, value)
+        if self.use_cred_file_vars:
+            self._save_cred_file_var(name, value)
         else:
             if win32cred is None:
                 raise Exception("Windows Credential Manager is only available on Windows systems")
@@ -110,8 +110,8 @@ class CredentialManager:
 
     def _delete_cred(self, name: str):
         """Delete a credential using the appropriate storage method"""
-        if self.use_env_vars:
-            self._delete_env_var(name)
+        if self.use_cred_file_vars:
+            self._delete_cred_file_var(name)
         else:
             if win32cred is None:
                 raise Exception("Windows Credential Manager is only available on Windows systems")
@@ -335,8 +335,8 @@ class CredentialManager:
 
     def find_credentials_starting_with(self, prefix: str) -> List[Dict]:
         """Find all credentials whose TargetName starts with the given prefix"""
-        if self.use_env_vars:
-            all_vars = self._load_env_vars()
+        if self.use_cred_file_vars:
+            all_vars = self._load_cred_file_vars()
             return [
                 {"TargetName": key, "CredentialBlob": val.encode("utf-16")}
                 for key, val in all_vars.items()
@@ -363,8 +363,8 @@ class CredentialManager:
 
     def get_all_connection_names(self) -> List[str]:
         """Get a list of all connection names"""
-        if self.use_env_vars:
-            all_vars = self._load_env_vars()
+        if self.use_cred_file_vars:
+            all_vars = self._load_cred_file_vars()
             unique_names = {
                 self.parse_credential_name(key)
                 for key in all_vars
@@ -373,7 +373,7 @@ class CredentialManager:
             return sorted(unique_names)
         else:
             if win32cred is None:
-                self.use_env_vars = True
+                self.use_cred_file_vars = True
                 raise Exception("Windows Credential Manager is only available on Windows systems.")
 
             try:

@@ -308,7 +308,7 @@ class DBExp:
         conn_menu.add_cascade(label="Storage Method", menu=storage_menu)
 
         # Storage method options
-        self.storage_method_var = tk.StringVar(value="credman" if not self.credential_manager.use_env_vars else "envvars")
+        self.storage_method_var = tk.StringVar(value="credman" if not self.credential_manager.use_cred_file_vars else "credfiles")
         storage_menu.add_radiobutton(
             label="Windows Credential Manager",
             variable=self.storage_method_var,
@@ -316,9 +316,9 @@ class DBExp:
             command=self.change_storage_method
         )
         storage_menu.add_radiobutton(
-            label="Environment Variables",
+            label="Cred File",
             variable=self.storage_method_var,
-            value="envvars",
+            value="credfiles",
             command=self.change_storage_method
         )
 
@@ -352,17 +352,17 @@ class DBExp:
         self.populate_existing_connections_menu()
 
     def change_storage_method(self):
-        """Change the storage method between Windows Credential Manager and environment variables"""
+        """Change the storage method between Windows Credential Manager and cred file"""
         current_method = self.storage_method_var.get()
-        new_use_env_vars = (current_method == "envvars")
+        new_use_cred_file_vars = (current_method == "credfiles")
 
         # If already using the selected method, do nothing
-        if self.credential_manager.use_env_vars == new_use_env_vars:
+        if self.credential_manager.use_cred_file_vars == new_use_cred_file_vars:
             return
 
 
         # Create new connection string generator with the new storage method
-        self.credential_manager.set_use_env_vars(use_env_vars=new_use_env_vars)
+        self.credential_manager.set_use_cred_file_vars(use_cred_file_vars=new_use_cred_file_vars)
 
         # Update the menu to show the new storage method is active
         self.storage_method_var.set(current_method)
@@ -372,7 +372,7 @@ class DBExp:
 
         messagebox.showinfo(
             "Storage Method Changed",
-            f"Storage method changed to {'Environment Variables' if new_use_env_vars else 'Windows Credential Manager'}."
+            f"Storage method changed to {'Cred File' if new_use_cred_file_vars else 'Windows Credential Manager'}."
         )
 
 
@@ -406,7 +406,7 @@ class DBExp:
         except Exception as e:
             extra_info = ""
             if str(e) == "Windows Credential Manager is only available on Windows systems.":
-                extra_info = "\n\nAutomatically switched to environment variables."
+                extra_info = "\n\nAutomatically switched to cred file."
                 self.setup_menu()
 
             messagebox.showwarning("Error", f"Failed to load existing connections: {str(e)}{extra_info}")

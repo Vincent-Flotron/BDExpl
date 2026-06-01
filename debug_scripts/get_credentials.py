@@ -16,7 +16,7 @@ MSSQL             = "mssql"
 
 def main():
     parser = argparse.ArgumentParser(description='Get database connection parameters')
-    parser.add_argument('cred_man', choices=["win", "env_var"],
+    parser.add_argument('cred_man', choices=["win", "cred_file_var"],
                        help='Type the credential manager to use')
     parser.add_argument('db_type', choices=[ORACLE_DRIVER, ORACLE_DRIVERLESS, SQLITE, POSTGRESQL, MSSQL],
                        help='Type of database connection')
@@ -25,7 +25,7 @@ def main():
     args = parser.parse_args()
 
 
-    connStrGen = CredentialManager(True if args.cred_man == "env_var" else False)
+    connStrGen = CredentialManager(True if args.cred_man == "cred_file_var" else False)
     if args.db_type == ORACLE_DRIVER:
         params = connStrGen.get_conn_string(args.connection_name)
     elif args.db_type == ORACLE_DRIVERLESS:
