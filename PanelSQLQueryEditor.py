@@ -427,7 +427,7 @@ class PanelSQLQueryEditor:
                 lambda: self._export_to_csv(tree, f"{table}_keys"),
                 lambda: self._copy_all_to_clipboard(tree)
             )
-            tree.bind("<Button-3>", lambda event: context_menu.post(event.x_root, event.y_root))
+            tree.bind("<Button-3>", lambda event: context_menu.tk_popup(event.x_root, event.y_root))
 
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load table keys: {str(e)}")
@@ -450,7 +450,7 @@ class PanelSQLQueryEditor:
                 lambda: self._export_to_csv(tree, f"{table}_structure"),
                 lambda: self._copy_all_to_clipboard(tree)
             )
-            tree.bind("<Button-3>", lambda event: context_menu.post(event.x_root, event.y_root))
+            tree.bind("<Button-3>", lambda event: context_menu.tk_popup(event.x_root, event.y_root))
 
             cursor.close()
         except Exception as e:
@@ -482,7 +482,7 @@ class PanelSQLQueryEditor:
                 lambda: self._export_to_csv(tree, f"{table}_indexes"),
                 lambda: self._copy_all_to_clipboard(tree)
             )
-            tree.bind("<Button-3>", lambda event: context_menu.post(event.x_root, event.y_root))
+            tree.bind("<Button-3>", lambda event: context_menu.tk_popup(event.x_root, event.y_root))
 
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load table indexes: {str(e)}")

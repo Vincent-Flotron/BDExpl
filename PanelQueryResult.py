@@ -254,7 +254,7 @@ class PanelQueryResult:
                 col_name = self.result_tree.heading(col_id)['text']
                 self._show_order_by_menu(event, col_name)
         else:
-            self.result_context_menu.post(event.x_root, event.y_root)
+            self.result_context_menu.tk_popup(event.x_root, event.y_root)
 
     def _show_order_by_menu(self, event, col_name):
         """Show a small context menu to insert ORDER BY ASC/DESC into the SQL editor."""
@@ -267,7 +267,7 @@ class PanelQueryResult:
             label=f"ORDER BY {col_name} DESC",
             command=lambda: self._insert_order_by(col_name, "DESC")
         )
-        menu.post(event.x_root, event.y_root)
+        menu.tk_popup(event.x_root, event.y_root)
 
     def _insert_order_by(self, col_name, direction):
         """Delegate the ORDER BY insertion to the SQL editor panel."""

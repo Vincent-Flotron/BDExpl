@@ -654,7 +654,7 @@ class PanelDatabaseTree:
                 lambda: self.panel_sql_query_editor._copy_selected_rows(tree),
                 lambda: self.panel_sql_query_editor._export_to_csv(tree, f"{view}_dependencies")
             )
-            tree.bind("<Button-3>", lambda event: context_menu.post(event.x_root, event.y_root))
+            tree.bind("<Button-3>", lambda event: context_menu.tk_popup(event.x_root, event.y_root))
 
             cursor.close()
         except Exception as e:
@@ -704,7 +704,7 @@ class PanelDatabaseTree:
                 lambda: self.panel_sql_query_editor._copy_selected_rows(tree),
                 lambda: self.panel_sql_query_editor._export_to_csv(tree, f"{view}_structure")
             )
-            tree.bind("<Button-3>", lambda event: context_menu.post(event.x_root, event.y_root))
+            tree.bind("<Button-3>", lambda event: context_menu.tk_popup(event.x_root, event.y_root))
 
             cursor.close()
         except Exception as e:
@@ -743,10 +743,10 @@ class PanelDatabaseTree:
                 # TABLES & VIEWS
                 # -------------------------------
                 if obj_type == 'table':
-                    self.table_context_menu.post(event.x_root, event.y_root)
+                    self.table_context_menu.tk_popup(event.x_root, event.y_root)
 
                 elif obj_type == 'view':
-                    self.view_context_menu.post(event.x_root, event.y_root)
+                    self.view_context_menu.tk_popup(event.x_root, event.y_root)
 
                 # -------------------------------
                 # STANDALONE OBJECTS
@@ -1202,7 +1202,7 @@ class PanelDatabaseTree:
                 lambda: self.panel_sql_query_editor._copy_selected_rows(tree),
                 lambda: self.panel_sql_query_editor._export_to_csv(tree, f"{package_name}_{procedure_name}_parameters")
             )
-            tree.bind("<Button-3>", lambda event: context_menu.post(event.x_root, event.y_root))
+            tree.bind("<Button-3>", lambda event: context_menu.tk_popup(event.x_root, event.y_root))
 
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load package function/procedure parameters: {str(e)}")
