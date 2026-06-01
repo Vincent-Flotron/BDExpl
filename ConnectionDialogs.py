@@ -614,6 +614,7 @@ class ManageConnectionsDialog(_ConnectionFormMixin):
             self._save_params(new_name, db_type, params)
             self.parent.populate_existing_connections_menu()
             self._refresh_list(select_name=new_name)
+            self._on_list_select()
             messagebox.showinfo("Cloned",
                                 f"Connection '{src}' cloned as '{new_name}'.",
                                 parent=self._dialog)
