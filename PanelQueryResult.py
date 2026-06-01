@@ -39,9 +39,11 @@ class PanelQueryResult:
             return
 
         font_size = int(9 * (self.zoom_level / 100))  # Base size is 9
+        row_height = font_size + 12  # Dynamically scale row height
+        
         style = ttk.Style()
-        style.configure('Treeview', font=('Helvetica', font_size))
-        style.configure('Treeview.Heading', font=('Helvetica', font_size, 'bold'))
+        style.configure('ResultTree.Treeview', font=('Helvetica', font_size), rowheight=row_height)
+        style.configure('ResultTree.Treeview.Heading', font=('Helvetica', font_size, 'bold'))
 
         # Update column widths after font change
         if self.result_tree.get_children():
@@ -86,6 +88,7 @@ class PanelQueryResult:
         grid_container.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
         self.result_tree = Helper.create_treeview_with_scrollbars(grid_container, show='tree headings')
+        self.result_tree.configure(style='ResultTree.Treeview')
         self.result_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         self.result_tree.bind("<Shift-MouseWheel>", self.on_shift_mousewheel)

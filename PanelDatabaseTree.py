@@ -103,8 +103,9 @@ class PanelDatabaseTree:
         
         # ── Breadcrumb Frame ──────────────────────────────────────────────
         # Container for ariane wire (Nautilus style)
-        self.breadcrumb_frame = ttk.Frame(left_frame, style='TFrame')
+        self.breadcrumb_frame = ttk.Frame(left_frame, style='TFrame', height=32)
         self.breadcrumb_frame.pack(fill=tk.X, padx=4, pady=2)
+        self.breadcrumb_frame.pack_propagate(False) # Prevent shrinking to fit children
 
         # Internal search state
         self._search_results       = []
@@ -116,6 +117,7 @@ class PanelDatabaseTree:
         tree_container.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
 
         self.db_tree = Helper.create_treeview_with_scrollbars(tree_container)
+        self.db_tree.configure(style='DBTree.Treeview')
 
         # Context menu for tables
         table_commands = [
@@ -438,9 +440,11 @@ class PanelDatabaseTree:
     def _apply_zoom(self):
         """Apply the current zoom level to the treeview."""
         font_size = int(9 * (self.zoom_level / 100))  # Base size is 9
+        row_height = font_size + 12  # Dynamically scale row height
+        
         style = ttk.Style()
-        style.configure('Treeview', font=('Helvetica', font_size))
-        style.configure('Treeview.Heading', font=('Helvetica', font_size, 'bold'))
+        style.configure('DBTree.Treeview', font=('Helvetica', font_size), rowheight=row_height)
+        style.configure('DBTree.Treeview.Heading', font=('Helvetica', font_size, 'bold'))
 
     def set_zoom(self, zoom_level):
         """Set the zoom level."""
