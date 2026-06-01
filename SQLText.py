@@ -65,7 +65,8 @@ class SQLText(Text):
             + r"SET\s+ROLE|SET\s+TRANSACTION|SHUTDOWN|SOME|START\s+WITH|STARTUP|SUBPARTITION|SYSDATE|SYSTIMESTAMP|THEN|"\
             + r"TRUNCATE|TYPE|UNION|UNION\s+ALL|UNIQUE|UNLIMITED|UPDATE|USER|USING|WHEN|"\
             + r"WHERE|WHILE|WITH|TABLE|VALUES|ADD|REFERENCES|SET|"\
-            + r"LIMIT|ON|VIEW|INTO|TIME +ZONE|WITHOUT +TIME +ZONE|RETURNS|TRIGGER|LANGUAGE|BEFORE|EACH|ROW|RESTRICT|REPLACE|NOTICE)\b"
+            + r"LIMIT|ON|VIEW|INTO|TIME +ZONE|WITHOUT +TIME +ZONE|RETURNS|TRIGGER|LANGUAGE|BEFORE|EACH|ROW|RESTRICT|REPLACE|"\
+            + r"NOTICE)\b"
 
         self.sql_operators = r"=|!=|<>|<=|>=|<|>|\+|-|\*|/|%"
 
@@ -78,9 +79,9 @@ class SQLText(Text):
             + r"RANK|RAWTOHEX|REGEXP_INSTR|REGEXP_REPLACE|REGEXP_SUBSTR|ROUND|ROW_NUMBER|ROW_NUMBER|RPAD|"\
             + r"RTRIM|SIN|SOUNDEX|SQRT|STDDEV|SUBSTR|SUM|SUM|SUM|"\
             + r"TAN|TO_CHAR|TO_CHAR|TO_DATE|TO_DATE|TO_NUMBER|TO_TIMESTAMP|TO_TIMESTAMP|TRIM|"\
-            + r"TRUNC|UID|UPPER|USER|VARIANCE|VSIZE|clock_timestamp)\b"
+            + r"TRUNC|UID|UPPER|USER|VARIANCE|VSIZE|clock_timestamp|NOW|ENUM)\b"
 
-        self.sql_type = r"\b(TIMESTAMPG|TIMESTAMP|SERIAL|VARCHAR|NUMERIC|BIGINT|"\
+        self.sql_type = r"\b(TIMESTAMPG|TIMESTAMP|TIMESTAMPTZ|SERIAL|VARCHAR|NUMERIC|BIGINT|"\
             + r"TEXT|INTEGER|INT|DATE|plpgsql)\b"
 
         self.sql_string_pattern  = r"'[^'\r\n]*'"
@@ -90,14 +91,14 @@ class SQLText(Text):
 
         # Define colors for syntax highlighting
         self.colors = {
-            'keyword':  'blue',
-            'operator': 'purple',
-            'function': 'darkorange',
-            'type':   "#B86920",
-            'string':   'green',
-            'string2':  'green',
-            'comment':  'gray',
-            'number': '#098658'
+            'keyword':   'blue',
+            'operator':  'purple',
+            'function':"#997A24",
+            'type':    "#117E99",
+            'string':    'green',
+            'string2':   'green',
+            'comment':   'gray',
+            'number':  '#098658'
         }
 
         # Initialize zoom level
@@ -407,7 +408,7 @@ class SQLText(Text):
             self.highlight_pattern(self.sql_functions,       "function", self.colors["function"])
 
             # Highlight types
-            self.highlight_pattern(self.sql_type,            "function", self.colors["type"])
+            self.highlight_pattern(self.sql_type,            "type",     self.colors["type"])
 
             # Highlight strings
             self.highlight_pattern(self.sql_string_pattern,  "string",   self.colors["string"])
