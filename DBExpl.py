@@ -11,7 +11,7 @@ from PanelQueryResult    import PanelQueryResult
 from ConnectionManager   import ConnectionManager
 from CredentialManager   import CredentialManager
 from QueryManager        import QueryManager
-from ConnectionDialogs   import DeleteConnectionDialog, NewConnectionDialog
+from ConnectionDialogs   import ManageConnectionsDialog
 from version             import VERSION
 
 class Theme:
@@ -326,11 +326,8 @@ class DBExp:
         self.existing_connections_menu = tk.Menu(conn_menu, tearoff=0)
         conn_menu.add_cascade(label="Connect with Existing", menu=self.existing_connections_menu)
 
-        # Add submenu for new connection
-        conn_menu.add_command(label="Connect with New Credentials", command=self.show_new_connection_dialog)
-
-        # Add delete connection command
-        conn_menu.add_command(label="Delete Connection", command=self.show_delete_connection_dialog)
+        # Add manage connections command
+        conn_menu.add_command(label="Manage Connections…", command=self.show_manage_connections_dialog)
 
         conn_menu.add_separator()
         conn_menu.add_command(label="Disconnect", command=self.connection_manager.disconnect)
@@ -379,14 +376,9 @@ class DBExp:
         )
 
 
-    def show_delete_connection_dialog(self):
-        """Show delete connection dialog and return deleted connection name if any."""
-        dialog = DeleteConnectionDialog( self )
-        return dialog.show()
-
-    def show_new_connection_dialog(self):
-        """Show new connection dialog and return True if saved successfully."""
-        dialog = NewConnectionDialog( self )
+    def show_manage_connections_dialog(self):
+        """Show the connection manager dialog (edit, rename, clone, new, delete, test)."""
+        dialog = ManageConnectionsDialog(self)
         return dialog.show()
 
     def populate_existing_connections_menu(self):

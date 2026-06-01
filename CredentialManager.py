@@ -148,6 +148,9 @@ class CredentialManager:
         pwd      = get_cred(f"{root_name}{connection_name}_PWD")
 
         return f"DRIVER={driver};SERVER={server};Database={database};DBQ={dbq};UID={uid};PWD={pwd}"
+    
+    def format_to_oracle_driver_conn_str(self, driver, host, username, password):
+        return f"DRIVER={driver};SERVER={host};Database={host};DBQ={host};UID={username};PWD={password}"
 
     def save_in_win_cred(self, name: str, value: str):
         """Save credential using the appropriate storage method"""
@@ -304,9 +307,9 @@ class CredentialManager:
             "trust_server_cert": get_cred(f"{root_name}{connection_name}_TRUSTSERVERCERT") or "yes",
         }
 
-    def save_oracle_odbc_user_credentials(self, connection_name: str, host: str, user: str, password: str, use_root_name: bool = True):
+    def save_oracle_odbc_user_credentials(self, connection_name: str, driver:str, host: str, user: str, password: str, use_root_name: bool = True):
         self.save_odbc_credentials(
-            driver="{Oracle dans OraClient19Home1}",
+            driver=driver,
             connection_name=connection_name,
             host=host,
             user=user,

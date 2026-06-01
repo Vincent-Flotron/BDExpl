@@ -136,6 +136,99 @@ class ConnectionManager:
             self.status_bar_panel.set_status("Not connected")
             self.database_tree_panel.clear_tree()
 
+    def test_connection_from_params(self, db_type: str, params: dict) -> tuple[bool, str]:
+        """
+        Open and immediately close a connection built from raw *params*.
+        Returns (success: bool, message: str).
+        The active connection is never touched.
+
+        This is the single place in the codebase that contains the
+        per-driver open logic for testing purposes; dialogs delegate here
+        instead of importing DB drivers themselves.
+        """
+        conn = None
+        try:
+            if db_type == "Oracle":
+                if not pyodbc:
+                    return False, "pyodbc is not available on this platform"
+                # Oracle ODBC: params["conn_str"] is the raw DSN
+                ora_conn_str = self.credential_manager.format_to_oracle_driver_conn_str(params["driver"], params["host"], params["user"], params["password"])
+                conn = pyodbc.connect(ora_conn_str)
+
+            elif db_type == "SQLite":
+                conn = sqlite3.connect(params["path"])
+
+            elif db_type == "OracleDB":
+                conn = oracledb.connect(
+                    user=params["user"], password=params["password"],
+                    host=params["host"], port=int(params["port"]), sid=params["sid"],
+                )
+
+            elif db_type == "PostgreSQL":
+                ssl_args = {"sslmode": params["sslmode"]}
+                if params.get("sslrootcert"):
+                    ssl_args["sslrootcert"] = params["sslrootcert"]
+                conn = psycopg2.connect(
+                    host=params["host"], port=int(params["port"]),
+                    dbname=params["database"], user=params["user"],
+                    password=params["password"], **ssl_args,
+                )
+
+            elif db_type == "MSSQL":
+                if not pyodbc:
+                    return False, "pyodbc is not available on this platform"
+                server = f"{params['host']},{params['port']}" if params.get("port") else params["host"]
+                if params.get("auth_type") == "Windows":
+                    cs = (f"DRIVER={params['driver']};SERVER={server};"
+                          f"DATABASE={params['database']};Trusted_Connection=yes;"
+                          f"Encrypt={params['encrypt']};TrustServerCertificate={params['trust_server_cert']};")
+                else:
+                    cs = (f"DRIVER={params['driver']};SERVER={server};"
+                          f"DATABASE={params['database']};UID={params['user']};PWD={params['password']};"
+                          f"Encrypt={params['encrypt']};TrustServerCertificate={params['trust_server_cert']};")
+                conn = pyodbc.connect(cs)
+
+            else:
+                return False, f"Unknown connection type: {db_type}"
+
+            return True, "Connection successful"
+
+        except Exception as e:
+            return False, str(e)
+        finally:
+            try:
+                if conn:
+                    conn.close()
+            except Exception:
+                pass
+
+    def test_connection(self, connection_name: str) -> tuple[bool, str]:
+        """
+        Open and immediately close a stored connection by name.
+        Resolves credentials via CredentialManager, then delegates to
+        test_connection_from_params. Returns (success: bool, message: str).
+        """
+        try:
+            conn_type = self.credential_manager.get_connection_type_offline(connection_name)
+
+            if conn_type == "Oracle":
+                params = {"conn_str": self.credential_manager.get_conn_string(connection_name)}
+            elif conn_type == "SQLite":
+                params = {"path": self.credential_manager.get_sqlite_conn_string(connection_name)}
+            elif conn_type == "OracleDB":
+                params = self.credential_manager.get_oracledb_conn_params(connection_name)
+            elif conn_type == "PostgreSQL":
+                params = self.credential_manager.get_postgresql_conn_params(connection_name)
+            elif conn_type == "MSSQL":
+                params = self.credential_manager.get_mssql_conn_params(connection_name)
+            else:
+                return False, f"Unknown connection type: {conn_type}"
+
+            return self.test_connection_from_params(conn_type, params)
+
+        except Exception as e:
+            return False, str(e)
+
     def delete_connection(self, connection_name: str):
         """Delete a connection from Windows Credential Manager"""
         try:
