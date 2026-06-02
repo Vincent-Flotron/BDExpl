@@ -66,7 +66,7 @@ class SQLText(Text):
             + r"TRUNCATE|TYPE|UNION|UNION\s+ALL|UNIQUE|UNLIMITED|UPDATE|USER|USING|WHEN|"\
             + r"WHERE|WHILE|WITH|TABLE|VALUES|ADD|REFERENCES|SET|"\
             + r"LIMIT|ON|VIEW|INTO|TIME +ZONE|WITHOUT +TIME +ZONE|RETURNS|TRIGGER|LANGUAGE|BEFORE|EACH|ROW|RESTRICT|REPLACE|"\
-            + r"NOTICE)\b"
+            + r"NOTICE|RETURNING)\b"
 
         self.sql_operators = r"=|!=|<>|<=|>=|<|>|\+|-|\*|/|%"
 
@@ -391,9 +391,11 @@ class SQLText(Text):
         self.tag_remove("keyword",   "1.0", "end")
         self.tag_remove("operator",  "1.0", "end")
         self.tag_remove("function",  "1.0", "end")
+        self.tag_remove("type",      "1.0", "end")
         self.tag_remove("string",    "1.0", "end")
         self.tag_remove("string2",   "1.0", "end")
         self.tag_remove("comment",   "1.0", "end")
+        self.tag_remove("number",    "1.0", "end")
 
         text = self.get("1.0", "end-1c")
 
