@@ -438,13 +438,22 @@ class PanelDatabaseTree:
         self.zoom_label.config(text=f"{self.zoom_level}%")
 
     def _apply_zoom(self):
-        """Apply the current zoom level to the treeview."""
-        font_size = int(9 * (self.zoom_level / 100))  # Base size is 9
-        row_height = font_size + 12  # Dynamically scale row height
-        
-        style = ttk.Style()
-        style.configure('DBTree.Treeview', font=('Helvetica', font_size), rowheight=row_height)
-        style.configure('DBTree.Treeview.Heading', font=('Helvetica', font_size, 'bold'))
+            """Apply the current zoom level to the treeview."""
+            font_size = int(9 * (self.zoom_level / 100))
+            row_height = font_size + 12
+            
+            # Détection simple pour choisir la meilleure police mono espacée
+            import sys
+            if sys.platform.startswith('win'):
+                font_name = 'Consolas'
+            elif sys.platform == 'darwin':
+                font_name = 'Monaco'
+            else:
+                font_name = 'DejaVu Sans Mono' # Ou 'Courier New' comme fallback universel
+
+            style = ttk.Style()
+            style.configure('DBTree.Treeview', font=(font_name, font_size), rowheight=row_height)
+            style.configure('DBTree.Treeview.Heading', font=(font_name, font_size, 'bold'))
 
     def set_zoom(self, zoom_level):
         """Set the zoom level."""
