@@ -7,6 +7,13 @@ class PanelQueryResult:
         self.zoom_level              = 100
         self.panel_status_bar        = panel_status_bar
         self.panel_sql_query_editor  = None   # set later via set_sql_query_editor()
+        self.reg_thousand_sep1       = re.compile(r"^(\d{1,3})(\d{3})(?:(\.)(\d+))?$")
+        self.reg_thousand_sep2       = re.compile(r"^(\d{1,3})(\d{3})(\d{3})(?:(\.)(\d+))?$")
+        self.reg_thousand_sep3       = re.compile(r"^(\d{1,3})(\d{3})(\d{3})(\d{3})(?:(\.)(\d+))?$")
+        self.reg_thousand_sep4       = re.compile(r"^(\d{1,3})(\d{3})(\d{3})(\d{3})(\d{3})(?:(\.)(\d+))?$")
+        self.reg_thousand_sep5       = re.compile(r"^(\d{1,3})(\d{3})(\d{3})(\d{3})(\d{3})(\d{3})(?:(\.)(\d+))?$")
+        self.reg_thousand_sep6       = re.compile(r"^(\d{1,3})(\d{3})(\d{3})(\d{3})(\d{3})(\d{3})(\d{3})(?:(\.)(\d+))?$")
+        self.thousand_sep            = "'"
 
     def set_sql_query_editor(self, panel_sql_query_editor):
         """Wire up the SQL editor panel so ORDER BY clicks can insert text there."""
@@ -112,6 +119,42 @@ class PanelQueryResult:
     # PUBLIC DISPLAY METHODS
     # ─────────────────────────────────────────────────────────────────
 
+    def _format_value_with_thousands_separator(self, value):
+        """Format numeric values with thousands separator (')."""
+
+        if value is None:
+            return ""
+
+        if isinstance(value, (Decimal, int)):
+            match = self.reg_thousand_sep1.match(str(value))
+            if match:
+                groups = match.groups()
+                return f"{groups[0] or ''}{self.thousand_sep}{groups[1] or ''}{groups[2] or ''}{groups[3] or ''}"
+            match = self.reg_thousand_sep2.match(str(value))
+            if match:
+                groups = match.groups()
+                return f"{groups[0] or ''}{self.thousand_sep}{groups[1] or ''}{self.thousand_sep}{groups[2] or ''}{groups[3] or ''}{groups[4] or ''}"
+            match = self.reg_thousand_sep3.match(str(value))
+            if match:
+                groups = match.groups()
+                return f"{groups[0] or ''}{self.thousand_sep}{groups[1] or ''}{self.thousand_sep}{groups[2] or ''}{self.thousand_sep}{groups[3] or ''}{groups[4] or ''}{groups[5] or ''}"
+            match = self.reg_thousand_sep4.match(str(value))
+            if match:
+                groups = match.groups()
+                return f"{groups[0] or ''}{self.thousand_sep}{groups[1] or ''}{self.thousand_sep}{groups[2] or ''}{self.thousand_sep}{groups[3] or ''}{self.thousand_sep}{groups[4] or ''}{groups[5] or ''}{groups[6] or ''}"
+            match = self.reg_thousand_sep5.match(str(value))
+            if match:
+                groups = match.groups()
+                return f"{groups[0] or ''}{self.thousand_sep}{groups[1] or ''}{self.thousand_sep}{groups[2] or ''}{self.thousand_sep}{groups[3] or ''}{self.thousand_sep}{groups[4] or ''}{self.thousand_sep}{groups[5] or ''}{groups[6] or ''}{groups[7] or ''}"
+            match = self.reg_thousand_sep6.match(str(value))
+            if match:
+                groups = match.groups()
+                return f"{groups[0] or ''}{self.thousand_sep}{groups[1] or ''}{self.thousand_sep}{groups[2] or ''}{self.thousand_sep}{groups[3] or ''}{self.thousand_sep}{groups[4] or ''}{self.thousand_sep}{groups[5] or ''}{self.thousand_sep}{groups[6] or ''}{groups[7] or ''}{groups[8] or ''}"
+
+        return str(value)
+
+
+
     def display_results(self, columns: List[str], rows: List[Tuple], description):
         """Display query results in grid with duplicate column name handling"""
         self.result_tree.delete(*self.result_tree.get_children())
@@ -135,7 +178,7 @@ class PanelQueryResult:
         self.result_tree['columns'] = unique_columns
         self.result_tree.column('#0', width=0, stretch=tk.NO)
         for col in unique_columns:
-            self.result_tree.column(col, minwidth=100, width=150, stretch=tk.NO, anchor=tk.W)
+            self.result_tree.column(col, minwidth=100, width=150, stretch=tk.NO, anchor=tk.E)
             self.result_tree.heading(col, text=col, anchor=tk.W)
 
         # Seed max widths from header labels so they're never under-sized
@@ -143,7 +186,7 @@ class PanelQueryResult:
 
         # ── 1. Format all rows up-front ───────────────────────────────────────────
         formatted_rows = [
-            tuple('' if v is None else str(v) for v in row)
+            tuple(self._format_value_with_thousands_separator(v) for v in row)
             for row in rows
         ]
         row_count = len(formatted_rows)
@@ -227,13 +270,13 @@ class PanelQueryResult:
                     max_widths[i] = w
 
         for col, w in zip(columns, max_widths):
-            self.result_tree.column(col, width=min(max(w, 150), 300))
+            self.result_tree.column(col, width=min(max(w, 150), 300), anchor=tk.E)
         self.result_tree.update_idletasks()
 
     def reset_column_widths(self):
         """Reset all columns to 150 px."""
         for col in self.result_tree['columns']:
-            self.result_tree.column(col, width=150)
+            self.result_tree.column(col, width=150, anchor=tk.E)
         self.result_tree.update_idletasks()
 
     # ─────────────────────────────────────────────────────────────────

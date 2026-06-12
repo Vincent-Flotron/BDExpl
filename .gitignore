@@ -9,3 +9,5 @@ test_database.db
 version_info.txt
 temp.bmp
 publish_exe.ps1
+testDeci.py
+testdecimalsep.py
