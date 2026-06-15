@@ -14,6 +14,7 @@ class PanelQueryResult:
         self.reg_thousand_sep5       = re.compile(r"^(\d{1,3})(\d{3})(\d{3})(\d{3})(\d{3})(\d{3})(?:(\.)(\d+))?$")
         self.reg_thousand_sep6       = re.compile(r"^(\d{1,3})(\d{3})(\d{3})(\d{3})(\d{3})(\d{3})(\d{3})(?:(\.)(\d+))?$")
         self.thousand_sep            = "'"
+        self.cols_anchor             = {}
 
     def set_sql_query_editor(self, panel_sql_query_editor):
         """Wire up the SQL editor panel so ORDER BY clicks can insert text there."""
@@ -177,8 +178,17 @@ class PanelQueryResult:
 
         self.result_tree['columns'] = unique_columns
         self.result_tree.column('#0', width=0, stretch=tk.NO)
+
+        # Indentify justification for columns
+        self.cols_anchor = {}
+        for cell, col_name in zip(rows[0], unique_columns):
+            if isinstance(cell, (int, Decimal, float)):
+                self.cols_anchor[col_name] = tk.E
+            else:
+                self.cols_anchor[col_name] = tk.W
+
         for col in unique_columns:
-            self.result_tree.column(col, minwidth=100, width=150, stretch=tk.NO, anchor=tk.E)
+            self.result_tree.column(col, minwidth=100, width=150, stretch=tk.NO, anchor=self.cols_anchor[col])
             self.result_tree.heading(col, text=col, anchor=tk.W)
 
         # Seed max widths from header labels so they're never under-sized
@@ -270,13 +280,19 @@ class PanelQueryResult:
                     max_widths[i] = w
 
         for col, w in zip(columns, max_widths):
-            self.result_tree.column(col, width=min(max(w, 150), 300), anchor=tk.E)
+            anchor = self.cols_anchor[col]
+            if not anchor:
+                anchor = tk.E
+            self.result_tree.column(col, width=min(max(w, 150), 300), anchor=anchor)
         self.result_tree.update_idletasks()
 
     def reset_column_widths(self):
         """Reset all columns to 150 px."""
         for col in self.result_tree['columns']:
-            self.result_tree.column(col, width=150, anchor=tk.E)
+            anchor = self.cols_anchor[col]
+            if not anchor:
+                anchor = tk.E
+            self.result_tree.column(col, width=150, anchor=anchor)
         self.result_tree.update_idletasks()
 
     # ─────────────────────────────────────────────────────────────────
