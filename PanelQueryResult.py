@@ -327,7 +327,7 @@ class PanelQueryResult:
             return
         lines = [
             '\t'.join(
-                str(v)
+                str(v).replace('\n', ' ').replace('\r', ' ') if v else ''
                 for v in self.result_tree.item(item)['values']
             )
             for item in selected
@@ -351,7 +351,7 @@ class PanelQueryResult:
         # Create data lines
         lines = [
             '\t'.join(
-                str(v)
+                str(v).replace('\n', ' ').replace('\r', ' ') if v else ''
                 for v in self.result_tree.item(item)['values']
             )
             for item in all_items
@@ -381,11 +381,10 @@ class PanelQueryResult:
                     writer.writerow(self.result_tree['columns'])
                     for item in self.result_tree.get_children():
                         row = [
-                            str(v)
+                            str(v).replace('\n', ' ').replace('\r', ' ') if v else ''
                             for v in self.result_tree.item(item)['values']
                         ]
                         writer.writerow(row)
                 messagebox.showinfo("Success", f"Data exported to {filepath}")
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to export data: {str(e)}")
-
