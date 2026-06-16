@@ -181,11 +181,16 @@ class PanelQueryResult:
 
         # Indentify justification for columns
         self.cols_anchor = {}
-        for cell, col_name in zip(rows[0], unique_columns):
-            if isinstance(cell, (int, Decimal, float)):
-                self.cols_anchor[col_name] = tk.E
-            else:
+        if len(rows) > 0:
+            for cell, col_name in zip(rows[0], unique_columns):
+                if isinstance(cell, (int, Decimal, float)):
+                    self.cols_anchor[col_name] = tk.E
+                else:
+                    self.cols_anchor[col_name] = tk.W
+        else:
+            for col_name in unique_columns:
                 self.cols_anchor[col_name] = tk.W
+
 
         for col in unique_columns:
             self.result_tree.column(col, minwidth=100, width=150, stretch=tk.NO, anchor=self.cols_anchor[col])
