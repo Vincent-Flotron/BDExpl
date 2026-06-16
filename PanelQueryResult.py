@@ -7,12 +7,12 @@ class PanelQueryResult:
         self.zoom_level              = 100
         self.panel_status_bar        = panel_status_bar
         self.panel_sql_query_editor  = None   # set later via set_sql_query_editor()
-        self.reg_thousand_sep1       = re.compile(r"^(\d{1,3})(\d{3})(?:(\.)(\d+))?$")
-        self.reg_thousand_sep2       = re.compile(r"^(\d{1,3})(\d{3})(\d{3})(?:(\.)(\d+))?$")
-        self.reg_thousand_sep3       = re.compile(r"^(\d{1,3})(\d{3})(\d{3})(\d{3})(?:(\.)(\d+))?$")
-        self.reg_thousand_sep4       = re.compile(r"^(\d{1,3})(\d{3})(\d{3})(\d{3})(\d{3})(?:(\.)(\d+))?$")
-        self.reg_thousand_sep5       = re.compile(r"^(\d{1,3})(\d{3})(\d{3})(\d{3})(\d{3})(\d{3})(?:(\.)(\d+))?$")
-        self.reg_thousand_sep6       = re.compile(r"^(\d{1,3})(\d{3})(\d{3})(\d{3})(\d{3})(\d{3})(\d{3})(?:(\.)(\d+))?$")
+        self.reg_thousand_sep1       = re.compile(r"^(-?)(\d{1,3})(\d{3})(?:(\.)(\d+))?$")
+        self.reg_thousand_sep2       = re.compile(r"^(-?)(\d{1,3})(\d{3})(\d{3})(?:(\.)(\d+))?$")
+        self.reg_thousand_sep3       = re.compile(r"^(-?)(\d{1,3})(\d{3})(\d{3})(\d{3})(?:(\.)(\d+))?$")
+        self.reg_thousand_sep4       = re.compile(r"^(-?)(\d{1,3})(\d{3})(\d{3})(\d{3})(\d{3})(?:(\.)(\d+))?$")
+        self.reg_thousand_sep5       = re.compile(r"^(-?)(\d{1,3})(\d{3})(\d{3})(\d{3})(\d{3})(\d{3})(?:(\.)(\d+))?$")
+        self.reg_thousand_sep6       = re.compile(r"^(-?)(\d{1,3})(\d{3})(\d{3})(\d{3})(\d{3})(\d{3})(\d{3})(?:(\.)(\d+))?$")
         self.thousand_sep            = "'"
         self.cols_anchor             = {}
 
@@ -130,27 +130,27 @@ class PanelQueryResult:
             match = self.reg_thousand_sep1.match(str(value))
             if match:
                 groups = match.groups()
-                return f"{groups[0] or ''}{self.thousand_sep}{groups[1] or ''}{groups[2] or ''}{groups[3] or ''}"
+                return f"{groups[0] or ''}{groups[1] or ''}{self.thousand_sep}{groups[2] or ''}{groups[3] or ''}{groups[4] or ''}".format(":.5f")
             match = self.reg_thousand_sep2.match(str(value))
             if match:
                 groups = match.groups()
-                return f"{groups[0] or ''}{self.thousand_sep}{groups[1] or ''}{self.thousand_sep}{groups[2] or ''}{groups[3] or ''}{groups[4] or ''}"
+                return f"{groups[0] or ''}{groups[1] or ''}{self.thousand_sep}{groups[2] or ''}{self.thousand_sep}{groups[3] or ''}{groups[4] or ''}{groups[5] or ''}"
             match = self.reg_thousand_sep3.match(str(value))
             if match:
                 groups = match.groups()
-                return f"{groups[0] or ''}{self.thousand_sep}{groups[1] or ''}{self.thousand_sep}{groups[2] or ''}{self.thousand_sep}{groups[3] or ''}{groups[4] or ''}{groups[5] or ''}"
+                return f"{groups[0] or ''}{groups[1] or ''}{self.thousand_sep}{groups[2] or ''}{self.thousand_sep}{groups[3] or ''}{self.thousand_sep}{groups[4] or ''}{groups[5] or ''}{groups[6] or ''}"
             match = self.reg_thousand_sep4.match(str(value))
             if match:
                 groups = match.groups()
-                return f"{groups[0] or ''}{self.thousand_sep}{groups[1] or ''}{self.thousand_sep}{groups[2] or ''}{self.thousand_sep}{groups[3] or ''}{self.thousand_sep}{groups[4] or ''}{groups[5] or ''}{groups[6] or ''}"
+                return f"{groups[0] or ''}{groups[1] or ''}{self.thousand_sep}{groups[2] or ''}{self.thousand_sep}{groups[3] or ''}{self.thousand_sep}{groups[4] or ''}{self.thousand_sep}{groups[5] or ''}{groups[6] or ''}{groups[7] or ''}"
             match = self.reg_thousand_sep5.match(str(value))
             if match:
                 groups = match.groups()
-                return f"{groups[0] or ''}{self.thousand_sep}{groups[1] or ''}{self.thousand_sep}{groups[2] or ''}{self.thousand_sep}{groups[3] or ''}{self.thousand_sep}{groups[4] or ''}{self.thousand_sep}{groups[5] or ''}{groups[6] or ''}{groups[7] or ''}"
+                return f"{groups[0] or ''}{groups[1] or ''}{self.thousand_sep}{groups[2] or ''}{self.thousand_sep}{groups[3] or ''}{self.thousand_sep}{groups[4] or ''}{self.thousand_sep}{groups[5] or ''}{self.thousand_sep}{groups[6] or ''}{groups[7] or ''}{groups[8] or ''}"
             match = self.reg_thousand_sep6.match(str(value))
             if match:
                 groups = match.groups()
-                return f"{groups[0] or ''}{self.thousand_sep}{groups[1] or ''}{self.thousand_sep}{groups[2] or ''}{self.thousand_sep}{groups[3] or ''}{self.thousand_sep}{groups[4] or ''}{self.thousand_sep}{groups[5] or ''}{self.thousand_sep}{groups[6] or ''}{groups[7] or ''}{groups[8] or ''}"
+                return f"{groups[0] or ''}{groups[1] or ''}{self.thousand_sep}{groups[2] or ''}{self.thousand_sep}{groups[3] or ''}{self.thousand_sep}{groups[4] or ''}{self.thousand_sep}{groups[5] or ''}{self.thousand_sep}{groups[6] or ''}{self.thousand_sep}{groups[7] or ''}{groups[8] or ''}{groups[9] or ''}"
 
         return str(value)
 
@@ -182,7 +182,14 @@ class PanelQueryResult:
         # Indentify justification for columns
         self.cols_anchor = {}
         if len(rows) > 0:
-            for cell, col_name in zip(rows[0], unique_columns):
+            for i, cell, col_name in zip(range(len(unique_columns)), rows[0], unique_columns):
+                # dive until a valid cell value
+                j     = 0
+                j_max = len(rows)
+                while not cell and not j >= j_max:
+                    cell = rows[j][i]
+                    j += 1;
+
                 if isinstance(cell, (int, Decimal, float)):
                     self.cols_anchor[col_name] = tk.E
                 else:
