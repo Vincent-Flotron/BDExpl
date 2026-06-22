@@ -81,7 +81,7 @@ class SQLText(Text):
             + r"TAN|TO_CHAR|TO_CHAR|TO_DATE|TO_DATE|TO_NUMBER|TO_TIMESTAMP|TO_TIMESTAMP|TRIM|"\
             + r"TRUNC|UID|UPPER|USER|VARIANCE|VSIZE|clock_timestamp|NOW|ENUM)\b"
 
-        self.sql_type = r"\b(TIMESTAMPG|TIMESTAMP|TIMESTAMPTZ|SERIAL|VARCHAR|NUMERIC|BIGINT|"\
+        self.sql_type = r"\b(TIMESTAMPG|TIMESTAMP|TIMESTAMPTZ|SERIAL|BIGSERIAL|VARCHAR|NUMERIC|BIGINT|"\
             + r"TEXT|INTEGER|INT|DATE|plpgsql)\b"
 
         self.sql_string_pattern  = r"'[^'\r\n]*'"
