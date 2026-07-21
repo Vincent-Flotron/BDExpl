@@ -1281,15 +1281,15 @@ class QueriesPostgreSQL(Queries):
 
     @staticmethod
     def get_clone_sql(schema, table, new_table):
-        return f"CREATE TABLE {schema}.{new_table} AS SELECT * FROM {schema}.{table}"
+        return f'CREATE TABLE "{schema}"."{new_table}" AS SELECT * FROM "{schema}"."{table}"'
 
     @staticmethod
     def delete_table_sql(schema, table):
-        return f"DROP TABLE IF EXISTS {schema}.{table} CASCADE"
+        return f'DROP TABLE IF EXISTS "{schema}"."{table}" CASCADE'
 
     @staticmethod
     def empty_table_sql(schema, table):
-        return f"TRUNCATE TABLE {schema}.{table}"
+        return f'TRUNCATE TABLE "{schema}"."{table}"'
 
     @staticmethod
     def count_records_sql(schema, table):
@@ -1297,7 +1297,7 @@ class QueriesPostgreSQL(Queries):
 
     @staticmethod
     def delete_view_sql(schema, view):
-        return f"DROP VIEW IF EXISTS {schema}.{view} CASCADE"
+        return f'DROP VIEW IF EXISTS "{schema}"."{view} CASCADE'
 
     @staticmethod
     def limit_results_to(limit_value):
