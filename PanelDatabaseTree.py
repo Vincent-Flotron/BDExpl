@@ -276,99 +276,167 @@ class PanelDatabaseTree:
 
 
     def empty_table(self):
-        """Empty the selected table (remove all rows)."""
+        """Empty the selected table(s) (remove all rows)."""
         selected = self.db_tree.selection()
         if not selected:
-            messagebox.showwarning("No Selection", "Please select a table to empty")
+            messagebox.showwarning("No Selection", "Please select at least one table to empty")
             return
 
-        values = self.db_tree.item(selected[0])['values']
-        if len(values) < 3 or values[1] != 'table':
-            messagebox.showwarning("Not a Table", "Selected item is not a table")
+        # Collect all valid tables from selection
+        tables_to_empty = []
+        for item in selected:
+            values = self.db_tree.item(item)['values']
+            if len(values) >= 3 and values[1] == 'table':
+                tables_to_empty.append((values[0], values[2]))  # (schema, table_name)
+
+        if not tables_to_empty:
+            messagebox.showwarning("No Valid Tables", "No valid tables found in selection")
             return
 
-        schema = values[0]
-        table_name = values[2]
+        # Build confirmation message
+        table_count = len(tables_to_empty)
+        if table_count == 1:
+            schema, table_name = tables_to_empty[0]
+            confirm_msg = f"Are you sure you want to permanently remove all rows from table '{table_name}' in schema '{schema}'?\n"
+        else:
+            # Show first few tables and count
+            display_tables = "\n".join([f"  - {s}.{t}" for s, t in tables_to_empty[:5]])
+            if table_count > 5:
+                display_tables += f"\n  ... and {table_count - 5} more"
+            confirm_msg = f"Are you sure you want to permanently remove all rows from {table_count} tables?\n\n{display_tables}\n"
+        
+        confirm_msg += "\nThis action cannot be undone."
 
-        confirm = messagebox.askyesno(
-            "Confirm Empty",
-            f"Are you sure you want to permanently remove all rows from table '{table_name}' in schema '{schema}'?\n"
-            "This action cannot be undone."
-        )
-
+        confirm = messagebox.askyesno("Confirm Empty", confirm_msg)
         if not confirm:
             return
+
+        cursor = None
+        success_count = 0
+        failure_count = 0
+        failed_tables = []
 
         try:
             cursor = self.db_connection.current_connection.cursor()
             queries = self.get_queries_instance()
 
-            # Get the empty SQL
-            empty_sql = queries.empty_table_sql(schema, table_name)
+            for schema, table_name in tables_to_empty:
+                try:
+                    # Get the empty SQL
+                    empty_sql = queries.empty_table_sql(schema, table_name)
 
-            # Execute the empty SQL through QueryManager
-            self.query_manager.cursor_execute(empty_sql, cursor)
-
-            # Commit the transaction
-            self.db_connection.current_connection.commit()
-            messagebox.showinfo("Success", f"Table '{table_name}' emptied successfully")
-
-            # Refresh the tree (optional, but good practice to update counts if displayed)
-            self.load_database_objects()
-
-            cursor.close()
-
-        except Exception as e:
-            self.db_connection.current_connection.rollback()
-            messagebox.showerror("Error", f"Failed to empty table: {str(e)}")
-
-
-    def delete_table(self):
-        """Delete the selected table."""
-        selected = self.db_tree.selection()
-        if not selected:
-            messagebox.showwarning("No Selection", "Please select a table to delete")
-            return
-
-        values = self.db_tree.item(selected[0])['values']
-        if len(values) < 3 or values[1] != 'table':
-            messagebox.showwarning("Not a Table", "Selected item is not a table")
-            return
-
-        schema = values[0]
-        table_name = values[2]
-
-        confirm = messagebox.askyesno(
-            "Confirm Delete",
-            f"Are you sure you want to permanently delete table '{table_name}' in schema '{schema}'?\n"
-            "This action cannot be undone."
-        )
-
-        if not confirm:
-            return
-
-        try:
-            cursor = self.db_connection.current_connection.cursor()
-            queries = self.get_queries_instance()
-
-            # Get the delete SQL
-            delete_sql = queries.delete_table_sql(schema, table_name)
-
-            # Execute the delete SQL through QueryManager
-            self.query_manager.cursor_execute(delete_sql, cursor)
+                    # Execute the empty SQL through QueryManager
+                    self.query_manager.cursor_execute(empty_sql, cursor)
+                    success_count += 1
+                except Exception as e:
+                    failure_count += 1
+                    failed_tables.append(f"{schema}.{table_name}: {str(e)}")
 
             # Commit the transaction
             self.db_connection.current_connection.commit()
-            messagebox.showinfo("Success", f"Table '{table_name}' deleted successfully")
+
+            # Show result summary
+            if failure_count == 0:
+                messagebox.showinfo("Success", f"Successfully emptied {success_count} table(s)")
+            else:
+                messagebox.showwarning("Partial Success",
+                    f"Successfully emptied {success_count} table(s), {failure_count} failed.\n\n"
+                    + "\n".join(failed_tables[:5]))
 
             # Refresh the tree
             self.load_database_objects()
 
-            cursor.close()
+        except Exception as e:
+            self.db_connection.current_connection.rollback()
+            messagebox.showerror("Error", f"Failed to empty tables: {str(e)}")
+        finally:
+            if cursor:
+                try:
+                    cursor.close()
+                except Exception:
+                    pass
+
+
+    def delete_table(self):
+        """Delete the selected table(s)."""
+        selected = self.db_tree.selection()
+        if not selected:
+            messagebox.showwarning("No Selection", "Please select at least one table to delete")
+            return
+
+        # Collect all valid tables from selection
+        tables_to_delete = []
+        for item in selected:
+            values = self.db_tree.item(item)['values']
+            if len(values) >= 3 and values[1] == 'table':
+                tables_to_delete.append((values[0], values[2]))  # (schema, table_name)
+
+        if not tables_to_delete:
+            messagebox.showwarning("No Valid Tables", "No valid tables found in selection")
+            return
+
+        # Build confirmation message
+        table_count = len(tables_to_delete)
+        if table_count == 1:
+            schema, table_name = tables_to_delete[0]
+            confirm_msg = f"Are you sure you want to permanently delete table '{table_name}' in schema '{schema}'?\n"
+        else:
+            # Show first few tables and count
+            display_tables = "\n".join([f"  - {s}.{t}" for s, t in tables_to_delete[:5]])
+            if table_count > 5:
+                display_tables += f"\n  ... and {table_count - 5} more"
+            confirm_msg = f"Are you sure you want to permanently delete {table_count} tables?\n\n{display_tables}\n"
+        
+        confirm_msg += "\nThis action cannot be undone."
+
+        confirm = messagebox.askyesno("Confirm Delete", confirm_msg)
+        if not confirm:
+            return
+
+        cursor = None
+        success_count = 0
+        failure_count = 0
+        failed_tables = []
+
+        try:
+            cursor = self.db_connection.current_connection.cursor()
+            queries = self.get_queries_instance()
+
+            for schema, table_name in tables_to_delete:
+                try:
+                    # Get the delete SQL
+                    delete_sql = queries.delete_table_sql(schema, table_name)
+
+                    # Execute the delete SQL through QueryManager
+                    self.query_manager.cursor_execute(delete_sql, cursor)
+                    success_count += 1
+                except Exception as e:
+                    failure_count += 1
+                    failed_tables.append(f"{schema}.{table_name}: {str(e)}")
+
+            # Commit the transaction
+            self.db_connection.current_connection.commit()
+
+            # Show result summary
+            if failure_count == 0:
+                messagebox.showinfo("Success", f"Successfully deleted {success_count} table(s)")
+            else:
+                messagebox.showwarning("Partial Success",
+                    f"Successfully deleted {success_count} table(s), {failure_count} failed.\n\n"
+                    + "\n".join(failed_tables[:5]))
+
+            # Refresh the tree
+            self.load_database_objects()
 
         except Exception as e:
             self.db_connection.current_connection.rollback()
-            messagebox.showerror("Error", f"Failed to delete table: {str(e)}")
+            messagebox.showerror("Error", f"Failed to delete tables: {str(e)}")
+        finally:
+            if cursor:
+                try:
+                    cursor.close()
+                except Exception:
+                    pass
 
 
     def delete_view(self):
