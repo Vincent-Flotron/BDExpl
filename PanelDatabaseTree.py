@@ -194,6 +194,9 @@ class PanelDatabaseTree:
         counter   = 1
         new_table = f"{base_name}_clone{counter}"
 
+        # Display status message in Query Result panel
+        self.panel_sql_query_editor.display_message(f"Cloning table '{original_table}'...")
+
         try:
             cursor = self.db_connection.current_connection.cursor()
             
@@ -213,12 +216,17 @@ class PanelDatabaseTree:
             
             messagebox.showinfo("Success", f"Table '{original_table}' cloned to '{new_table}'")
             
+            # Display success message in Query Result panel
+            self.panel_sql_query_editor.display_message(f"Table '{original_table}' successfully cloned to '{new_table}'")
+            
             # Refresh tree
             self.load_database_objects()
             
             cursor.close()
         except Exception as e:
             messagebox.showerror("Error", f"Failed to clone table: {str(e)}")
+            # Display error message in Query Result panel
+            self.panel_sql_query_editor.display_message(f"Failed to clone table '{original_table}': {str(e)}")
 
     def count_records(self):
         """Count and display records for all selected tables or views, updating their tree nodes."""
@@ -311,6 +319,12 @@ class PanelDatabaseTree:
         if not confirm:
             return
 
+        # Display status message in Query Result panel
+        if table_count == 1:
+            self.panel_sql_query_editor.display_message(f"Emptying table '{tables_to_empty[0][1]}' in schema '{tables_to_empty[0][0]}'...")
+        else:
+            self.panel_sql_query_editor.display_message(f"Emptying {table_count} tables...")
+
         cursor = None
         success_count = 0
         failure_count = 0
@@ -338,10 +352,14 @@ class PanelDatabaseTree:
             # Show result summary
             if failure_count == 0:
                 messagebox.showinfo("Success", f"Successfully emptied {success_count} table(s)")
+                # Display success message in Query Result panel
+                self.panel_sql_query_editor.display_message(f"Successfully emptied {success_count} table(s)")
             else:
                 messagebox.showwarning("Partial Success",
                     f"Successfully emptied {success_count} table(s), {failure_count} failed.\n\n"
                     + "\n".join(failed_tables[:5]))
+                # Display partial success message in Query Result panel
+                self.panel_sql_query_editor.display_message(f"Successfully emptied {success_count} table(s), {failure_count} failed")
 
             # Refresh the tree
             self.load_database_objects()
@@ -349,6 +367,8 @@ class PanelDatabaseTree:
         except Exception as e:
             self.db_connection.current_connection.rollback()
             messagebox.showerror("Error", f"Failed to empty tables: {str(e)}")
+            # Display error message in Query Result panel
+            self.panel_sql_query_editor.display_message(f"Failed to empty tables: {str(e)}")
         finally:
             if cursor:
                 try:
@@ -393,6 +413,12 @@ class PanelDatabaseTree:
         if not confirm:
             return
 
+        # Display status message in Query Result panel
+        if table_count == 1:
+            self.panel_sql_query_editor.display_message(f"Deleting table '{tables_to_delete[0][1]}' in schema '{tables_to_delete[0][0]}'...")
+        else:
+            self.panel_sql_query_editor.display_message(f"Deleting {table_count} tables...")
+
         cursor = None
         success_count = 0
         failure_count = 0
@@ -420,10 +446,14 @@ class PanelDatabaseTree:
             # Show result summary
             if failure_count == 0:
                 messagebox.showinfo("Success", f"Successfully deleted {success_count} table(s)")
+                # Display success message in Query Result panel
+                self.panel_sql_query_editor.display_message(f"Successfully deleted {success_count} table(s)")
             else:
                 messagebox.showwarning("Partial Success",
                     f"Successfully deleted {success_count} table(s), {failure_count} failed.\n\n"
                     + "\n".join(failed_tables[:5]))
+                # Display partial success message in Query Result panel
+                self.panel_sql_query_editor.display_message(f"Successfully deleted {success_count} table(s), {failure_count} failed")
 
             # Refresh the tree
             self.load_database_objects()
@@ -431,6 +461,8 @@ class PanelDatabaseTree:
         except Exception as e:
             self.db_connection.current_connection.rollback()
             messagebox.showerror("Error", f"Failed to delete tables: {str(e)}")
+            # Display error message in Query Result panel
+            self.panel_sql_query_editor.display_message(f"Failed to delete tables: {str(e)}")
         finally:
             if cursor:
                 try:
@@ -453,6 +485,9 @@ class PanelDatabaseTree:
 
         schema = values[0]
         view_name = values[2]
+
+        # Display status message in Query Result panel
+        self.panel_sql_query_editor.display_message(f"Deleting view '{view_name}' in schema '{schema}'...")
 
         confirm = messagebox.askyesno(
             "Confirm Delete",
@@ -477,6 +512,9 @@ class PanelDatabaseTree:
             self.db_connection.current_connection.commit()
             messagebox.showinfo("Success", f"View '{view_name}' deleted successfully")
 
+            # Display success message in Query Result panel
+            self.panel_sql_query_editor.display_message(f"View '{view_name}' successfully deleted")
+
             # Refresh the tree
             self.load_database_objects()
 
@@ -485,6 +523,8 @@ class PanelDatabaseTree:
         except Exception as e:
             self.db_connection.current_connection.rollback()
             messagebox.showerror("Error", f"Failed to delete view: {str(e)}")
+            # Display error message in Query Result panel
+            self.panel_sql_query_editor.display_message(f"Failed to delete view '{view_name}': {str(e)}")
 
 
     def zoom_in(self):
