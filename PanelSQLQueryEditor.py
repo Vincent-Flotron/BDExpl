@@ -1,4 +1,14 @@
 from Panels import *
+import os
+import sys
+import subprocess
+from datetime import datetime
+try:
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment, PatternFill
+    OPENPYXL_AVAILABLE = True
+except ImportError:
+    OPENPYXL_AVAILABLE = False
 
 
 class PanelSQLQueryEditor:
@@ -333,7 +343,7 @@ class PanelSQLQueryEditor:
 
         return tree
 
-    def _create_context_menu(self, tree, copy_command, export_command, copy_all_command=None):
+    def _create_context_menu(self, tree, copy_command, export_command, copy_all_command=None, export_excel_command=None):
         """Helper: Create a context menu for a treeview."""
         commands = [
             ("Copy Selected", copy_command),
@@ -342,10 +352,91 @@ class PanelSQLQueryEditor:
         if copy_all_command:
             commands.append(("Copy All", copy_all_command))
 
+        if export_excel_command:
+            commands.append(("Export to Excel", export_excel_command))
+
         commands.append(("Export to CSV", export_command))
 
         context_menu = Helper.create_context_menu(tree, commands)
         return context_menu
+
+    def _export_to_excel(self, tree, default_name):
+        """Helper: Export treeview data to true Excel .xlsx file using openpyxl."""
+        if not OPENPYXL_AVAILABLE:
+            messagebox.showerror("Error", "openpyxl library not installed. Please run: pip install openpyxl")
+            return
+        
+        # Get default export path from PanelQueryResult config
+        default_path = self.panel_query_result.get_default_export_path()
+        
+        # Generate filename with datetime tag
+        datetime_tag = datetime.now().strftime("%Y%m%d_%H%M%S")
+        default_filename = f"{default_name}_{datetime_tag}.xlsx"
+        
+        filepath = filedialog.asksaveasfilename(
+            title=f"Export {default_name} to Excel",
+            defaultextension=".xlsx",
+            initialfile=default_filename,
+            filetypes=[("Excel Files", "*.xlsx"), ("All Files", "*.*")],
+            initialdir=default_path
+        )
+        
+        if filepath:
+            try:
+                # Create a new workbook
+                wb = Workbook()
+                ws = wb.active
+                ws.title = "Export"
+                
+                # Add header row with bold formatting
+                header_font = Font(bold=True)
+                header_fill = PatternFill(start_color="E7EEF5", end_color="E7EEF5", fill_type="solid")
+                
+                columns = tree['columns']
+                ws.append(columns)
+                
+                # Style the header row
+                for col_num, cell in enumerate(ws[1], 1):
+                    cell.font = header_font
+                    cell.fill = header_fill
+                    cell.alignment = Alignment(horizontal='center')
+                
+                # Add data rows
+                for item in tree.get_children():
+                    row_data = [
+                        str(v).replace('\n', ' ').replace('\r', ' ') if v else ''
+                        for v in tree.item(item)['values']
+                    ]
+                    ws.append(row_data)
+                
+                # Auto-adjust column widths
+                for column in ws.columns:
+                    max_length = 0
+                    column_letter = column[0].column_letter
+                    for cell in column:
+                        try:
+                            if len(str(cell.value)) > max_length:
+                                max_length = len(str(cell.value))
+                        except:
+                            pass
+                    adjusted_width = min(max_length + 2, 50)  # Cap at 50 characters
+                    ws.column_dimensions[column_letter].width = adjusted_width
+                
+                # Save the workbook
+                wb.save(filepath)
+                messagebox.showinfo("Success", f"{default_name} exported to {filepath}")
+                
+                # Ask if user wants to open the file
+                if messagebox.askyesno("Open File", "Do you want to open the exported file?"):
+                    # Open with default OS application
+                    if os.name == 'nt':  # Windows
+                        os.startfile(filepath)
+                    else:
+                        opener = "open" if sys.platform == "darwin" else "xdg-open"
+                        subprocess.call([opener, filepath])
+                        
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to export {default_name}: {str(e)}")
 
     def _export_to_csv(self, tree, default_name):
         """Helper: Export treeview data to CSV."""

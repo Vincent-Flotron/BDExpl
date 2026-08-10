@@ -1,4 +1,14 @@
 from Panels import *
+import os
+import sys
+import subprocess
+from datetime import datetime
+try:
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment, PatternFill
+    OPENPYXL_AVAILABLE = True
+except ImportError:
+    OPENPYXL_AVAILABLE = False
 
 class PanelQueryResult:
     def __init__(self, root, panel_status_bar):
@@ -105,6 +115,7 @@ class PanelQueryResult:
         commands = [
             ("Copy Selected",       self.copy_selected_rows),
             ("Copy All",            self.copy_all_rows),
+            ("Export to Excel",     self.export_to_excel),
             ("Export to CSV",       self.export_to_csv),
             ("Reset Column Widths", self.reset_column_widths),
         ]
@@ -390,16 +401,116 @@ class PanelQueryResult:
         self.root.clipboard_append(header_line + '\n' + '\n'.join(lines))
         self.root.update()
 
+    def get_default_export_path(self):
+        """Get the default export path from config or use Documents folder."""
+        if hasattr(self, 'config') and 'export_path' in self.config:
+            export_path = self.config['export_path']
+            if os.path.isdir(export_path):
+                return export_path
+        # Fallback to Documents folder
+        documents_path = os.path.join(os.path.expanduser('~'), 'Documents')
+        if os.path.isdir(documents_path):
+            return documents_path
+        return os.path.expanduser('~')
+
+    def export_to_excel(self):
+        """Export currently visible rows to a true Excel .xlsx file using openpyxl."""
+        if not self.result_tree.get_children():
+            messagebox.showwarning("No Data", "No data to export")
+            return
+        
+        if not OPENPYXL_AVAILABLE:
+            messagebox.showerror("Error", "openpyxl library not installed. Please run: pip install openpyxl")
+            return
+        
+        # Get default export path
+        default_path = self.get_default_export_path()
+        
+        # Generate filename with datetime tag
+        datetime_tag = datetime.now().strftime("%Y%m%d_%H%M%S")
+        default_filename = f"Export_{datetime_tag}.xlsx"
+        
+        filepath = filedialog.asksaveasfilename(
+            title="Export to Excel",
+            defaultextension=".xlsx",
+            filetypes=[("Excel Files", "*.xlsx"), ("All Files", "*.*")],
+            initialdir=default_path,
+            initialfile=default_filename
+        )
+        
+        if filepath:
+            try:
+                # Create a new workbook
+                wb = Workbook()
+                ws = wb.active
+                ws.title = "Export"
+                
+                # Add header row with bold formatting
+                header_font = Font(bold=True)
+                header_fill = PatternFill(start_color="E7EEF5", end_color="E7EEF5", fill_type="solid")
+                header_style = Font(bold=True)
+                
+                columns = self.result_tree['columns']
+                ws.append(columns)
+                
+                # Style the header row
+                for col_num, cell in enumerate(ws[1], 1):
+                    cell.font = header_font
+                    cell.fill = header_fill
+                    cell.alignment = Alignment(horizontal='center')
+                
+                # Add data rows
+                for item in self.result_tree.get_children():
+                    row_data = [
+                        str(v).replace('\n', ' ').replace('\r', ' ') if v else ''
+                        for v in self.result_tree.item(item)['values']
+                    ]
+                    ws.append(row_data)
+                
+                # Auto-adjust column widths
+                for column in ws.columns:
+                    max_length = 0
+                    column_letter = column[0].column_letter
+                    for cell in column:
+                        try:
+                            if len(str(cell.value)) > max_length:
+                                max_length = len(str(cell.value))
+                        except:
+                            pass
+                    adjusted_width = min(max_length + 2, 50)  # Cap at 50 characters
+                    ws.column_dimensions[column_letter].width = adjusted_width
+                
+                # Save the workbook
+                wb.save(filepath)
+                
+                messagebox.showinfo("Success", f"Data exported to {filepath}")
+                
+                # Ask if user wants to open the file
+                if messagebox.askyesno("Open File", "Do you want to open the exported file?"):
+                    # Open with default OS application
+                    if os.name == 'nt':  # Windows
+                        os.startfile(filepath)
+                    else:
+                        opener = "open" if sys.platform == "darwin" else "xdg-open"
+                        subprocess.call([opener, filepath])
+                        
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to export data: {str(e)}")
+
     def export_to_csv(self):
         """Export currently visible rows to a CSV file."""
         if not self.result_tree.get_children():
             messagebox.showwarning("No Data", "No data to export")
             return
 
+        # Get default export path
+        default_path = self.get_default_export_path()
+        
         filepath = filedialog.asksaveasfilename(
             title="Export to CSV",
             defaultextension=".csv",
-            filetypes=[("CSV Files", "*.csv"), ("All Files", "*.*")]
+            filetypes=[("CSV Files", "*.csv"), ("All Files", "*.*")],
+            initialdir=default_path
         )
 
         if filepath:

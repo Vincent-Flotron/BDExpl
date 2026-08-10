@@ -773,7 +773,8 @@ class PanelDatabaseTree:
             context_menu = self.panel_sql_query_editor._create_context_menu(
                 tree,
                 lambda: self.panel_sql_query_editor._copy_selected_rows(tree),
-                lambda: self.panel_sql_query_editor._export_to_csv(tree, f"{view}_dependencies")
+                lambda: self.panel_sql_query_editor._export_to_csv(tree, f"{view}_dependencies"),
+                export_excel_command=lambda: self.panel_sql_query_editor._export_to_excel(tree, f"{view}_dependencies")
             )
             tree.bind("<Button-3>", lambda event: context_menu.tk_popup(event.x_root, event.y_root))
 
@@ -823,7 +824,8 @@ class PanelDatabaseTree:
             context_menu = self.panel_sql_query_editor._create_context_menu(
                 tree,
                 lambda: self.panel_sql_query_editor._copy_selected_rows(tree),
-                lambda: self.panel_sql_query_editor._export_to_csv(tree, f"{view}_structure")
+                lambda: self.panel_sql_query_editor._export_to_csv(tree, f"{view}_structure"),
+                export_excel_command=lambda: self.panel_sql_query_editor._export_to_excel(tree, f"{view}_structure")
             )
             tree.bind("<Button-3>", lambda event: context_menu.tk_popup(event.x_root, event.y_root))
 
@@ -1321,7 +1323,8 @@ class PanelDatabaseTree:
             context_menu = self.panel_sql_query_editor._create_context_menu(
                 tree,
                 lambda: self.panel_sql_query_editor._copy_selected_rows(tree),
-                lambda: self.panel_sql_query_editor._export_to_csv(tree, f"{package_name}_{procedure_name}_parameters")
+                lambda: self.panel_sql_query_editor._export_to_csv(tree, f"{package_name}_{procedure_name}_parameters"),
+                export_excel_command=lambda: self.panel_sql_query_editor._export_to_excel(tree, f"{package_name}_{procedure_name}_parameters")
             )
             tree.bind("<Button-3>", lambda event: context_menu.tk_popup(event.x_root, event.y_root))
 

@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, filedialog
 import json
 import os
 import signal
@@ -348,6 +348,11 @@ class DBExp:
         query_menu.add_command(label="Execute (F5)",      command=self.panel_sql_query_editor.execute)
         query_menu.add_command(label="Execute Selection", command=self.panel_sql_query_editor.execute_selection)
 
+        # Tools menu
+        tools_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Tools", menu=tools_menu)
+        tools_menu.add_command(label="Settings...", command=self.show_settings_dialog)
+
         # Populate existing connections menu
         self.populate_existing_connections_menu()
 
@@ -415,6 +420,14 @@ class DBExp:
         print("close_keys_tab")
         self.panel_sql_query_editor.close_keys_tab(frame)
 
+    def show_settings_dialog(self):
+        """Show the settings dialog to configure export root path."""
+        dialog = SettingsDialog(self)
+        result = dialog.show()
+        if result:
+            # Save the updated config
+            self.save_config()
+
     def shutdown(self, *args):
         """Gracefully shutdown application and close DB connections"""
         # Save zoom settings before shutting down
@@ -422,6 +435,99 @@ class DBExp:
         self.connection_manager.disconnect()
         self.root.quit()
         self.root.destroy()
+
+
+class SettingsDialog:
+    """Dialog for configuring export settings."""
+    
+    def __init__(self, parent):
+        self.parent = parent
+        self.root = parent.root
+        self.config = parent.config
+        self.result = None
+        
+        # Create top-level window
+        self.dialog = tk.Toplevel(self.root)
+        self.dialog.title("Settings")
+        self.dialog.geometry("500x200")
+        self.dialog.resizable(False, False)
+        
+        # Center the dialog
+        self.dialog.transient(self.root)
+        self.dialog.grab_set()
+        
+        self.setup_ui()
+        
+    def setup_ui(self):
+        """Setup the settings dialog UI."""
+        main_frame = ttk.Frame(self.dialog, padding="20")
+        main_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Export Root Path section
+        path_frame = ttk.LabelFrame(main_frame, text="Export Root Path", padding="10")
+        path_frame.pack(fill=tk.X, pady=10)
+        
+        # Current path label
+        current_path = self.config.get('export_path', os.path.join(os.path.expanduser('~'), 'Documents'))
+        
+        ttk.Label(path_frame, text="Default export location:").pack(anchor=tk.W, pady=(0, 5))
+        
+        self.path_var = tk.StringVar(value=current_path)
+        path_entry = ttk.Entry(path_frame, textvariable=self.path_var, width=50)
+        path_entry.pack(fill=tk.X, pady=(0, 5))
+        
+        # Browse button
+        browse_frame = ttk.Frame(path_frame)
+        browse_frame.pack(fill=tk.X, pady=(5, 0))
+        
+        ttk.Button(browse_frame, text="Browse...", command=self.browse_path).pack(side=tk.LEFT)
+        
+        # Status label
+        self.status_var = tk.StringVar(value="")
+        status_label = ttk.Label(browse_frame, textvariable=self.status_var, foreground='gray')
+        status_label.pack(side=tk.LEFT, padx=10)
+        
+        # Buttons frame
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(fill=tk.X, pady=20)
+        
+        ttk.Button(button_frame, text="OK", command=self.ok_action).pack(side=tk.RIGHT, padx=5)
+        ttk.Button(button_frame, text="Cancel", command=self.cancel_action).pack(side=tk.RIGHT)
+        
+    def browse_path(self):
+        """Open folder browser dialog."""
+        current_path = self.path_var.get()
+        if os.path.isdir(current_path):
+            initial_dir = current_path
+        else:
+            initial_dir = os.path.expanduser('~')
+        
+        selected_dir = filedialog.askdirectory(title="Select Export Root Path", initialdir=initial_dir)
+        if selected_dir:
+            self.path_var.set(selected_dir)
+            self.status_var.set("Path selected")
+            
+    def ok_action(self):
+        """Handle OK button click."""
+        selected_path = self.path_var.get()
+        if os.path.isdir(selected_path):
+            self.config['export_path'] = selected_path
+            self.parent.save_config()  # Save to CONFIG_FILE
+            self.result = True
+            self.dialog.destroy()
+        else:
+            messagebox.showerror("Invalid Path", "The selected path is not a valid directory.")
+            
+    def cancel_action(self):
+        """Handle Cancel button click."""
+        self.result = False
+        self.dialog.destroy()
+        
+    def show(self):
+        """Show the dialog and return the result."""
+        self.dialog.wait_window()
+        return self.result
+
 
 def main():
     root = tk.Tk()
