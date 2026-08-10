@@ -2,7 +2,7 @@ from Panels import *
 import os
 import sys
 import subprocess
-from datetime import datetime
+from datetime import datetime, date
 try:
     from openpyxl import Workbook
     from openpyxl.styles import Font, Alignment, PatternFill
@@ -244,7 +244,7 @@ class PanelSQLQueryEditor:
                 line_end = len(current_text)
             
             # Replace the entire ORDER BY line
-            new_text = f"{prefix}ORDER BY {col_name} {direction}"
+            new_text = f"{prefix}ORDER BY \"{col_name}\" {direction}"
             
             self.insert_edit_separator_in_actual_tab()
             widget.delete(f"1.0+{line_start}c", f"1.0+{line_end}c")
@@ -265,7 +265,7 @@ class PanelSQLQueryEditor:
             prefix = "\n" if line_start > 0 and current_text[line_start-1] != '\n' else ""
             
             self.insert_edit_separator_in_actual_tab()
-            widget.insert(insert_pos, f"{prefix}ORDER BY {col_name} {direction}\n")
+            widget.insert(insert_pos, f"{prefix}ORDER BY \"{col_name}\" {direction}\n")
             widget.edit_separator()
             widget.see(insert_pos)
             widget.focus_set()
@@ -276,7 +276,7 @@ class PanelSQLQueryEditor:
             prefix = "\n" if current_text and not current_text.endswith("\n") else ""
 
             self.insert_edit_separator_in_actual_tab()
-            widget.insert(tk.END, f"{prefix}ORDER BY {col_name} {direction}")
+            widget.insert(tk.END, f"{prefix}ORDER BY \"{col_name}\" {direction}")
             widget.edit_separator()
             widget.see(tk.END)
             widget.focus_set()
@@ -305,7 +305,7 @@ class PanelSQLQueryEditor:
             for value in row:
                 if value is None:
                     formatted_row.append('')
-                elif isinstance(value, (datetime.datetime, datetime.date)):
+                elif isinstance(value, (datetime, date)):
                     formatted_row.append(str(value))
                 elif isinstance(value, Decimal):
                     formatted_row.append(str(value))
@@ -343,33 +343,90 @@ class PanelSQLQueryEditor:
 
         return tree
 
-    def _create_context_menu(self, tree, copy_command, export_command, copy_all_command=None, export_excel_command=None):
+    def _create_context_menu(self, tree, copy_command, export_command, copy_all_command=None, export_excel_command=None, open_excel_command=None):
         """Helper: Create a context menu for a treeview."""
         commands = [
             ("Copy Selected", copy_command),
         ]
-
+        
         if copy_all_command:
             commands.append(("Copy All", copy_all_command))
-
+        
+        if open_excel_command:
+            commands.append(("Open into Excel", open_excel_command))
+        
         if export_excel_command:
             commands.append(("Export to Excel", export_excel_command))
-
+        
         commands.append(("Export to CSV", export_command))
-
+        
         context_menu = Helper.create_context_menu(tree, commands)
         return context_menu
 
+    def _create_excel_workbook(self, tree):
+        """Create an Excel workbook from treeview data.
+        
+        Args:
+            tree: The treeview widget containing the data
+            
+        Returns:
+            Workbook: The created openpyxl Workbook
+        """
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Export"
+        
+        # Add header row with bold formatting
+        header_font = Font(bold=True)
+        header_fill = PatternFill(start_color="E7EEF5", end_color="E7EEF5", fill_type="solid")
+        
+        columns = tree['columns']
+        ws.append(columns)
+        
+        # Style the header row
+        for col_num, cell in enumerate(ws[1], 1):
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal='center')
+        
+        # Add data rows
+        for item in tree.get_children():
+            row_data = [
+                str(v).replace('\n', ' ').replace('\r', ' ') if v else ''
+                for v in tree.item(item)['values']
+            ]
+            ws.append(row_data)
+        
+        # Auto-adjust column widths
+        for column in ws.columns:
+            max_length = 0
+            column_letter = column[0].column_letter
+            for cell in column:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = min(max_length + 2, 50)
+            ws.column_dimensions[column_letter].width = adjusted_width
+        
+        return wb
+    
+    def _open_file(self, filepath):
+        """Open a file with the default OS application."""
+        if os.name == 'nt':  # Windows
+            os.startfile(filepath)
+        else:
+            opener = "open" if sys.platform == "darwin" else "xdg-open"
+            subprocess.call([opener, filepath])
+    
     def _export_to_excel(self, tree, default_name):
-        """Helper: Export treeview data to true Excel .xlsx file using openpyxl."""
+        """Helper: Export treeview data to Excel with file dialog."""
         if not OPENPYXL_AVAILABLE:
             messagebox.showerror("Error", "openpyxl library not installed. Please run: pip install openpyxl")
             return
         
-        # Get default export path from PanelQueryResult config
         default_path = self.panel_query_result.get_default_export_path()
-        
-        # Generate filename with datetime tag
         datetime_tag = datetime.now().strftime("%Y%m%d_%H%M%S")
         default_filename = f"{default_name}_{datetime_tag}.xlsx"
         
@@ -383,60 +440,32 @@ class PanelSQLQueryEditor:
         
         if filepath:
             try:
-                # Create a new workbook
-                wb = Workbook()
-                ws = wb.active
-                ws.title = "Export"
-                
-                # Add header row with bold formatting
-                header_font = Font(bold=True)
-                header_fill = PatternFill(start_color="E7EEF5", end_color="E7EEF5", fill_type="solid")
-                
-                columns = tree['columns']
-                ws.append(columns)
-                
-                # Style the header row
-                for col_num, cell in enumerate(ws[1], 1):
-                    cell.font = header_font
-                    cell.fill = header_fill
-                    cell.alignment = Alignment(horizontal='center')
-                
-                # Add data rows
-                for item in tree.get_children():
-                    row_data = [
-                        str(v).replace('\n', ' ').replace('\r', ' ') if v else ''
-                        for v in tree.item(item)['values']
-                    ]
-                    ws.append(row_data)
-                
-                # Auto-adjust column widths
-                for column in ws.columns:
-                    max_length = 0
-                    column_letter = column[0].column_letter
-                    for cell in column:
-                        try:
-                            if len(str(cell.value)) > max_length:
-                                max_length = len(str(cell.value))
-                        except:
-                            pass
-                    adjusted_width = min(max_length + 2, 50)  # Cap at 50 characters
-                    ws.column_dimensions[column_letter].width = adjusted_width
-                
-                # Save the workbook
+                wb = self._create_excel_workbook(tree)
                 wb.save(filepath)
                 messagebox.showinfo("Success", f"{default_name} exported to {filepath}")
                 
-                # Ask if user wants to open the file
                 if messagebox.askyesno("Open File", "Do you want to open the exported file?"):
-                    # Open with default OS application
-                    if os.name == 'nt':  # Windows
-                        os.startfile(filepath)
-                    else:
-                        opener = "open" if sys.platform == "darwin" else "xdg-open"
-                        subprocess.call([opener, filepath])
+                    self._open_file(filepath)
                         
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to export {default_name}: {str(e)}")
+    
+    def _open_into_excel(self, tree, default_name):
+        """Helper: Export treeview data directly to Excel and open immediately."""
+        if not OPENPYXL_AVAILABLE:
+            messagebox.showerror("Error", "openpyxl library not installed. Please run: pip install openpyxl")
+            return
+        
+        default_path = self.panel_query_result.get_default_export_path()
+        datetime_tag = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filepath = os.path.join(default_path, f"{default_name}_{datetime_tag}.xlsx")
+        
+        try:
+            wb = self._create_excel_workbook(tree)
+            wb.save(filepath)
+            self._open_file(filepath)
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to export {default_name}: {str(e)}")
 
     def _export_to_csv(self, tree, default_name):
         """Helper: Export treeview data to CSV."""
@@ -516,7 +545,9 @@ class PanelSQLQueryEditor:
                 tree,
                 lambda: self._copy_selected_rows(tree),
                 lambda: self._export_to_csv(tree, f"{table}_keys"),
-                lambda: self._copy_all_to_clipboard(tree)
+                lambda: self._copy_all_to_clipboard(tree),
+                export_excel_command=lambda: self._export_to_excel(tree, f"{table}_keys"),
+                open_excel_command=lambda: self._open_into_excel(tree, f"{table}_keys")
             )
             tree.bind("<Button-3>", lambda event: context_menu.tk_popup(event.x_root, event.y_root))
 
@@ -539,7 +570,9 @@ class PanelSQLQueryEditor:
                 tree,
                 lambda: self._copy_selected_rows(tree),
                 lambda: self._export_to_csv(tree, f"{table}_structure"),
-                lambda: self._copy_all_to_clipboard(tree)
+                lambda: self._copy_all_to_clipboard(tree),
+                export_excel_command=lambda: self._export_to_excel(tree, f"{table}_structure"),
+                open_excel_command=lambda: self._open_into_excel(tree, f"{table}_structure")
             )
             tree.bind("<Button-3>", lambda event: context_menu.tk_popup(event.x_root, event.y_root))
 
@@ -571,7 +604,9 @@ class PanelSQLQueryEditor:
                 tree,
                 lambda: self._copy_selected_rows(tree),
                 lambda: self._export_to_csv(tree, f"{table}_indexes"),
-                lambda: self._copy_all_to_clipboard(tree)
+                lambda: self._copy_all_to_clipboard(tree),
+                export_excel_command=lambda: self._export_to_excel(tree, f"{table}_indexes"),
+                open_excel_command=lambda: self._open_into_excel(tree, f"{table}_indexes")
             )
             tree.bind("<Button-3>", lambda event: context_menu.tk_popup(event.x_root, event.y_root))
 

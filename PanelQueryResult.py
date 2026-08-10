@@ -115,6 +115,7 @@ class PanelQueryResult:
         commands = [
             ("Copy Selected",       self.copy_selected_rows),
             ("Copy All",            self.copy_all_rows),
+            ("Open into Excel",     self.open_into_excel),
             ("Export to Excel",     self.export_to_excel),
             ("Export to CSV",       self.export_to_csv),
             ("Reset Column Widths", self.reset_column_widths),
@@ -345,11 +346,11 @@ class PanelQueryResult:
         """Show a small context menu to insert ORDER BY ASC/DESC into the SQL editor."""
         menu = tk.Menu(self.root, tearoff=0)
         menu.add_command(
-            label=f"ORDER BY {col_name} ASC",
+            label=f"ORDER BY \"{col_name}\" ASC",
             command=lambda: self._insert_order_by(col_name, "ASC")
         )
         menu.add_command(
-            label=f"ORDER BY {col_name} DESC",
+            label=f"ORDER BY \"{col_name}\" DESC",
             command=lambda: self._insert_order_by(col_name, "DESC")
         )
         menu.tk_popup(event.x_root, event.y_root)
@@ -413,6 +414,85 @@ class PanelQueryResult:
             return documents_path
         return os.path.expanduser('~')
 
+    def _create_excel_workbook(self, filepath):
+        """Create and save an Excel workbook from the result tree data.
+        
+        Args:
+            filepath: Path where the workbook will be saved
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Export"
+        
+        # Add header row with bold formatting
+        header_font = Font(bold=True)
+        header_fill = PatternFill(start_color="E7EEF5", end_color="E7EEF5", fill_type="solid")
+        
+        columns = self.result_tree['columns']
+        ws.append(columns)
+        
+        # Style the header row
+        for col_num, cell in enumerate(ws[1], 1):
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal='center')
+        
+        # Add data rows
+        for item in self.result_tree.get_children():
+            row_data = [
+                str(v).replace('\n', ' ').replace('\r', ' ') if v else ''
+                for v in self.result_tree.item(item)['values']
+            ]
+            ws.append(row_data)
+        
+        # Auto-adjust column widths
+        for column in ws.columns:
+            max_length = 0
+            column_letter = column[0].column_letter
+            for cell in column:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = min(max_length + 2, 50)  # Cap at 50 characters
+            ws.column_dimensions[column_letter].width = adjusted_width
+        
+        wb.save(filepath)
+        return True
+    
+    def _open_file(self, filepath):
+        """Open a file with the default OS application."""
+        if os.name == 'nt':  # Windows
+            os.startfile(filepath)
+        else:
+            opener = "open" if sys.platform == "darwin" else "xdg-open"
+            subprocess.call([opener, filepath])
+    
+    def open_into_excel(self):
+        """Export directly to Excel in the default path and open it immediately."""
+        if not self.result_tree.get_children():
+            messagebox.showwarning("No Data", "No data to export")
+            return
+        
+        if not OPENPYXL_AVAILABLE:
+            messagebox.showerror("Error", "openpyxl library not installed. Please run: pip install openpyxl")
+            return
+        
+        # Get default export path and generate filename
+        default_path = self.get_default_export_path()
+        datetime_tag = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filepath = os.path.join(default_path, f"Export_{datetime_tag}.xlsx")
+        
+        try:
+            if self._create_excel_workbook(filepath):
+                self._open_file(filepath)
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to export data: {str(e)}")
+    
     def export_to_excel(self):
         """Export currently visible rows to a true Excel .xlsx file using openpyxl."""
         if not self.result_tree.get_children():
@@ -440,59 +520,12 @@ class PanelQueryResult:
         
         if filepath:
             try:
-                # Create a new workbook
-                wb = Workbook()
-                ws = wb.active
-                ws.title = "Export"
-                
-                # Add header row with bold formatting
-                header_font = Font(bold=True)
-                header_fill = PatternFill(start_color="E7EEF5", end_color="E7EEF5", fill_type="solid")
-                header_style = Font(bold=True)
-                
-                columns = self.result_tree['columns']
-                ws.append(columns)
-                
-                # Style the header row
-                for col_num, cell in enumerate(ws[1], 1):
-                    cell.font = header_font
-                    cell.fill = header_fill
-                    cell.alignment = Alignment(horizontal='center')
-                
-                # Add data rows
-                for item in self.result_tree.get_children():
-                    row_data = [
-                        str(v).replace('\n', ' ').replace('\r', ' ') if v else ''
-                        for v in self.result_tree.item(item)['values']
-                    ]
-                    ws.append(row_data)
-                
-                # Auto-adjust column widths
-                for column in ws.columns:
-                    max_length = 0
-                    column_letter = column[0].column_letter
-                    for cell in column:
-                        try:
-                            if len(str(cell.value)) > max_length:
-                                max_length = len(str(cell.value))
-                        except:
-                            pass
-                    adjusted_width = min(max_length + 2, 50)  # Cap at 50 characters
-                    ws.column_dimensions[column_letter].width = adjusted_width
-                
-                # Save the workbook
-                wb.save(filepath)
-                
-                messagebox.showinfo("Success", f"Data exported to {filepath}")
-                
-                # Ask if user wants to open the file
-                if messagebox.askyesno("Open File", "Do you want to open the exported file?"):
-                    # Open with default OS application
-                    if os.name == 'nt':  # Windows
-                        os.startfile(filepath)
-                    else:
-                        opener = "open" if sys.platform == "darwin" else "xdg-open"
-                        subprocess.call([opener, filepath])
+                if self._create_excel_workbook(filepath):
+                    messagebox.showinfo("Success", f"Data exported to {filepath}")
+                    
+                    # Ask if user wants to open the file
+                    if messagebox.askyesno("Open File", "Do you want to open the exported file?"):
+                        self._open_file(filepath)
                         
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to export data: {str(e)}")

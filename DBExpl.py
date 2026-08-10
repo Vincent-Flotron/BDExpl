@@ -449,7 +449,7 @@ class SettingsDialog:
         # Create top-level window
         self.dialog = tk.Toplevel(self.root)
         self.dialog.title("Settings")
-        self.dialog.geometry("500x200")
+        self.dialog.geometry("500x270")
         self.dialog.resizable(False, False)
         
         # Center the dialog
