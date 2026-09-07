@@ -166,6 +166,13 @@ class PanelSQLQueryEditor:
             style='SQLHelper.TButton'
         ).pack(side=tk.LEFT, padx=2)
 
+        ttk.Button(
+            helper_frame,
+            text="SET SCHEMA",
+            command=self.insert_set_schema_clause,
+            style='SQLHelper.TButton'
+        ).pack(side=tk.LEFT, padx=2)
+
     def insert_limit_clause(self, limit):
         """Insert the appropriate LIMIT clause based on database type"""
         if not self.db_connection.current_connection:
@@ -177,6 +184,60 @@ class PanelSQLQueryEditor:
         clause  = queries.limit_results_to(limit)
 
         self.insert_at_cursor(clause)
+
+    def insert_set_schema_clause(self):
+        """Insert SET SCHEMA query based on selected schema and database type"""
+        if not self.db_connection.current_connection:
+            messagebox.showwarning("Not Connected", "Please connect to a database first")
+            return
+        
+        # Get queries instance
+        queries = self.get_queries_instance()
+        
+        # Fetch available schemas
+        try:
+            cursor = self.db_connection.current_connection.cursor()
+            cursor = self.query_manager.cursor_execute(queries.get_all_schemas_with_their_table_count(), cursor)
+            schemas = cursor.fetchall()
+            
+            if not schemas:
+                messagebox.showinfo("No Schemas", "No schemas available in the current database")
+                return
+            
+            # Extract schema names for dropdown
+            schema_names = [schema[0] for schema in schemas]
+            
+            # Create dropdown dialog
+            dialog = tk.Toplevel(self.parent)
+            dialog.title("Set Schema")
+            dialog.geometry("300x100")
+            dialog.transient(self.root)
+            dialog.grab_set()
+            
+            ttk.Label(dialog, text="Select Schema:").pack(pady=10)
+            
+            combobox = ttk.Combobox(dialog, values=schema_names, state="readonly", width=30)
+            combobox.pack(pady=5)
+            combobox.bind("<<ComboboxSelected>>", lambda e: self._apply_schema_selection(combobox.get(), queries, dialog))
+            
+            # Focus on combobox
+            combobox.focus_set()
+            
+            # Center dialog
+            dialog.update_idletasks()
+            x = dialog.winfo_screenwidth() // 2 - 150
+            y = dialog.winfo_screenheight() // 2 - 50
+            dialog.geometry(f"+{x}+{y}")
+            
+        except Exception as e:
+            self.display_error(f"Failed to fetch schemas: {str(e)}")
+
+    def _apply_schema_selection(self, schema, queries, dialog):
+        """Apply the selected schema and close dialog"""
+        if schema:
+            schema_sql = queries.get_set_schema_sql(schema)
+            self.insert_at_cursor(schema_sql)
+        dialog.destroy()
 
     def get_connection_type(self):
         """Get the type of the current database connection"""

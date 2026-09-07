@@ -164,6 +164,11 @@ class Queries(ABC):
     def limit_results_to(self, limit_value):
         pass
 
+    @abstractmethod
+    def get_set_schema_sql(self, schema):
+        """Generate SQL to set the schema for the current session"""
+        pass
+
 # ======================================================================
 # ORACLE QUERIES
 # ======================================================================
@@ -598,6 +603,10 @@ class QueriesOracle(Queries):
     def limit_results_to(limit_value):
         return f"FETCH FIRST {limit_value} ROWS ONLY"
 
+    @staticmethod
+    def get_set_schema_sql(schema):
+        return f"ALTER SESSION SET CURRENT_SCHEMA = {schema}"
+
 # ======================================================================
 # SQLITE QUERIES
 # ======================================================================
@@ -911,6 +920,11 @@ class QueriesSQLite(Queries):
     @staticmethod
     def limit_results_to(limit_value):
         return  f"LIMIT {limit_value}"
+
+    @staticmethod
+    def get_set_schema_sql(schema):
+        # SQLite doesn't have schemas in the traditional sense
+        return "-- SQLite uses a single database; no schema setting required"
 
 # ======================================================================
 # POSTGRESQL QUERIES
@@ -1302,6 +1316,10 @@ class QueriesPostgreSQL(Queries):
     @staticmethod
     def limit_results_to(limit_value):
         return  f"LIMIT {limit_value}"
+
+    @staticmethod
+    def get_set_schema_sql(schema):
+        return f"SET search_path TO {schema}"
 
 # ======================================================================
 # MICROSOFT SQL SERVER QUERIES
@@ -1753,6 +1771,11 @@ class QueriesMSSQL(Queries):
     @staticmethod
     def limit_results_to(limit_value):
         return  f"SELECT TOP({limit_value})"
+
+    @staticmethod
+    def get_set_schema_sql(schema):
+        # SQL Server doesn't have session-level schema setting
+        return f"-- SQL Server uses schema-qualified names: [{schema}].[table_name]"
 
 # ======================================================================
 # QUERY MANAGER

@@ -51,7 +51,8 @@ class SQLText(Text):
         self.bind("<Key>",             self.reset_ctrl_k_flag, add="+")
 
         # Define regex patterns for SQL syntax
-        self.sql_keywords = r"\b(ALL|ALTER|ALTER\s+SESSION|ALTER\s+SYSTEM|ANALYZE|AND|ANY|AS|AUDIT|AUTONOMOUS\s+TRANSACTION|BEGIN|"\
+        self.sql_keywords = r"\b(TO|ALL|ALTER|ALTER\s+SESSION|ALTER\s+SYSTEM|ANALYZE|AND|ANY|AS|AUDIT|AUTONOMOUS\s+TRANSACTION|BEGIN|"\
+            + r"ON\s+DELETE\s+CASCADE|"\
             + r"BETWEEN|BULK\s+COLLECT|CALL|CASE|CHECK|CLOSE|CLUSTER|COMMENT|COMMIT|COMMITTED|"\
             + r"CONNECT|CONNECT\s+BY|CONSTRAINT|CONTINUE|CREATE|CROSS\s+JOIN|CURSOR|DECLARE|DECODE|DEFAULT|"\
             + r"DELETE|DISCONNECT|DISTINCT|DROP|DUAL|DYNAMIC|ELSE|ELSIF|END|EXCEPTION|"\
@@ -66,7 +67,7 @@ class SQLText(Text):
             + r"TRUNCATE|TYPE|UNION|UNION\s+ALL|UNIQUE|UNLIMITED|UPDATE|USER|USING|WHEN|"\
             + r"WHERE|WHILE|WITH|TABLE|VALUES|ADD|REFERENCES|SET|"\
             + r"LIMIT|ON|VIEW|INTO|TIME +ZONE|WITHOUT +TIME +ZONE|RETURNS|TRIGGER|LANGUAGE|BEFORE|EACH|ROW|RESTRICT|REPLACE|"\
-            + r"NOTICE|RETURNING|YEAR)\b"
+            + r"NOTICE|RETURNING|YEAR|FALSE|TRUE)\b"
 
         self.sql_operators = r"=|!=|<>|<=|>=|<|>|\+|-|\*|/|%"
 
@@ -82,7 +83,7 @@ class SQLText(Text):
             + r"TRUNC|UID|UPPER|USER|VARIANCE|VSIZE|clock_timestamp|NOW|ENUM)\b"
 
         self.sql_type = r"\b(TIMESTAMPG|TIMESTAMP|TIMESTAMPTZ|SERIAL|BIGSERIAL|VARCHAR|NUMERIC|BIGINT|"\
-            + r"TEXT|INTEGER|INT|DATE|plpgsql)\b"
+            + r"TEXT|INTEGER|INT|DATE|BOOLEAN|plpgsql)\b"
 
         self.sql_string_pattern  = r"'[^'\r\n]*'"
         self.sql_string_pattern2 = r'"[^"\r\n]*"'
