@@ -1,0 +1,39 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: DBExpl",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}\\DBExpl.py",
+            "console": "integratedTerminal",
+            "python": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+            "args": []
+        },
+        {
+            "name": "Python: Current File",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "python": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+            "args": []
+        },
+        {
+            "name": "Python: Debug Scripts",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}\\debug_scripts\\${input:scriptName}",
+            "console": "integratedTerminal",
+            "python": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+            "args": []
+        }
+    ],
+    "inputs": [
+        {
+            "id": "scriptName",
+            "type": "promptString",
+            "description": "Enter the script name (e.g., testcase.py)"
+        }
+    ]
+}

@@ -1,0 +1,20 @@
+{
+    "python.defaultInterpreterPath": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+    "python.terminal.activateEnvironment": true,
+    "python.analysis.extraPaths": [],
+    "python.autoComplete.extraPaths": [],
+    "[python]": {
+        "editor.defaultFormatter": "ms-python.black-formatter",
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+            "source.organizeImports": "explicit"
+        }
+    },
+    "terminal.integrated.profiles.windows": {
+        "Python (venv)": {
+            "path": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+            "args": ["-c", "import sys; print(sys.executable)"],
+            "icon": "terminal-python"
+        }
+    }
+}
