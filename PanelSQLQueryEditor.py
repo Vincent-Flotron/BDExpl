@@ -361,6 +361,10 @@ class PanelSQLQueryEditor:
             tree.column(col, minwidth=100, width=150, stretch=tk.NO, anchor=tk.W)
             tree.heading(col, text=col, anchor=tk.W)
 
+        # Store raw data on the tree widget for exports (without formatting)
+        tree.raw_data_columns = list(columns)
+        tree.raw_data_rows = list(rows)
+
         for row in rows:
             formatted_row = []
             for value in row:
@@ -441,7 +445,8 @@ class PanelSQLQueryEditor:
         header_font = Font(bold=True)
         header_fill = PatternFill(start_color="E7EEF5", end_color="E7EEF5", fill_type="solid")
         
-        columns = tree['columns']
+        # Use raw columns if available (to avoid formatted column names)
+        columns = tree.raw_data_columns if hasattr(tree, 'raw_data_columns') and tree.raw_data_columns else tree['columns']
         ws.append(columns)
         
         # Style the header row
@@ -450,13 +455,21 @@ class PanelSQLQueryEditor:
             cell.fill = header_fill
             cell.alignment = Alignment(horizontal='center')
         
-        # Add data rows
-        for item in tree.get_children():
-            row_data = [
-                str(v).replace('\n', ' ').replace('\r', ' ') if v else ''
-                for v in tree.item(item)['values']
-            ]
-            ws.append(row_data)
+        # Add data rows - use raw data if available to avoid thousands separators
+        if hasattr(tree, 'raw_data_rows') and tree.raw_data_rows:
+            for row in tree.raw_data_rows:
+                row_data = [
+                    str(v).replace('\n', ' ').replace('\r', ' ') if v else ''
+                    for v in row
+                ]
+                ws.append(row_data)
+        else:
+            for item in tree.get_children():
+                row_data = [
+                    str(v).replace('\n', ' ').replace('\r', ' ') if v else ''
+                    for v in tree.item(item)['values']
+                ]
+                ws.append(row_data)
         
         # Auto-adjust column widths
         for column in ws.columns:
@@ -541,9 +554,20 @@ class PanelSQLQueryEditor:
             try:
                 with open(filepath, 'w', newline='', encoding='utf-8') as f:
                     writer = csv.writer(f, delimiter='\t')
-                    writer.writerow(tree['columns'])
-                    for item in tree.get_children():
-                        writer.writerow(tree.item(item)['values'])
+                    # Use raw columns if available (to avoid formatted column names)
+                    columns = tree.raw_data_columns if hasattr(tree, 'raw_data_columns') and tree.raw_data_columns else tree['columns']
+                    writer.writerow(columns)
+                    # Use raw data rows if available to avoid thousands separators
+                    if hasattr(tree, 'raw_data_rows') and tree.raw_data_rows:
+                        for row in tree.raw_data_rows:
+                            row_data = [
+                                str(v).replace('\n', ' ').replace('\r', ' ') if v else ''
+                                for v in row
+                            ]
+                            writer.writerow(row_data)
+                    else:
+                        for item in tree.get_children():
+                            writer.writerow(tree.item(item)['values'])
                 messagebox.showinfo("Success", f"{default_name} exported to {filepath}")
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to export {default_name}: {str(e)}")

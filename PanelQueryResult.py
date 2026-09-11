@@ -25,6 +25,8 @@ class PanelQueryResult:
         self.reg_thousand_sep6       = re.compile(r"^(-?)(\d{1,3})(\d{3})(\d{3})(\d{3})(\d{3})(\d{3})(\d{3})(?:(\.)(\d+))?$")
         self.thousand_sep            = "'"
         self.cols_anchor             = {}
+        self.raw_data_rows           = []   # Store raw data for exports without formatting
+        self.raw_data_columns        = []   # Store column names for exports
 
     def set_sql_query_editor(self, panel_sql_query_editor):
         """Wire up the SQL editor panel so ORDER BY clicks can insert text there."""
@@ -190,6 +192,10 @@ class PanelQueryResult:
 
         self.result_tree['columns'] = unique_columns
         self.result_tree.column('#0', width=0, stretch=tk.NO)
+
+        # Store raw data for exports (before formatting)
+        self.raw_data_columns = unique_columns
+        self.raw_data_rows = list(rows)
 
         # Indentify justification for columns
         self.cols_anchor = {}
@@ -431,7 +437,8 @@ class PanelQueryResult:
         header_font = Font(bold=True)
         header_fill = PatternFill(start_color="E7EEF5", end_color="E7EEF5", fill_type="solid")
         
-        columns = self.result_tree['columns']
+        # Use raw columns (stored before formatting)
+        columns = self.raw_data_columns if self.raw_data_columns else self.result_tree['columns']
         ws.append(columns)
         
         # Style the header row
@@ -440,13 +447,21 @@ class PanelQueryResult:
             cell.fill = header_fill
             cell.alignment = Alignment(horizontal='center')
         
-        # Add data rows
-        for item in self.result_tree.get_children():
-            row_data = [
-                str(v).replace('\n', ' ').replace('\r', ' ') if v else ''
-                for v in self.result_tree.item(item)['values']
-            ]
-            ws.append(row_data)
+        # Add data rows - use raw data to avoid thousands separators in export
+        if self.raw_data_rows:
+            for row in self.raw_data_rows:
+                row_data = [
+                    str(v).replace('\n', ' ').replace('\r', ' ') if v else ''
+                    for v in row
+                ]
+                ws.append(row_data)
+        else:
+            for item in self.result_tree.get_children():
+                row_data = [
+                    str(v).replace('\n', ' ').replace('\r', ' ') if v else ''
+                    for v in self.result_tree.item(item)['values']
+                ]
+                ws.append(row_data)
         
         # Auto-adjust column widths
         for column in ws.columns:
@@ -550,13 +565,23 @@ class PanelQueryResult:
             try:
                 with open(filepath, 'w', newline='', encoding='utf-8') as f:
                     writer = csv.writer(f, delimiter='\t')
-                    writer.writerow(self.result_tree['columns'])
-                    for item in self.result_tree.get_children():
-                        row = [
-                            str(v).replace('\n', ' ').replace('\r', ' ') if v else ''
-                            for v in self.result_tree.item(item)['values']
-                        ]
-                        writer.writerow(row)
+                    # Use raw columns and rows to avoid thousands separators in export
+                    columns = self.raw_data_columns if self.raw_data_columns else self.result_tree['columns']
+                    writer.writerow(columns)
+                    if self.raw_data_rows:
+                        for row in self.raw_data_rows:
+                            row_data = [
+                                str(v).replace('\n', ' ').replace('\r', ' ') if v else ''
+                                for v in row
+                            ]
+                            writer.writerow(row_data)
+                    else:
+                        for item in self.result_tree.get_children():
+                            row = [
+                                str(v).replace('\n', ' ').replace('\r', ' ') if v else ''
+                                for v in self.result_tree.item(item)['values']
+                            ]
+                            writer.writerow(row)
                 messagebox.showinfo("Success", f"Data exported to {filepath}")
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to export data: {str(e)}")
