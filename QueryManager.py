@@ -145,6 +145,21 @@ class Queries(ABC):
         """Generate SQL to copy a table to a different schema"""
         pass
 
+    @staticmethod
+    @abstractmethod
+    def generate_create_table_sql(schema=None, table_name=None, columns=None):
+        """Generate CREATE TABLE SQL statement.
+        
+        Args:
+            schema: Optional schema name to use as template
+            table_name: Optional table name to use as template
+            columns: Optional list of column definitions from template table
+            
+        Returns:
+            str: CREATE TABLE SQL statement
+        """
+        pass
+
     @abstractmethod
     def delete_table_sql(schema, table):
         pass
@@ -594,6 +609,27 @@ class QueriesOracle(Queries):
         return f"CREATE TABLE {target_schema}.{table_name} AS SELECT * FROM {source_schema}.{table_name}"
 
     @staticmethod
+    def generate_create_table_sql(schema=None, table_name=None, columns=None):
+        """Generate Oracle CREATE TABLE SQL statement."""
+        if schema and table_name and columns:
+            # Generate based on existing table structure
+            column_defs = []
+            for col in columns:
+                col_name = col[0]
+                col_type = col[1]
+                nullable = "NOT NULL" if col[5] == 'N' else ""
+                column_defs.append(f"    {col_name} {col_type} {nullable}".strip())
+            columns_sql = ",\n".join(column_defs)
+            return f"CREATE TABLE {schema}.{table_name}_copy (\n{columns_sql}\n);"
+        else:
+            # Return template
+            return """CREATE TABLE MyTable (
+    id NUMBER PRIMARY KEY,
+    name VARCHAR2(100) NOT NULL,
+    created_date DATE DEFAULT SYSDATE
+);"""
+
+    @staticmethod
     def delete_table_sql(schema, table):
         return f"DROP TABLE {schema}.{table} PURGE"
 
@@ -914,6 +950,27 @@ class QueriesSQLite(Queries):
     def copy_table_to_schema(source_schema, table_name, target_schema):
         # SQLite ignores schema parameter, table name is unique in the database
         return f"CREATE TABLE {table_name} AS SELECT * FROM {table_name}"
+
+    @staticmethod
+    def generate_create_table_sql(schema=None, table_name=None, columns=None):
+        """Generate SQLite CREATE TABLE SQL statement."""
+        if schema and table_name and columns:
+            # Generate based on existing table structure
+            column_defs = []
+            for col in columns:
+                col_name = col[0]
+                col_type = col[1]
+                nullable = "NOT NULL" if col[4] == 'N' else ""
+                column_defs.append(f"    {col_name} {col_type} {nullable}".strip())
+            columns_sql = ",\n".join(column_defs)
+            return f"CREATE TABLE {table_name}_copy (\n{columns_sql}\n);"
+        else:
+            # Return template
+            return """CREATE TABLE MyTable (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    created_date TEXT DEFAULT CURRENT_TIMESTAMP
+);"""
 
     # Add to QueriesSQLite class
     @staticmethod
@@ -1317,6 +1374,27 @@ class QueriesPostgreSQL(Queries):
     @staticmethod
     def copy_table_to_schema(source_schema, table_name, target_schema):
         return f'CREATE TABLE "{target_schema}"."{table_name}" AS SELECT * FROM "{source_schema}"."{table_name}"'
+
+    @staticmethod
+    def generate_create_table_sql(schema=None, table_name=None, columns=None):
+        """Generate PostgreSQL CREATE TABLE SQL statement."""
+        if schema and table_name and columns:
+            # Generate based on existing table structure
+            column_defs = []
+            for col in columns:
+                col_name = col[0]
+                col_type = col[1]
+                nullable = "NOT NULL" if col[7] == 'N' else ""
+                column_defs.append(f'    "{col_name}" {col_type} {nullable}'.strip())
+            columns_sql = ",\n".join(column_defs)
+            return f'CREATE TABLE "{schema}"."{table_name}_copy" (\n{columns_sql}\n);'
+        else:
+            # Return template
+            return """CREATE TABLE MyTable (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);"""
 
     @staticmethod
     def delete_table_sql(schema, table):
@@ -1775,6 +1853,33 @@ class QueriesMSSQL(Queries):
     @staticmethod
     def copy_table_to_schema(source_schema, table_name, target_schema):
         return f"SELECT * INTO {target_schema}.{table_name} FROM {source_schema}.{table_name}"
+
+    @staticmethod
+    def generate_create_table_sql(schema=None, table_name=None, columns=None):
+        """Generate MSSQL CREATE TABLE SQL statement."""
+        if schema and table_name and columns:
+            # Generate based on existing table structure
+            column_defs = []
+            for col in columns:
+                col_name = col[0]
+                col_type = col[1]
+                # Handle MSSQL-specific type formatting
+                if col[3]:  # precision
+                    if col[4]:  # scale
+                        col_type = f"{col_type}({col[3]},{col[4]})"
+                    else:
+                        col_type = f"{col_type}({col[3]})"
+                nullable = "NOT NULL" if col[6] == 'N' else ""
+                column_defs.append(f"    [{col_name}] {col_type} {nullable}".strip())
+            columns_sql = ",\n".join(column_defs)
+            return f"CREATE TABLE [{schema}].[{table_name}_copy] (\n{columns_sql}\n);"
+        else:
+            # Return template
+            return """CREATE TABLE MyTable (
+    [id] INT PRIMARY KEY IDENTITY(1,1),
+    [name] NVARCHAR(100) NOT NULL,
+    [created_date] DATETIME DEFAULT GETDATE()
+);"""
 
     @staticmethod
     def delete_table_sql(schema, table):

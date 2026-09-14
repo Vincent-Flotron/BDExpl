@@ -173,6 +173,13 @@ class PanelSQLQueryEditor:
             style='SQLHelper.TButton'
         ).pack(side=tk.LEFT, padx=2)
 
+        ttk.Button(
+            helper_frame,
+            text="CREATE TABLE",
+            command=self.insert_create_table_clause,
+            style='SQLHelper.TButton'
+        ).pack(side=tk.LEFT, padx=2)
+
     def insert_limit_clause(self, limit):
         """Insert the appropriate LIMIT clause based on database type"""
         if not self.db_connection.current_connection:
@@ -238,6 +245,123 @@ class PanelSQLQueryEditor:
             schema_sql = queries.get_set_schema_sql(schema)
             self.insert_at_cursor(schema_sql)
         dialog.destroy()
+
+    def insert_create_table_clause(self):
+        """Insert CREATE TABLE query based on selected table or template"""
+        if not self.db_connection.current_connection:
+            messagebox.showwarning("Not Connected", "Please connect to a database first")
+            return
+        
+        # Get queries instance
+        queries = self.get_queries_instance()
+        
+        # Show dialog for schema and table selection
+        from tkinter import ttk
+        dialog = tk.Toplevel(self.parent)
+        dialog.title("Create Table")
+        dialog.geometry("400x250")
+        dialog.transient(self.root)
+        dialog.grab_set()
+        
+        main_frame = ttk.Frame(dialog, padding="20")
+        main_frame.pack(fill=tk.BOTH, expand=True)
+        
+        ttk.Label(main_frame, text="Select a table to use as template (or leave blank for template):").pack(pady=(0, 10))
+        
+        # Schema combobox
+        schema_frame = ttk.Frame(main_frame)
+        schema_frame.pack(fill=tk.X, pady=5)
+        ttk.Label(schema_frame, text="Schema:", width=10).pack(side=tk.LEFT)
+        schema_var = tk.StringVar()
+        schema_combo = ttk.Combobox(schema_frame, textvariable=schema_var, state="readonly", width=30)
+        schema_combo.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
+        
+        # Table combobox
+        table_frame = ttk.Frame(main_frame)
+        table_frame.pack(fill=tk.X, pady=5)
+        ttk.Label(table_frame, text="Table:", width=10).pack(side=tk.LEFT)
+        table_var = tk.StringVar()
+        table_combo = ttk.Combobox(table_frame, textvariable=table_var, state="readonly", width=30)
+        table_combo.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
+        
+        result = {'selected': False}
+        
+        def on_schema_changed(event):
+            """Fetch tables when schema is selected"""
+            schema = schema_var.get()
+            if schema and schema != "---":
+                try:
+                    cursor = self.db_connection.current_connection.cursor()
+                    cursor = self.query_manager.cursor_execute(queries.get_all_table_names_in_schema(schema), cursor)
+                    tables = cursor.fetchall()
+                    cursor.close()
+                    table_names = [t[0] for t in tables]
+                    table_combo['values'] = ['---'] + table_names
+                    table_combo.set('---')
+                except Exception as e:
+                    messagebox.showerror("Error", f"Failed to fetch tables: {str(e)}")
+        
+        def on_ok():
+            """Handle OK button click"""
+            result['selected'] = True
+            dialog.destroy()
+        
+        def on_cancel():
+            """Handle Cancel button click"""
+            result['selected'] = False
+            dialog.destroy()
+        
+        # Fetch schemas
+        try:
+            cursor = self.db_connection.current_connection.cursor()
+            cursor = self.query_manager.cursor_execute(queries.get_all_schemas_with_their_table_count(), cursor)
+            schemas = cursor.fetchall()
+            cursor.close()
+            schema_names = [s[0] for s in schemas]
+            schema_combo['values'] = ['---'] + schema_names
+            schema_combo.set('---')
+            schema_combo.bind("<<ComboboxSelected>>", on_schema_changed)
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to fetch schemas: {str(e)}")
+        
+        # Buttons
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(pady=15)
+        ttk.Button(button_frame, text="OK", command=on_ok).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Cancel", command=on_cancel).pack(side=tk.LEFT, padx=5)
+        
+        # Center dialog
+        dialog.update_idletasks()
+        x = self.root.winfo_screenwidth() // 2 - 200
+        y = self.root.winfo_screenheight() // 2 - 90
+        dialog.geometry(f"+{x}+{y}")
+        
+        # Wait for dialog
+        self.root.wait_window(dialog)
+        
+        if result['selected']:
+            schema = schema_var.get()
+            table = table_var.get()
+            
+            # If both schema and table are selected (not "---")
+            if schema and schema != "---" and table and table != "---":
+                try:
+                    # Fetch table structure
+                    cursor = self.db_connection.current_connection.cursor()
+                    cursor = self.query_manager.cursor_execute(queries.get_table_structure(schema, table), cursor)
+                    columns = cursor.fetchall()
+                    cursor.close()
+                    
+                    # Generate CREATE TABLE SQL
+                    create_sql = queries.generate_create_table_sql(schema, table, columns)
+                    self.insert_at_cursor(create_sql)
+                    
+                except Exception as e:
+                    messagebox.showerror("Error", f"Failed to generate CREATE TABLE: {str(e)}")
+            else:
+                # Generate template
+                create_sql = queries.generate_create_table_sql()
+                self.insert_at_cursor(create_sql)
 
     def get_connection_type(self):
         """Get the type of the current database connection"""
