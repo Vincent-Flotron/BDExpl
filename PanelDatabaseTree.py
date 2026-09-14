@@ -119,12 +119,12 @@ class FillTableFromDialog:
         """Show the table selection dialog.
         
         Returns:
-            dict: Dictionary with 'source_schema' and 'source_table' keys, or None if cancelled
+            dict: Dictionary with 'source_schema', 'source_table', 'complexity', and optionally 'columns' keys, or None if cancelled
         """
         # Create top-level window
         self.dialog = tk.Toplevel(self.parent)
         self.dialog.title(self.title)
-        self.dialog.geometry("400x250")
+        self.dialog.geometry("450x380")
         self.dialog.transient(self.parent)
         self.dialog.grab_set()
         
@@ -172,6 +172,14 @@ class FillTableFromDialog:
             # Bind schema selection to update table list
             self.schema_combo.bind('<<ComboboxSelected>>', self.on_schema_changed)
             
+            # Complexity radio buttons
+            complexity_frame = ttk.LabelFrame(main_frame, text="Complexity", padding="10")
+            complexity_frame.pack(pady=10, fill=tk.X)
+            
+            self.complexity_var = tk.StringVar(value="use_named_fields")  # Default
+            ttk.Radiobutton(complexity_frame, text="Simple (SELECT *)", variable=self.complexity_var, value="simple").pack(anchor=tk.W)
+            ttk.Radiobutton(complexity_frame, text="Use named fields (INSERT INTO ... (cols) SELECT (...))", variable=self.complexity_var, value="use_named_fields").pack(anchor=tk.W)
+            
             # Buttons frame
             button_frame = ttk.Frame(main_frame)
             button_frame.pack(pady=15)
@@ -186,8 +194,8 @@ class FillTableFromDialog:
             
             # Center dialog
             self.dialog.update_idletasks()
-            x = self.parent.winfo_screenwidth() // 2 - 200
-            y = self.parent.winfo_screenheight() // 2 - 100
+            x = self.parent.winfo_screenwidth() // 2 - 225
+            y = self.parent.winfo_screenheight() // 2 - 130
             self.dialog.geometry(f"+{x}+{y}")
             
             # Wait for dialog to close
@@ -231,11 +239,31 @@ class FillTableFromDialog:
         """Handle OK button click."""
         schema = self.schema_var.get()
         table = self.table_var.get()
+        complexity = self.complexity_var.get()
+        
         if schema and table and schema != "--- Select Schema ---" and table != "--- Select Table ---":
-            self.result = {
+            result = {
                 'source_schema': schema,
-                'source_table': table
+                'source_table': table,
+                'complexity': complexity
             }
+            
+            # If using named fields, fetch the column structure
+            if complexity == "use_named_fields":
+                try:
+                    cursor = self.db_connection.current_connection.cursor()
+                    queries = self.db_connection.get_queries_instance(self.db_connection.current_connection)
+                    cursor = self.query_manager.cursor_execute(queries.get_table_structure(schema, table), cursor)
+                    columns = cursor.fetchall()
+                    cursor.close()
+                    
+                    # Extract column names in order
+                    result['columns'] = [col[0] for col in columns]
+                except Exception as e:
+                    messagebox.showerror("Error", f"Failed to fetch table structure: {str(e)}")
+                    return
+            
+            self.result = result
         else:
             self.result = None
         self.dialog.destroy()
@@ -747,10 +775,16 @@ class PanelDatabaseTree:
         if result and result.get('source_schema') and result.get('source_table'):
             source_schema = result['source_schema']
             source_table = result['source_table']
+            complexity = result.get('complexity', 'use_named_fields')
+            columns = result.get('columns', [])
 
             # Generate the INSERT INTO ... SELECT query
             try:
-                sql = queries.generate_fill_table_sql(dest_schema, dest_table, source_schema, source_table)
+                if complexity == "simple":
+                    sql = queries.generate_fill_table_sql(dest_schema, dest_table, source_schema, source_table)
+                else:
+                    # Use named fields
+                    sql = queries.generate_fill_table_sql_named(dest_schema, dest_table, source_schema, source_table, columns)
 
                 # Open a new SQL editor tab with the generated query
                 tab_id = self.panel_sql_query_editor.new_sql_tab()

@@ -648,6 +648,15 @@ class QueriesOracle(Queries):
         return f"INSERT INTO {source_schema}.{source_table}\nSELECT * FROM {dest_schema}.{dest_table};"
 
     @staticmethod
+    def generate_fill_table_sql_named(dest_schema, dest_table, source_schema, source_table, columns):
+        """Generate Oracle INSERT INTO ... SELECT query with named columns."""
+        if not columns:
+            return f"INSERT INTO {dest_schema}.{dest_table}\nSELECT * FROM {source_schema}.{source_table};"
+        
+        col_list = ", ".join(columns)
+        return f"INSERT INTO {dest_schema}.{dest_table} ({col_list})\nSELECT {col_list}\nFROM {source_schema}.{source_table};"
+
+    @staticmethod
     def delete_table_sql(schema, table):
         return f"DROP TABLE {schema}.{table} PURGE"
 
@@ -1011,6 +1020,15 @@ class QueriesSQLite(Queries):
         """Generate SQLite INSERT INTO ... SELECT query to fill a table from another table."""
         # SQLite ignores schema parameter
         return f"INSERT INTO {source_table}\nSELECT * FROM {dest_table};"
+
+    @staticmethod
+    def generate_fill_table_sql_named(dest_schema, dest_table, source_schema, source_table, columns):
+        """Generate SQLite INSERT INTO ... SELECT query with named columns."""
+        if not columns:
+            return f"INSERT INTO {dest_table}\nSELECT * FROM {source_table};"
+        
+        col_list = ", ".join(columns)
+        return f"INSERT INTO {dest_table} ({col_list})\nSELECT {col_list}\nFROM {source_table};"
 
     # Add to QueriesSQLite class
     @staticmethod
@@ -1441,6 +1459,15 @@ class QueriesPostgreSQL(Queries):
     def generate_fill_table_sql(source_schema, source_table, dest_schema, dest_table):
         """Generate PostgreSQL INSERT INTO ... SELECT query to fill a table from another table."""
         return f'INSERT INTO "{source_schema}"."{source_table}"\nSELECT * FROM "{dest_schema}"."{dest_table}";'
+
+    @staticmethod
+    def generate_fill_table_sql_named(dest_schema, dest_table, source_schema, source_table, columns):
+        """Generate PostgreSQL INSERT INTO ... SELECT query with named columns."""
+        if not columns:
+            return f'INSERT INTO "{dest_schema}"."{dest_table}"\nSELECT * FROM "{source_schema}"."{source_table}";'
+        
+        col_list = '", "'.join(columns)
+        return f'INSERT INTO "{dest_schema}"."{dest_table}" ("{col_list}")\nSELECT "{col_list}"\nFROM "{source_schema}"."{source_table}";'
 
     @staticmethod
     def delete_table_sql(schema, table):
@@ -1945,6 +1972,15 @@ class QueriesMSSQL(Queries):
     def generate_fill_table_sql(source_schema, source_table, dest_schema, dest_table):
         """Generate MSSQL INSERT INTO ... SELECT query to fill a table from another table."""
         return f"INSERT INTO [{source_schema}].[{source_table}]\nSELECT * FROM [{dest_schema}].[{dest_table}];"
+
+    @staticmethod
+    def generate_fill_table_sql_named(dest_schema, dest_table, source_schema, source_table, columns):
+        """Generate MSSQL INSERT INTO ... SELECT query with named columns."""
+        if not columns:
+            return f"INSERT INTO [{dest_schema}].[{dest_table}]\nSELECT * FROM [{source_schema}].[{source_table}];"
+        
+        col_list = "], [".join(columns)
+        return f"INSERT INTO [{dest_schema}].[{dest_table}] ([{col_list}])\nSELECT [{col_list}]\nFROM [{source_schema}].[{source_table}];"
 
     @staticmethod
     def view_exists(schema, view):
