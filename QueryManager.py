@@ -1384,7 +1384,8 @@ class QueriesPostgreSQL(Queries):
             for col in columns:
                 col_name = col[0]
                 col_type = col[1]
-                nullable = "NOT NULL" if col[7] == 'N' else ""
+                # PostgreSQL get_table_structure returns: fieldname, type, data_length, data_precision, data_scale, nullable
+                nullable = "NOT NULL" if col[5] == 'N' else ""
                 column_defs.append(f'    "{col_name}" {col_type} {nullable}'.strip())
             columns_sql = ",\n".join(column_defs)
             return f'CREATE TABLE "{schema}"."{table_name}_copy" (\n{columns_sql}\n);'
@@ -1863,13 +1864,14 @@ class QueriesMSSQL(Queries):
             for col in columns:
                 col_name = col[0]
                 col_type = col[1]
+                # MSSQL get_table_structure returns: fieldname, type, data_length, data_precision, data_scale, nullable
                 # Handle MSSQL-specific type formatting
                 if col[3]:  # precision
                     if col[4]:  # scale
                         col_type = f"{col_type}({col[3]},{col[4]})"
                     else:
                         col_type = f"{col_type}({col[3]})"
-                nullable = "NOT NULL" if col[6] == 'N' else ""
+                nullable = "NOT NULL" if col[5] == 'N' else ""
                 column_defs.append(f"    [{col_name}] {col_type} {nullable}".strip())
             columns_sql = ",\n".join(column_defs)
             return f"CREATE TABLE [{schema}].[{table_name}_copy] (\n{columns_sql}\n);"
