@@ -105,6 +105,147 @@ class SchemaSelectionDialog:
         self.dialog.destroy()
 
 
+class FillTableFromDialog:
+    """Dialog for selecting a source table to fill the destination table."""
+    
+    def __init__(self, parent, db_connection, query_manager, title="Fill Table From"):
+        self.parent = parent
+        self.db_connection = db_connection
+        self.query_manager = query_manager
+        self.title = title
+        self.result = None
+        
+    def show(self):
+        """Show the table selection dialog.
+        
+        Returns:
+            dict: Dictionary with 'source_schema' and 'source_table' keys, or None if cancelled
+        """
+        # Create top-level window
+        self.dialog = tk.Toplevel(self.parent)
+        self.dialog.title(self.title)
+        self.dialog.geometry("400x250")
+        self.dialog.transient(self.parent)
+        self.dialog.grab_set()
+        
+        # Main frame
+        main_frame = ttk.Frame(self.dialog, padding="20")
+        main_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Label
+        ttk.Label(main_frame, text="Select source table (data will be copied from this table):").pack(pady=(0, 10))
+        
+        # Fetch available schemas
+        try:
+            cursor = self.db_connection.current_connection.cursor()
+            queries = self.db_connection.get_queries_instance(self.db_connection.current_connection)
+            cursor = self.query_manager.cursor_execute(queries.get_all_schemas_with_their_table_count(), cursor)
+            schemas = cursor.fetchall()
+            cursor.close()
+            
+            if not schemas:
+                messagebox.showinfo("No Schemas", "No schemas available in the current database")
+                self.dialog.destroy()
+                return None
+            
+            # Extract schema names
+            schema_names = [schema[0] for schema in schemas]
+            
+            # Frame for dropdowns
+            dropdown_frame = ttk.Frame(main_frame)
+            dropdown_frame.pack(pady=10, fill=tk.X)
+            
+            # Schema combobox
+            ttk.Label(dropdown_frame, text="Schema:").grid(row=0, column=0, sticky=tk.W, padx=5)
+            self.schema_var = tk.StringVar()
+            self.schema_combo = ttk.Combobox(dropdown_frame, textvariable=self.schema_var, values=schema_names, state="readonly", width=30)
+            self.schema_combo.grid(row=0, column=1, padx=5, pady=5)
+            self.schema_combo.set("--- Select Schema ---")  # Placeholder
+            
+            # Table combobox (initially empty)
+            ttk.Label(dropdown_frame, text="Table:").grid(row=1, column=0, sticky=tk.W, padx=5)
+            self.table_var = tk.StringVar()
+            self.table_combo = ttk.Combobox(dropdown_frame, textvariable=self.table_var, state="readonly", width=30)
+            self.table_combo.grid(row=1, column=1, padx=5, pady=5)
+            self.table_combo.set("--- Select Table ---")  # Placeholder
+            
+            # Bind schema selection to update table list
+            self.schema_combo.bind('<<ComboboxSelected>>', self.on_schema_changed)
+            
+            # Buttons frame
+            button_frame = ttk.Frame(main_frame)
+            button_frame.pack(pady=15)
+            
+            self.ok_button = ttk.Button(button_frame, text="OK", command=self.ok_action, state=tk.DISABLED)
+            self.ok_button.pack(side=tk.LEFT, padx=5)
+            ttk.Button(button_frame, text="Cancel", command=self.cancel_action).pack(side=tk.LEFT, padx=5)
+            
+            # Bind Enter key to OK
+            self.dialog.bind('<Return>', lambda e: self.ok_action() if self.ok_button.cget('state') == tk.NORMAL else None)
+            self.dialog.bind('<Escape>', lambda e: self.cancel_action())
+            
+            # Center dialog
+            self.dialog.update_idletasks()
+            x = self.parent.winfo_screenwidth() // 2 - 200
+            y = self.parent.winfo_screenheight() // 2 - 100
+            self.dialog.geometry(f"+{x}+{y}")
+            
+            # Wait for dialog to close
+            self.parent.wait_window(self.dialog)
+            
+            return self.result
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to load dialog: {str(e)}")
+            self.dialog.destroy()
+            return None
+    
+    def on_schema_changed(self, event):
+        """Update table list when schema changes."""
+        selected_schema = self.schema_var.get()
+        if selected_schema and selected_schema != "--- Select Schema ---":
+            try:
+                cursor = self.db_connection.current_connection.cursor()
+                queries = self.db_connection.get_queries_instance(self.db_connection.current_connection)
+                cursor = self.query_manager.cursor_execute(queries.get_all_table_names_in_schema(selected_schema), cursor)
+                tables = cursor.fetchall()
+                cursor.close()
+                
+                table_names = [table[0] for table in tables]
+                self.table_combo['values'] = table_names
+                if table_names:
+                    self.table_combo.set(table_names[0])
+                    self.ok_button.config(state=tk.NORMAL)
+                else:
+                    self.table_combo.set("--- No Tables ---")
+                    self.ok_button.config(state=tk.DISABLED)
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to fetch tables: {str(e)}")
+                self.table_combo.set("--- Error Loading Tables ---")
+                self.ok_button.config(state=tk.DISABLED)
+        else:
+            self.table_combo.set("--- Select Table ---")
+            self.ok_button.config(state=tk.DISABLED)
+    
+    def ok_action(self):
+        """Handle OK button click."""
+        schema = self.schema_var.get()
+        table = self.table_var.get()
+        if schema and table and schema != "--- Select Schema ---" and table != "--- Select Table ---":
+            self.result = {
+                'source_schema': schema,
+                'source_table': table
+            }
+        else:
+            self.result = None
+        self.dialog.destroy()
+        
+    def cancel_action(self):
+        """Handle Cancel button click."""
+        self.result = None
+        self.dialog.destroy()
+
+
 class PanelDatabaseTree:
     def __init__(self, parent, db_connection, panel_sql_query_editor, query_manager):
         self.parent = parent
@@ -240,6 +381,7 @@ class PanelDatabaseTree:
             ("-------------------------", None),
             ("Clone Table",          lambda: self.clone_table()),
             ("Copy tables",          lambda: self.copy_tables()),
+            ("Fill table from...",   lambda: self.fill_table_from()),
             ("-------------------------", None),
             ("Count Records",        lambda: self.count_records()),
             ("-------------------------", None),
@@ -582,6 +724,49 @@ class PanelDatabaseTree:
                     cursor.close()
                 except Exception:
                     pass
+
+    def fill_table_from(self):
+        """Fill a table from another table by generating INSERT INTO ... SELECT query."""
+        selected = self.db_tree.selection()
+        if not selected:
+            return
+
+        values = self.db_tree.item(selected[0])['values']
+        if len(values) < 3 or values[1] != 'table':
+            return
+
+        # Destination table (the one to fill)
+        dest_schema = values[0]
+        dest_table = values[2]
+        queries = self.get_queries_instance()
+
+        # Create dialog for selecting source table
+        dialog = FillTableFromDialog(self.db_tree, self.db_connection, self.query_manager)
+        result = dialog.show()
+
+        if result and result.get('source_schema') and result.get('source_table'):
+            source_schema = result['source_schema']
+            source_table = result['source_table']
+
+            # Generate the INSERT INTO ... SELECT query
+            try:
+                sql = queries.generate_fill_table_sql(dest_schema, dest_table, source_schema, source_table)
+
+                # Open a new SQL editor tab with the generated query
+                tab_id = self.panel_sql_query_editor.new_sql_tab()
+                self.panel_sql_query_editor.set_text_without_undo(
+                    self.panel_sql_query_editor.sql_files[tab_id]["widget"],
+                    sql
+                )
+                self.panel_sql_query_editor.sql_files[tab_id]["modified"] = False
+
+                # Show message to user
+                messagebox.showinfo(
+                    "Query Generated",
+                    f"INSERT query generated in new tab.\n\nExecute it with F5 to fill '{dest_schema}.{dest_table}' from '{source_schema}.{source_table}'."
+                )
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to generate query: {str(e)}")
 
     def count_records(self):
         """Count and display records for all selected tables or views, updating their tree nodes."""

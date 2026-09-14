@@ -643,6 +643,11 @@ class QueriesOracle(Queries):
 );"""
 
     @staticmethod
+    def generate_fill_table_sql(source_schema, source_table, dest_schema, dest_table):
+        """Generate Oracle INSERT INTO ... SELECT query to fill a table from another table."""
+        return f"INSERT INTO {source_schema}.{source_table}\nSELECT * FROM {dest_schema}.{dest_table};"
+
+    @staticmethod
     def delete_table_sql(schema, table):
         return f"DROP TABLE {schema}.{table} PURGE"
 
@@ -1000,6 +1005,12 @@ class QueriesSQLite(Queries):
     name TEXT NOT NULL,
     created_date TEXT DEFAULT CURRENT_TIMESTAMP
 );"""
+
+    @staticmethod
+    def generate_fill_table_sql(source_schema, source_table, dest_schema, dest_table):
+        """Generate SQLite INSERT INTO ... SELECT query to fill a table from another table."""
+        # SQLite ignores schema parameter
+        return f"INSERT INTO {source_table}\nSELECT * FROM {dest_table};"
 
     # Add to QueriesSQLite class
     @staticmethod
@@ -1425,6 +1436,11 @@ class QueriesPostgreSQL(Queries):
     name VARCHAR(100) NOT NULL,
     created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );"""
+
+    @staticmethod
+    def generate_fill_table_sql(source_schema, source_table, dest_schema, dest_table):
+        """Generate PostgreSQL INSERT INTO ... SELECT query to fill a table from another table."""
+        return f'INSERT INTO "{source_schema}"."{source_table}"\nSELECT * FROM "{dest_schema}"."{dest_table}";'
 
     @staticmethod
     def delete_table_sql(schema, table):
@@ -1924,6 +1940,11 @@ class QueriesMSSQL(Queries):
     [name] NVARCHAR(100) NOT NULL,
     [created_date] DATETIME DEFAULT GETDATE()
 );"""
+
+    @staticmethod
+    def generate_fill_table_sql(source_schema, source_table, dest_schema, dest_table):
+        """Generate MSSQL INSERT INTO ... SELECT query to fill a table from another table."""
+        return f"INSERT INTO [{source_schema}].[{source_table}]\nSELECT * FROM [{dest_schema}].[{dest_table}];"
 
     @staticmethod
     def view_exists(schema, view):
