@@ -653,8 +653,8 @@ class QueriesOracle(Queries):
         if not columns:
             return f"INSERT INTO {dest_schema}.{dest_table}\nSELECT * FROM {source_schema}.{source_table};"
         
-        col_list = ", ".join(columns)
-        return f"INSERT INTO {dest_schema}.{dest_table} ({col_list})\nSELECT {col_list}\nFROM {source_schema}.{source_table};"
+        col_list = ",\n    ".join(columns)
+        return f"INSERT INTO {dest_schema}.{dest_table} (\n    {col_list}\n    )\nSELECT\n    {col_list}\nFROM {source_schema}.{source_table};"
 
     @staticmethod
     def delete_table_sql(schema, table):
@@ -1027,8 +1027,8 @@ class QueriesSQLite(Queries):
         if not columns:
             return f"INSERT INTO {dest_table}\nSELECT * FROM {source_table};"
         
-        col_list = ", ".join(columns)
-        return f"INSERT INTO {dest_table} ({col_list})\nSELECT {col_list}\nFROM {source_table};"
+        col_list = ",\n    ".join(columns)
+        return f"INSERT INTO {dest_table} (\n    {col_list}\n    )\nSELECT\n    {col_list}\nFROM {source_table};"
 
     # Add to QueriesSQLite class
     @staticmethod
@@ -1466,8 +1466,8 @@ class QueriesPostgreSQL(Queries):
         if not columns:
             return f'INSERT INTO "{dest_schema}"."{dest_table}"\nSELECT * FROM "{source_schema}"."{source_table}";'
         
-        col_list = '", "'.join(columns)
-        return f'INSERT INTO "{dest_schema}"."{dest_table}" ("{col_list}")\nSELECT "{col_list}"\nFROM "{source_schema}"."{source_table}";'
+        col_list = '",\n    "'.join(columns)
+        return f'INSERT INTO "{dest_schema}"."{dest_table}" (\n    "{col_list}"\n    )\nSELECT\n    "{col_list}"\nFROM "{source_schema}"."{source_table}";'
 
     @staticmethod
     def delete_table_sql(schema, table):
@@ -1979,8 +1979,8 @@ class QueriesMSSQL(Queries):
         if not columns:
             return f"INSERT INTO [{dest_schema}].[{dest_table}]\nSELECT * FROM [{source_schema}].[{source_table}];"
         
-        col_list = "], [".join(columns)
-        return f"INSERT INTO [{dest_schema}].[{dest_table}] ([{col_list}])\nSELECT [{col_list}]\nFROM [{source_schema}].[{source_table}];"
+        col_list = "],\n    [".join(columns)
+        return f"INSERT INTO [{dest_schema}].[{dest_table}] (\n    [{col_list}]\n    )\nSELECT\n    [{col_list}]\nFROM [{source_schema}].[{source_table}];"
 
     @staticmethod
     def view_exists(schema, view):
