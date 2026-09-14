@@ -141,6 +141,11 @@ class Queries(ABC):
         pass
 
     @abstractmethod
+    def copy_table_to_schema(source_schema, table_name, target_schema):
+        """Generate SQL to copy a table to a different schema"""
+        pass
+
+    @abstractmethod
     def delete_table_sql(schema, table):
         pass
 
@@ -199,11 +204,12 @@ class QueriesOracle(Queries):
     @staticmethod
     def get_all_schemas_with_their_table_count():
         return """
-            SELECT owner, COUNT(*) AS table_count
-            FROM all_tables
-            WHERE owner NOT IN ('SYS', 'SYSTEM', 'OUTLN', 'DBSNMP')
-            GROUP BY owner
-            ORDER BY owner
+            SELECT u.username AS owner, COUNT(t.table_name) AS table_count
+            FROM all_users u
+            LEFT JOIN all_tables t ON t.owner = u.username
+            WHERE u.username NOT IN ('SYS', 'SYSTEM', 'OUTLN', 'DBSNMP')
+            GROUP BY u.username
+            ORDER BY u.username
         """
 
     @staticmethod
@@ -584,6 +590,10 @@ class QueriesOracle(Queries):
         return f"CREATE TABLE {new_table} AS SELECT * FROM {schema}.{table}"
 
     @staticmethod
+    def copy_table_to_schema(source_schema, table_name, target_schema):
+        return f"CREATE TABLE {target_schema}.{table_name} AS SELECT * FROM {source_schema}.{table_name}"
+
+    @staticmethod
     def delete_table_sql(schema, table):
         return f"DROP TABLE {schema}.{table} PURGE"
 
@@ -900,6 +910,11 @@ class QueriesSQLite(Queries):
         # SQLite ignores schema parameter for table creation
         return f"CREATE TABLE {new_table} AS SELECT * FROM {table}"
 
+    @staticmethod
+    def copy_table_to_schema(source_schema, table_name, target_schema):
+        # SQLite ignores schema parameter, table name is unique in the database
+        return f"CREATE TABLE {table_name} AS SELECT * FROM {table_name}"
+
     # Add to QueriesSQLite class
     @staticmethod
     def delete_table_sql(schema, table):
@@ -956,12 +971,14 @@ class QueriesPostgreSQL(Queries):
     @staticmethod
     def get_all_schemas_with_their_table_count():
         return """
-            SELECT table_schema AS owner, COUNT(*) AS table_count
-            FROM information_schema.tables
-            WHERE table_type = 'BASE TABLE'
-              AND table_schema NOT IN ('pg_catalog', 'information_schema')
-            GROUP BY table_schema
-            ORDER BY table_schema
+            SELECT s.schema_name AS owner, COUNT(t.table_name) AS table_count
+            FROM information_schema.schemata s
+            LEFT JOIN information_schema.tables t
+                ON t.table_schema = s.schema_name
+                AND t.table_type = 'BASE TABLE'
+            WHERE s.schema_name NOT IN ('pg_catalog', 'information_schema')
+            GROUP BY s.schema_name
+            ORDER BY s.schema_name
         """
 
     @staticmethod
@@ -1298,6 +1315,10 @@ class QueriesPostgreSQL(Queries):
         return f'CREATE TABLE "{schema}"."{new_table}" AS SELECT * FROM "{schema}"."{table}"'
 
     @staticmethod
+    def copy_table_to_schema(source_schema, table_name, target_schema):
+        return f'CREATE TABLE "{target_schema}"."{table_name}" AS SELECT * FROM "{source_schema}"."{table_name}"'
+
+    @staticmethod
     def delete_table_sql(schema, table):
         return f'DROP TABLE IF EXISTS "{schema}"."{table}" CASCADE'
 
@@ -1364,7 +1385,7 @@ class QueriesMSSQL(Queries):
                 'db_ddladmin', 'db_backupoperator', 'db_datareader',
                 'db_datawriter', 'db_denydatareader', 'db_denydatawriter'
             )
-            GROUP BY s.name
+            GROUP BY s.name, s.schema_id
             ORDER BY s.name
         """
 
@@ -1750,6 +1771,10 @@ class QueriesMSSQL(Queries):
     def get_clone_sql(schema, table, new_table):
         # SQL Server uses SELECT INTO for cloning
         return f"SELECT * INTO {schema}.{new_table} FROM {schema}.{table}"
+
+    @staticmethod
+    def copy_table_to_schema(source_schema, table_name, target_schema):
+        return f"SELECT * INTO {target_schema}.{table_name} FROM {source_schema}.{table_name}"
 
     @staticmethod
     def delete_table_sql(schema, table):

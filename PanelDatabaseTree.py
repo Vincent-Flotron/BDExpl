@@ -1,6 +1,110 @@
 from Panels import *
 
 
+class SchemaSelectionDialog:
+    """Dialog for selecting a target schema for copying tables."""
+    
+    def __init__(self, parent, db_connection, query_manager, title="Select Schema"):
+        self.parent = parent
+        self.db_connection = db_connection
+        self.query_manager = query_manager
+        self.title = title
+        self.selected_schema = None
+        self.result = None
+        
+    def show(self, exclude_schema=None):
+        """Show the schema selection dialog.
+        
+        Args:
+            exclude_schema: Optional schema name to exclude from the list (e.g., current schema)
+            
+        Returns:
+            str: Selected schema name, or None if cancelled
+        """
+        # Create top-level window
+        self.dialog = tk.Toplevel(self.parent)
+        self.dialog.title(self.title)
+        self.dialog.geometry("350x250")
+        self.dialog.transient(self.parent)
+        self.dialog.grab_set()
+        
+        # Main frame
+        main_frame = ttk.Frame(self.dialog, padding="20")
+        main_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Label
+        ttk.Label(main_frame, text="Select Target Schema:").pack(pady=(0, 10))
+        
+        # Fetch available schemas
+        try:
+            cursor = self.db_connection.current_connection.cursor()
+            queries = self.db_connection.get_queries_instance(self.db_connection.current_connection)
+            cursor = self.query_manager.cursor_execute(queries.get_all_schemas_with_their_table_count(), cursor)
+            schemas = cursor.fetchall()
+            cursor.close()
+            
+            if not schemas:
+                messagebox.showinfo("No Schemas", "No schemas available in the current database")
+                self.dialog.destroy()
+                return None
+            
+            # Extract schema names, excluding the specified schema if provided
+            schema_names = [schema[0] for schema in schemas if schema[0] != exclude_schema]
+            
+            if not schema_names:
+                messagebox.showinfo("No Schemas", "No target schemas available")
+                self.dialog.destroy()
+                return None
+            
+            # Combobox for schema selection
+            self.schema_var = tk.StringVar()
+            combobox = ttk.Combobox(main_frame, textvariable=self.schema_var, values=schema_names, state="readonly", width=40)
+            combobox.pack(pady=5)
+            combobox.set(schema_names[0])  # Select first item by default
+            
+            # Focus on combobox
+            combobox.focus_set()
+            
+            # Buttons frame
+            button_frame = ttk.Frame(main_frame)
+            button_frame.pack(pady=15)
+            
+            ttk.Button(button_frame, text="OK", command=self.ok_action).pack(side=tk.LEFT, padx=5)
+            ttk.Button(button_frame, text="Cancel", command=self.cancel_action).pack(side=tk.LEFT, padx=5)
+            
+            # Bind Enter key to OK
+            self.dialog.bind('<Return>', lambda e: self.ok_action())
+            self.dialog.bind('<Escape>', lambda e: self.cancel_action())
+            
+            # Center dialog
+            self.dialog.update_idletasks()
+            x = self.parent.winfo_screenwidth() // 2 - 175
+            y = self.parent.winfo_screenheight() // 2 - 60
+            self.dialog.geometry(f"+{x}+{y}")
+            
+            # Wait for dialog to close
+            self.parent.wait_window(self.dialog)
+            
+            return self.selected_schema
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to fetch schemas: {str(e)}")
+            self.dialog.destroy()
+            return None
+    
+    def ok_action(self):
+        """Handle OK button click."""
+        self.selected_schema = self.schema_var.get()
+        self.result = True
+        self.dialog.destroy()
+        
+    def cancel_action(self):
+        """Handle Cancel button click."""
+        self.selected_schema = None
+        self.result = False
+        self.dialog.destroy()
+
+
 class PanelDatabaseTree:
     def __init__(self, parent, db_connection, panel_sql_query_editor, query_manager):
         self.parent = parent
@@ -135,6 +239,7 @@ class PanelDatabaseTree:
             )),
             ("-------------------------", None),
             ("Clone Table",          lambda: self.clone_table()),
+            ("Copy tables",          lambda: self.copy_tables()),
             ("-------------------------", None),
             ("Count Records",        lambda: self.count_records()),
             ("-------------------------", None),
@@ -227,6 +332,130 @@ class PanelDatabaseTree:
             messagebox.showerror("Error", f"Failed to clone table: {str(e)}")
             # Display error message in Query Result panel
             self.panel_sql_query_editor.display_message(f"Failed to clone table '{original_table}': {str(e)}")
+
+    def copy_tables(self):
+        """Copy selected tables to a different schema."""
+        selected = self.db_tree.selection()
+        if not selected:
+            return
+
+        # Collect all valid tables from selection
+        tables_to_copy = []
+        source_schema = None
+        for item in selected:
+            values = self.db_tree.item(item)['values']
+            if len(values) >= 3 and values[1] == 'table':
+                schema = values[0]
+                table_name = values[2]
+                tables_to_copy.append((schema, table_name))
+                # Track source schema (should be the same for all selected tables)
+                if source_schema is None:
+                    source_schema = schema
+                elif source_schema != schema:
+                    messagebox.showwarning("Mixed Schemas", "Please select tables from the same schema")
+                    return
+
+        if not tables_to_copy:
+            messagebox.showwarning("No Valid Tables", "No valid tables found in selection")
+            return
+
+        # Show schema selection dialog
+        dialog = SchemaSelectionDialog(
+            self.parent,
+            self.db_connection,
+            self.query_manager,
+            title="Copy Tables to Schema"
+        )
+        target_schema = dialog.show(exclude_schema=source_schema)
+        
+        if not target_schema:
+            return  # User cancelled
+
+        # Build confirmation message
+        table_count = len(tables_to_copy)
+        if table_count == 1:
+            confirm_msg = f"Copy table '{tables_to_copy[0][1]}' from schema '{source_schema}' to schema '{target_schema}'?"
+        else:
+            display_tables = "\n".join([f"  - {s}.{t}" for s, t in tables_to_copy[:5]])
+            if table_count > 5:
+                display_tables += f"\n  ... and {table_count - 5} more"
+            confirm_msg = f"Copy {table_count} tables to schema '{target_schema}'?\n\n{display_tables}"
+        
+        confirm_msg += "\n\nNote: Tables that already exist in the target schema will be skipped."
+
+        confirm = messagebox.askyesno("Confirm Copy", confirm_msg)
+        if not confirm:
+            return
+
+        # Display status message in Query Result panel
+        if table_count == 1:
+            self.panel_sql_query_editor.display_message(f"Copying table '{tables_to_copy[0][1]}' to schema '{target_schema}'...")
+        else:
+            self.panel_sql_query_editor.display_message(f"Copying {table_count} tables to schema '{target_schema}'...")
+
+        cursor = None
+        success_count = 0
+        skipped_count = 0
+        failure_count = 0
+        failed_tables = []
+        skipped_tables = []
+
+        try:
+            cursor = self.db_connection.current_connection.cursor()
+            queries = self.get_queries_instance()
+
+            for source_schema_name, table_name in tables_to_copy:
+                try:
+                    # Check if table already exists in target schema
+                    cursor = self.query_manager.cursor_execute(queries.table_exists(target_schema, table_name), cursor)
+                    count = cursor.fetchone()[0]
+                    
+                    if count > 0:
+                        skipped_count += 1
+                        skipped_tables.append(f"{target_schema}.{table_name} (already exists)")
+                        continue
+
+                    # Get the copy SQL
+                    copy_sql = queries.copy_table_to_schema(source_schema_name, table_name, target_schema)
+
+                    # Execute the copy SQL through QueryManager
+                    self.query_manager.cursor_execute(copy_sql, cursor)
+                    success_count += 1
+
+                except Exception as e:
+                    failure_count += 1
+                    failed_tables.append(f"{source_schema_name}.{table_name}: {str(e)}")
+
+            # Commit the transaction
+            self.db_connection.current_connection.commit()
+
+            # Show result summary
+            if failure_count == 0 and skipped_count == 0:
+                messagebox.showinfo("Success", f"Successfully copied {success_count} table(s) to schema '{target_schema}'")
+                self.panel_sql_query_editor.display_message(f"Successfully copied {success_count} table(s) to schema '{target_schema}'")
+            elif failure_count == 0:
+                messagebox.showinfo("Partial Success",
+                    f"Successfully copied {success_count} table(s), {skipped_count} skipped (already exist).")
+                self.panel_sql_query_editor.display_message(f"Successfully copied {success_count} table(s), {skipped_count} skipped")
+            else:
+                messagebox.showwarning("Partial Success",
+                    f"Successfully copied {success_count} table(s), {skipped_count} skipped, {failure_count} failed.\n\n"
+                    + "\n".join(failed_tables[:5]))
+                self.panel_sql_query_editor.display_message(f"Copied {success_count}, skipped {skipped_count}, failed {failure_count}")
+
+            # Refresh the tree
+            self.load_database_objects()
+
+        except Exception as e:
+            self.db_connection.current_connection.rollback()
+            messagebox.showerror("Error", f"Failed to copy tables: {str(e)}")
+            self.panel_sql_query_editor.display_message(f"Failed to copy tables: {str(e)}")
+        finally:
+            if cursor:
+                try:
+                    cursor.close()
+                except Exception:
+                    pass
 
     def count_records(self):
         """Count and display records for all selected tables or views, updating their tree nodes."""
