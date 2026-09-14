@@ -601,6 +601,19 @@ class QueriesOracle(Queries):
         """
 
     @staticmethod
+    def view_exists(schema, view):
+        return f"""
+            SELECT COUNT(*)
+            FROM all_objects
+            WHERE owner = '{schema}' AND object_name = '{view}' AND object_type = 'VIEW'
+        """
+
+    @staticmethod
+    def copy_view_to_schema(source_schema, view_name, target_schema):
+        """Generate Oracle CREATE VIEW SQL to copy view to different schema."""
+        return f"CREATE VIEW {target_schema}.{view_name} AS SELECT * FROM {source_schema}.{view_name}"
+
+    @staticmethod
     def get_clone_sql(schema, table, new_table):
         return f"CREATE TABLE {new_table} AS SELECT * FROM {schema}.{table}"
 
@@ -940,6 +953,22 @@ class QueriesSQLite(Queries):
     def table_exists(schema, table):
         # SQLite doesn't use schemas in the same way, table name is unique in the DB
         return f"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='{table}'"
+
+    @staticmethod
+    def view_exists(schema, view):
+        return f"""
+            SELECT COUNT(*)
+            FROM sqlite_master
+            WHERE type='view' AND name = '{view}'
+        """
+
+    @staticmethod
+    def copy_view_to_schema(source_schema, view_name, target_schema):
+        """Generate SQLite CREATE VIEW SQL to copy view to different schema.
+        
+        SQLite ignores schema parameter, view name is unique in the database.
+        """
+        return f"CREATE VIEW {view_name} AS SELECT * FROM {view_name}"
 
     @staticmethod
     def get_clone_sql(schema, table, new_table):
@@ -1418,6 +1447,19 @@ class QueriesPostgreSQL(Queries):
         return  f"LIMIT {limit_value}"
 
     @staticmethod
+    def view_exists(schema, view):
+        return f"""
+            SELECT COUNT(*)
+            FROM information_schema.views
+            WHERE table_schema = '{schema}' AND table_name = '{view}'
+        """
+
+    @staticmethod
+    def copy_view_to_schema(source_schema, view_name, target_schema):
+        """Generate PostgreSQL CREATE VIEW SQL to copy view to different schema."""
+        return f'CREATE VIEW "{target_schema}"."{view_name}" AS SELECT * FROM "{source_schema}"."{view_name}"'
+
+    @staticmethod
     def get_set_schema_sql(schema):
         return f"SET search_path TO {schema}"
 
@@ -1882,6 +1924,20 @@ class QueriesMSSQL(Queries):
     [name] NVARCHAR(100) NOT NULL,
     [created_date] DATETIME DEFAULT GETDATE()
 );"""
+
+    @staticmethod
+    def view_exists(schema, view):
+        return f"""
+            SELECT COUNT(*)
+            FROM sys.views v
+            JOIN sys.schemas s ON v.schema_id = s.schema_id
+            WHERE s.name = '{schema}' AND v.name = '{view}'
+        """
+
+    @staticmethod
+    def copy_view_to_schema(source_schema, view_name, target_schema):
+        """Generate MSSQL CREATE VIEW SQL to copy view to different schema."""
+        return f"CREATE VIEW [{target_schema}].[{view_name}] AS SELECT * FROM [{source_schema}].[{view_name}]"
 
     @staticmethod
     def delete_table_sql(schema, table):

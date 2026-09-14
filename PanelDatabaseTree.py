@@ -266,6 +266,8 @@ class PanelDatabaseTree:
                 *self.db_tree.item(self.db_tree.selection()[0])['values'][0:3:2]
             )),
             ("-------------------------", None),
+            ("Copy views",           lambda: self.copy_views()),
+            ("-------------------------", None),
             ("Count Records",        lambda: self.count_records()),
             ("-------------------------", None),
             ("Delete View",          lambda: self.delete_view())
@@ -450,6 +452,130 @@ class PanelDatabaseTree:
             self.db_connection.current_connection.rollback()
             messagebox.showerror("Error", f"Failed to copy tables: {str(e)}")
             self.panel_sql_query_editor.display_message(f"Failed to copy tables: {str(e)}")
+        finally:
+            if cursor:
+                try:
+                    cursor.close()
+                except Exception:
+                    pass
+
+    def copy_views(self):
+        """Copy selected views to a different schema."""
+        selected = self.db_tree.selection()
+        if not selected:
+            return
+
+        # Collect all valid views from selection
+        views_to_copy = []
+        source_schema = None
+        for item in selected:
+            values = self.db_tree.item(item)['values']
+            if len(values) >= 3 and values[1] == 'view':
+                schema = values[0]
+                view_name = values[2]
+                views_to_copy.append((schema, view_name))
+                # Track source schema (should be the same for all selected views)
+                if source_schema is None:
+                    source_schema = schema
+                elif source_schema != schema:
+                    messagebox.showwarning("Mixed Schemas", "Please select views from the same schema")
+                    return
+
+        if not views_to_copy:
+            messagebox.showwarning("No Valid Views", "No valid views found in selection")
+            return
+
+        # Show schema selection dialog
+        dialog = SchemaSelectionDialog(
+            self.parent,
+            self.db_connection,
+            self.query_manager,
+            title="Copy Views to Schema"
+        )
+        target_schema = dialog.show(exclude_schema=source_schema)
+        
+        if not target_schema:
+            return  # User cancelled
+
+        # Build confirmation message
+        view_count = len(views_to_copy)
+        if view_count == 1:
+            confirm_msg = f"Copy view '{views_to_copy[0][1]}' from schema '{source_schema}' to schema '{target_schema}'?"
+        else:
+            display_views = "\n".join([f"  - {s}.{v}" for s, v in views_to_copy[:5]])
+            if view_count > 5:
+                display_views += f"\n  ... and {view_count - 5} more"
+            confirm_msg = f"Copy {view_count} views to schema '{target_schema}'?\n\n{display_views}"
+        
+        confirm_msg += "\n\nNote: Views that already exist in the target schema will be skipped."
+
+        confirm = messagebox.askyesno("Confirm Copy", confirm_msg)
+        if not confirm:
+            return
+
+        # Display status message in Query Result panel
+        if view_count == 1:
+            self.panel_sql_query_editor.display_message(f"Copying view '{views_to_copy[0][1]}' to schema '{target_schema}'...")
+        else:
+            self.panel_sql_query_editor.display_message(f"Copying {view_count} views to schema '{target_schema}'...")
+
+        cursor = None
+        success_count = 0
+        skipped_count = 0
+        failure_count = 0
+        failed_views = []
+        skipped_views = []
+
+        try:
+            cursor = self.db_connection.current_connection.cursor()
+            queries = self.get_queries_instance()
+
+            for source_schema_name, view_name in views_to_copy:
+                try:
+                    # Check if view already exists in target schema
+                    cursor = self.query_manager.cursor_execute(queries.view_exists(target_schema, view_name), cursor)
+                    count = cursor.fetchone()[0]
+                    
+                    if count > 0:
+                        skipped_count += 1
+                        skipped_views.append(f"{target_schema}.{view_name} (already exists)")
+                        continue
+
+                    # Get the copy view SQL
+                    copy_sql = queries.copy_view_to_schema(source_schema_name, view_name, target_schema)
+
+                    # Execute the copy SQL through QueryManager
+                    self.query_manager.cursor_execute(copy_sql, cursor)
+                    success_count += 1
+
+                except Exception as e:
+                    failure_count += 1
+                    failed_views.append(f"{source_schema_name}.{view_name}: {str(e)}")
+
+            # Commit the transaction
+            self.db_connection.current_connection.commit()
+
+            # Show result summary
+            if failure_count == 0 and skipped_count == 0:
+                messagebox.showinfo("Success", f"Successfully copied {success_count} view(s) to schema '{target_schema}'")
+                self.panel_sql_query_editor.display_message(f"Successfully copied {success_count} view(s) to schema '{target_schema}'")
+            elif failure_count == 0:
+                messagebox.showinfo("Partial Success",
+                    f"Successfully copied {success_count} view(s), {skipped_count} skipped (already exist).")
+                self.panel_sql_query_editor.display_message(f"Successfully copied {success_count} view(s), {skipped_count} skipped")
+            else:
+                messagebox.showwarning("Partial Success",
+                    f"Successfully copied {success_count} view(s), {skipped_count} skipped, {failure_count} failed.\n\n"
+                    + "\n".join(failed_views[:5]))
+                self.panel_sql_query_editor.display_message(f"Copied {success_count}, skipped {skipped_count}, failed {failure_count}")
+
+            # Refresh the tree
+            self.load_database_objects()
+
+        except Exception as e:
+            self.db_connection.current_connection.rollback()
+            messagebox.showerror("Error", f"Failed to copy views: {str(e)}")
+            self.panel_sql_query_editor.display_message(f"Failed to copy views: {str(e)}")
         finally:
             if cursor:
                 try:
