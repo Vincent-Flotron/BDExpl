@@ -786,6 +786,14 @@ class PanelDatabaseTree:
                     # Use named fields
                     sql = queries.generate_fill_table_sql_named(dest_schema, dest_table, source_schema, source_table, columns)
 
+                # Append sequence synchronization SQL to ensure subsequent INSERTs work correctly
+                # This is database-specific: PostgreSQL (SERIAL/IDENTITY), Oracle (IDENTITY),
+                # MSSQL (IDENTITY), SQLite (AUTOINCREMENT)
+                reset_sql = queries.reset_auto_increment_sequences(dest_schema, dest_table)
+                if reset_sql and reset_sql.strip():
+                    sql += "\n\n-- Synchronize auto-increment sequences to current MAX values\n"
+                    sql += reset_sql
+
                 # Open a new SQL editor tab with the generated query
                 tab_id = self.panel_sql_query_editor.new_sql_tab()
                 self.panel_sql_query_editor.set_text_without_undo(
