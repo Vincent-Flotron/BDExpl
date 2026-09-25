@@ -15,6 +15,7 @@ class DBConnection:
         self.connections = {}
         self.current_connection = None
         self.current_connection_type = None  # Explicit type tracking ("Oracle", "OracleDB", "PostgreSQL", "SQLite", "MSSQL")
+        self.display_empty_schema = False  # Setting to control display of empty schemas
 
     def add_connection(self, name, host, port, user, password, db_type="Oracle", ssh_tunnel=None):
         self.connections[name] = {

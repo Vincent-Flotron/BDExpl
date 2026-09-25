@@ -31,6 +31,9 @@ class ConnectionManager:
         try:
             conn_type = self.credential_manager.get_connection_type_offline(connection_name)
 
+            # Load the display_empty_schema setting for this connection
+            self.db_connection.display_empty_schema = self.credential_manager.get_display_empty_schema(connection_name)
+
             if conn_type == "Oracle":
                 conn_str = self.credential_manager.get_conn_string(connection_name)
                 if pyodbc:

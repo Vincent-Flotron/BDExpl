@@ -305,6 +305,16 @@ class PanelDatabaseTree:
         ttk.Button(zoom_frame, text="-", command=self.zoom_out, width=2).pack(side=tk.RIGHT, padx=2)
         ttk.Button(zoom_frame, text="↻", command=self.reset_zoom, width=2).pack(side=tk.RIGHT, padx=2)
 
+        # Display Empty Schema checkbox
+        self.display_empty_schema_var = tk.BooleanVar(value=False)
+        self.display_empty_schema_cb = ttk.Checkbutton(
+            header_frame,
+            text="Display empty schemas",
+            variable=self.display_empty_schema_var,
+            command=self.toggle_display_empty_schema
+        )
+        self.display_empty_schema_cb.pack(side=tk.LEFT, padx=5)
+
 
         # ── Search bar ────────────────────────────────────────────────
         search_frame = ttk.Frame(left_frame, style='TFrame')
@@ -1605,6 +1615,9 @@ class PanelDatabaseTree:
             messagebox.showwarning("Not Connected", "Please connect to a database first")
             return
 
+        # Sync the checkbox with the connection setting
+        self.display_empty_schema_var.set(self.db_connection.display_empty_schema)
+
         self.db_tree.delete(*self.db_tree.get_children())
 
         try:
@@ -1612,7 +1625,7 @@ class PanelDatabaseTree:
             queries = self.get_queries_instance()
 
             cursor = self.query_manager.cursor_execute(queries.get_all_schemas_with_their_table_count(), cursor)
-            schemas = cursor.fetchall()
+            all_schemas = cursor.fetchall()
 
             # Clean ariane wire when connecting to a new db
             for widget in self.breadcrumb_frame.winfo_children():
@@ -1620,7 +1633,15 @@ class PanelDatabaseTree:
 
             self.db_tree.delete(*self.db_tree.get_children())
 
-            for schema, table_count in schemas:
+            for schema, table_count in all_schemas:
+                # Check if schema has views (in addition to tables)
+                cursor = self.query_manager.cursor_execute(queries.count_views_in_schema(schema), cursor)
+                view_count = cursor.fetchone()[0]
+
+                # Filter empty schemas if display_empty_schema is False
+                if not self.db_connection.display_empty_schema and table_count == 0 and view_count == 0:
+                    continue  # Skip this empty schema
+
                 schema_node = self.db_tree.insert('', 'end', text=f"{schema} ({table_count} tables)", values=(schema, 'schema'))
 
                 # Insert tables folder first
@@ -1656,6 +1677,11 @@ class PanelDatabaseTree:
             cursor.close()
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load database objects: {str(e)}")
+
+    def toggle_display_empty_schema(self):
+        """Toggle the display empty schema setting and refresh the tree"""
+        self.db_connection.display_empty_schema = self.display_empty_schema_var.get()
+        self.load_database_objects()
 
     def view_view_data(self, limit: int):
         """View first N rows of selected view - creates new tab with query"""

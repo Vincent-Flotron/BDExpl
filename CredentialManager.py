@@ -172,6 +172,31 @@ class CredentialManager:
             use_root_name
         )
 
+    def save_display_empty_schema(self, connection_name: str, value: bool, use_root_name: bool = True):
+        """Save the display empty schema setting for a connection"""
+        self._validate_connection_name(connection_name)
+        root_name = self._get_root_name(use_root_name)
+        self._save_cred(f"{root_name}{connection_name}_DISPLAY_EMPTY_SCHEMA", "true" if value else "false")
+
+    def get_display_empty_schema(self, connection_name: str, use_root_name: bool = True) -> bool:
+        """Get the display empty schema setting for a connection (default: False)"""
+        self._validate_connection_name(connection_name)
+        root_name = self._get_root_name(use_root_name)
+        
+        # Use silent getter for optional setting (don't print errors for missing credentials)
+        if self.use_cred_file_vars:
+            value = self._get_cred_file_var(f"{root_name}{connection_name}_DISPLAY_EMPTY_SCHEMA")
+        else:
+            if win32cred is None:
+                raise Exception("Windows Credential Manager is only available on Windows systems")
+            try:
+                cred = win32cred.CredRead(f"{root_name}{connection_name}_DISPLAY_EMPTY_SCHEMA", win32cred.CRED_TYPE_GENERIC, 0)
+                value = cred["CredentialBlob"].decode("utf-16")
+            except Exception:
+                value = None  # Silently return None for missing credentials
+        
+        return value.lower() == "true" if value else False
+
     def save_postgresql_credentials(self, connection_name: str, host: str, port: int, database: str,
                                    user: str, password: str, sslmode: str = "require",
                                    sslrootcert: str = "", use_root_name: bool = True):
@@ -398,7 +423,7 @@ class CredentialManager:
             "DRIVER", "SERVER", "Database", "DBQ", "DBPATH",
             "HOST", "PORT", "DATABASE", "SID", "UID", "PWD",
             "SSLMODE", "SSLROOTCERT", "AUTHTYPE", "ENCRYPT",
-            "TRUSTSERVERCERT", "DBTYPE"
+            "TRUSTSERVERCERT", "DBTYPE", "DISPLAY_EMPTY_SCHEMA"
         ]
 
         for cred_type in cred_types:

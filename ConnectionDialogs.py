@@ -275,6 +275,10 @@ class _ConnectionFormMixin:
                 db_path = self.credential_manager.get_sqlite_conn_string(conn_name)
                 self._db_path_var.set(db_path)
 
+            # Load display empty schema setting (default: False)
+            display_empty = self.credential_manager.get_display_empty_schema(conn_name)
+            self._display_empty_schema_var.set(display_empty)
+
         except Exception as e:
             messagebox.showerror("Error", f"Could not load connection parameters: {e}")
 
@@ -296,6 +300,7 @@ class _ConnectionFormMixin:
         self._mssql_trust_var.set("yes")
         self._pg_sslmode_var.set("require")
         self._odb_host_var.set("localhost")
+        self._display_empty_schema_var.set(False)
 
     # ── gather + validate form data ──────────────────────────────────────────
 
@@ -393,6 +398,9 @@ class _ConnectionFormMixin:
                                       params["driver"], params["encrypt"], params["trust_server_cert"])
         elif db_type == "SQLite":
             cm.save_sqlite_credentials(conn_name, params["path"])
+        
+        # Save display empty schema setting
+        cm.save_display_empty_schema(conn_name, self._display_empty_schema_var.get())
 
     # ── test connection (no side-effects on active connection) ────────────────
 
@@ -541,6 +549,20 @@ class ManageConnectionsDialog(_ConnectionFormMixin):
         timeout_entry.pack(side=tk.LEFT, padx=5)
         
         tk.Label(timeout_row, text="(Max wait time)", font=("Helvetica", 8), fg="gray").pack(side=tk.LEFT)
+
+        # ── Display Empty Schema Setting ────────────────────────────────────
+        schema_row = tk.Frame(close_bar)
+        schema_row.pack(fill=tk.X, pady=(4, 4))
+        
+        self._display_empty_schema_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(
+            schema_row,
+            text="Display empty schemas in Database Objects panel",
+            variable=self._display_empty_schema_var
+        ).pack(anchor=tk.W)
+        
+        tk.Label(schema_row, text="When unchecked, schemas without tables or views are hidden for faster display",
+                 font=("Helvetica", 8), fg="gray").pack(anchor=tk.W, padx=20)
 
 
         # Populate list and disable form until an action is chosen
