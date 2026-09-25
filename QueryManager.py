@@ -206,6 +206,18 @@ class Queries(ABC):
         """Generate SQL to reset all serial/identity sequences for a table."""
         pass
 
+    @abstractmethod
+    def get_key_column_current_value(schema, table, column):
+        pass
+
+    @abstractmethod
+    def get_sequence_current_state(schema, table, column):
+        pass
+
+    @abstractmethod
+    def is_sequence_up_to_date(schema, table, column):
+        pass
+
 
 # ======================================================================
 # ORACLE QUERIES
@@ -763,6 +775,60 @@ class QueriesOracle(Queries):
             END;
         """
 
+    @staticmethod
+    def get_key_column_current_value(schema, table, column):
+        """Get the current MAX value of a key column.
+        
+        Returns SQL query to get MAX(column_value) for the specified column.
+        """
+        return f'SELECT NVL(MAX("{column}"), 0) AS current_value FROM "{schema}"."{table}";'
+
+    @staticmethod
+    def get_sequence_current_state(schema, table, column):
+        """Get the current state of a sequence for an IDENTITY column.
+        
+        For Oracle IDENTITY columns, queries the sequence associated with the column.
+        Returns SQL query to get the current sequence value.
+        """
+        # For Oracle 12c+ IDENTITY columns, we need to find the associated sequence
+        # This query joins with ALL_SEQUENCES to get the current value
+        return f"""
+            SELECT s.last_number AS sequence_state
+            FROM all_tab_identity_cols t
+            JOIN all_sequences s ON s.sequence_name = t.sequence_name
+            WHERE t.owner = '{schema}'
+              AND t.table_name = '{table}'
+              AND t.column_name = '{column}';
+        """
+
+    @staticmethod
+    def is_sequence_up_to_date(schema, table, column):
+        """Check if sequence state is up-to-date with max key value.
+        
+        Returns PL/SQL block that compares sequence state with MAX(column_value).
+        Returns 1 if sequence is up-to-date (sequence_state >= max_value), 0 otherwise.
+        """
+        return f"""
+            DECLARE
+                v_max_val NUMBER;
+                v_seq_state NUMBER;
+            BEGIN
+                SELECT NVL(MAX("{column}"), 0) INTO v_max_val FROM "{schema}"."{table}";
+                SELECT s.last_number INTO v_seq_state
+                FROM all_tab_identity_cols t
+                JOIN all_sequences s ON s.sequence_name = t.sequence_name
+                WHERE t.owner = '{schema}'
+                  AND t.table_name = '{table}'
+                  AND t.column_name = '{column}';
+                
+                IF v_seq_state >= v_max_val THEN
+                    :result := 1;
+                ELSE
+                    :result := 0;
+                END IF;
+            END;
+        """
+
 # ======================================================================
 # SQLITE QUERIES
 # ======================================================================
@@ -1182,6 +1248,33 @@ class QueriesSQLite(Queries):
         # Check if table has AUTOINCREMENT by looking at sqlite_master
         # For simplicity, we return the reset SQL - it's a no-op if no AUTOINCREMENT
         return f"DELETE FROM sqlite_sequence WHERE name = '{table}';"
+
+    @staticmethod
+    def get_key_column_current_value(schema, table, column):
+        """Get the current MAX value of a key column.
+        
+        Returns SQL query to get MAX(column_value) for the specified column.
+        """
+        return f'SELECT COALESCE(MAX("{column}"), 0) AS current_value FROM "{table}";'
+
+    @staticmethod
+    def get_sequence_current_state(schema, table, column):
+        """Get the current state of SQLite AUTOINCREMENT sequence.
+        
+        For SQLite, queries sqlite_sequence table which tracks the largest ROWID.
+        Returns SQL query to get the current sequence value.
+        """
+        return f"SELECT seq AS sequence_state FROM sqlite_sequence WHERE name = '{table}';"
+
+    @staticmethod
+    def is_sequence_up_to_date(schema, table, column):
+        """Check if SQLite AUTOINCREMENT sequence is up-to-date.
+        
+        For SQLite, the sequence is managed automatically.
+        Returns 1 (true) as SQLite handles this internally.
+        """
+        # SQLite auto-manages AUTOINCREMENT, so it's always "up-to-date"
+        return "SELECT 1 AS is_up_to_date;"
 
 # ======================================================================
 # POSTGRESQL QUERIES
@@ -1702,6 +1795,44 @@ class QueriesPostgreSQL(Queries):
                     END IF;
                 END LOOP;
             END $$;
+        """
+
+    @staticmethod
+    def get_key_column_current_value(schema, table, column):
+        """Get the current MAX value of a key column.
+        
+        Returns SQL query to get MAX(column_value) for the specified column.
+        """
+        return f'SELECT COALESCE(MAX("{column}"), 0) AS current_value FROM "{schema}"."{table}";'
+
+    @staticmethod
+    def get_sequence_current_state(schema, table, column):
+        """Get the current state of a PostgreSQL sequence.
+        
+        Uses a dynamic query with pg_get_serial_sequence() to get the sequence's last_value.
+        The result is cast to text to handle the dynamic nature of the sequence name.
+        """
+        # Use a subquery that extracts the sequence name and queries it
+        # pg_get_serial_sequence returns something like "prisme"."prisme_id_seq"
+        return f"""
+            SELECT (SELECT last_value FROM "{schema}"."{table}_{column}_seq") AS sequence_state
+            WHERE pg_get_serial_sequence('{schema}.{table}', '{column}') IS NOT NULL;
+        """
+
+    @staticmethod
+    def is_sequence_up_to_date(schema, table, column):
+        """Check if PostgreSQL sequence is up-to-date with max key value.
+        
+        Compares sequence last_value with MAX(column_value).
+        Returns boolean: true if sequence is up-to-date (last_value >= max_value).
+        """
+        return f"""
+            SELECT CASE
+                WHEN (SELECT COALESCE(last_value, 0) FROM "{schema}"."{table}_{column}_seq")
+                     >= (SELECT COALESCE(MAX("{column}"), 0) FROM "{schema}"."{table}")
+                THEN TRUE
+                ELSE FALSE
+            END AS is_up_to_date;
         """
 
 # ======================================================================
@@ -2255,6 +2386,38 @@ class QueriesMSSQL(Queries):
         to MAX(column_value) + 1, or to 1 if table is empty.
         """
         return f"DBCC CHECKIDENT ('[{schema}].[{table}]', RESEED);"
+
+    @staticmethod
+    def get_key_column_current_value(schema, table, column):
+        """Get the current MAX value of a key column.
+        
+        Returns SQL query to get MAX(column_value) for the specified column.
+        """
+        return f'SELECT COALESCE(MAX([{column}]), 0) AS current_value FROM [{schema}].[{table}];'
+
+    @staticmethod
+    def get_sequence_current_state(schema, table, column):
+        """Get the current state of a MSSQL IDENTITY column.
+        
+        Uses IDENT_CURRENT() to get the last identity value generated for the table.
+        Returns SQL query to get the current identity state.
+        """
+        return f"SELECT IDENT_CURRENT('[{schema}].[{table}]') AS sequence_state;"
+
+    @staticmethod
+    def is_sequence_up_to_date(schema, table, column):
+        """Check if MSSQL IDENTITY column is up-to-date with max key value.
+        
+        Compares IDENT_CURRENT() with MAX(column_value).
+        Returns 1 (true) if identity is up-to-date (IDENT_CURRENT >= max_value).
+        """
+        return f"""
+            SELECT CASE
+                WHEN IDENT_CURRENT('[{schema}].[{table}]') >= (SELECT COALESCE(MAX([{column}]), 0) FROM [{schema}].[{table}])
+                THEN 1
+                ELSE 0
+            END AS is_up_to_date;
+        """
 
 # ======================================================================
 # QUERY MANAGER

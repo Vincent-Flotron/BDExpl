@@ -731,25 +731,86 @@ class PanelSQLQueryEditor:
         self.root.update()
 
     def show_table_keys(self, schema: str, table: str):
-        """Fetch and display table or view keys (primary and foreign) in a new tab."""
+        """Fetch and display table or view keys (primary and foreign) with sequence info in a new tab.
+        
+        For auto-increment columns (SERIAL, IDENTITY, AUTOINCREMENT), also displays:
+        - Current value in the table (MAX of column)
+        - Current sequence state (what next value will be)
+        - Whether sequence is up-to-date (sequence_state >= current_value)
+        """
         try:
             cursor  = self.db_connection.current_connection.cursor()
             queries = self.get_queries_instance()
+            db_type = self.db_connection.get_connection_type()
 
+            # Fetch primary and foreign keys
             cursor   = self.query_manager.cursor_execute(queries.get_table_keys(schema, table), cursor)
-            raw_rows = cursor.fetchall()
+            key_rows = cursor.fetchall()
+
+            # Fetch auto-increment columns
+            cursor = self.query_manager.cursor_execute(queries.get_auto_increment_columns(schema, table), cursor)
+            auto_inc_cols = cursor.fetchall()
+
+            # Build combined results
+            # Columns: Key name, Key Type, Column name, Ref. Schema, Ref. Table, Ref. Constraint,
+            #          Current Value, Sequence State, Is Up-to-Date
+            columns = ["Key name", "Key Type", "Column name", "Ref. Schema", "Ref. Table", "Ref. Constraint",
+                       "Current Value", "Sequence State", "Is Up-to-Date"]
+            
+            rows = []
+            
+            # Add primary and foreign keys (without sequence info)
+            for row in key_rows:
+                # Replace None with "" so the Treeview never shows "None"
+                clean_row = tuple("" if v is None else v for v in row)
+                # Pad with empty strings for sequence columns
+                rows.append(clean_row + ("", "", ""))
+            
+            # Add auto-increment columns with sequence info
+            for col_row in auto_inc_cols:
+                column_name = col_row[0]  # First column is always column_name
+                
+                # Get current value
+                cursor = self.query_manager.cursor_execute(
+                    queries.get_key_column_current_value(schema, table, column_name), cursor
+                )
+                val_row = cursor.fetchone()
+                current_value = val_row[0] if val_row else ""
+                
+                # Get sequence state
+                cursor = self.query_manager.cursor_execute(
+                    queries.get_sequence_current_state(schema, table, column_name), cursor
+                )
+                seq_row = cursor.fetchone()
+                sequence_state = seq_row[0] if seq_row else ""
+                
+                # Get is_up_to_date status
+                try:
+                    cursor = self.query_manager.cursor_execute(
+                        queries.is_sequence_up_to_date(schema, table, column_name), cursor
+                    )
+                    upd_row = cursor.fetchone()
+                    is_up_to_date = str(upd_row[0]) if upd_row else ""
+                except Exception:
+                    # Some databases may not support this query
+                    is_up_to_date = "N/A"
+                
+                # Format as key row: empty key name, "AUTO_INCREMENT" type, column name, etc.
+                rows.append(("", "AUTO_INCREMENT", column_name, "", "", "",
+                           str(current_value), str(sequence_state), str(is_up_to_date)))
+
             cursor.close()
 
-            if not raw_rows:
-                messagebox.showinfo("Info", f"No keys found for {table}.")
+            if not rows:
+                messagebox.showinfo("Info", f"No keys or auto-increment columns found for {table}.")
                 return
-
-            columns = ["Key name", "Key Type", "Column name", "Ref. Schema", "Ref. Table", "Ref. Constraint"]
-            # Replace None with "" so the Treeview never shows "None"
-            rows = [tuple("" if v is None else v for v in row) for row in raw_rows]
 
             tree = self._create_result_tab(f"{table} (Keys)", columns, rows)
 
+            # Create context menu with sequence update option
+            def update_sequence():
+                self._update_sequence_for_selected(tree, schema, table, queries)
+            
             context_menu = self._create_context_menu(
                 tree,
                 lambda: self._copy_selected_rows(tree),
@@ -758,10 +819,58 @@ class PanelSQLQueryEditor:
                 export_excel_command=lambda: self._export_to_excel(tree, f"{table}_keys"),
                 open_excel_command=lambda: self._open_into_excel(tree, f"{table}_keys")
             )
+            
+            # Add "Update sequence to last key value" menu item
+            context_menu.add_separator()
+            context_menu.add_command(label="Update sequence to last key value", command=update_sequence)
+            
             tree.bind("<Button-3>", lambda event: context_menu.tk_popup(event.x_root, event.y_root))
 
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load table keys: {str(e)}")
+
+    def _update_sequence_for_selected(self, tree, schema: str, table: str, queries):
+        """Update sequence to match the current MAX value for the selected auto-increment column."""
+        try:
+            selected_item = tree.selection()[0]
+            values = tree.item(selected_item)['values']
+            
+            # Check if this is an AUTO_INCREMENT row (column index 1)
+            key_type = values[1] if len(values) > 1 else ""
+            if key_type != "AUTO_INCREMENT":
+                messagebox.showwarning("Warning", "Please select an auto-increment column row.")
+                return
+            
+            column_name = values[2] if len(values) > 2 else ""
+            if not column_name:
+                messagebox.showwarning("Warning", "Could not determine column name.")
+                return
+            
+            # Confirm with user
+            confirm = messagebox.askyesno(
+                "Confirm Sequence Update",
+                f"Update sequence for column '{column_name}' to match current MAX value?\n\n"
+                f"Table: {schema}.{table}\nColumn: {column_name}"
+            )
+            if not confirm:
+                return
+            
+            # Generate and execute the reset SQL
+            cursor = self.db_connection.current_connection.cursor()
+            reset_sql = queries.generate_sequence_reset_sql(schema, table, column_name)
+            cursor = self.query_manager.cursor_execute(reset_sql, cursor)
+            self.db_connection.current_connection.commit()
+            cursor.close()
+            
+            messagebox.showinfo("Success", f"Sequence for column '{column_name}' has been updated.")
+            
+            # Refresh the display
+            self.show_table_keys(schema, table)
+            
+        except IndexError:
+            messagebox.showwarning("Warning", "Please select a row.")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to update sequence: {str(e)}")
 
     # Update the show_table_structure method in PanelSQLQueryEditor
     def show_table_structure(self, schema: str, table: str):
