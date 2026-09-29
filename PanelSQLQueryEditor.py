@@ -1034,6 +1034,10 @@ class PanelSQLQueryEditor:
         text_widget.edit_reset()
         text_widget.edit_modified(False)
         text_widget.configure(undo=True)
+        
+        # Refresh syntax highlighting for SQLText widgets
+        if hasattr(text_widget, 'refresh_highlighting'):
+            text_widget.refresh_highlighting()
 
     def undo(self):
         """Undo the last action in the current SQL tab"""

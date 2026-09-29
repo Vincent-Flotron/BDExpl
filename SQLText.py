@@ -164,6 +164,13 @@ class SQLText(Text):
         self.draw_line_numbers()
         # Don't trigger highlighting on resize
 
+    def yview(self, *args):
+        """Override yview to handle scrollbar dragging and update highlighting."""
+        result = super().yview(*args)
+        self.draw_line_numbers()
+        self.highlight_visible()  # Highlight newly visible lines
+        return result
+
     def on_scroll(self, event):
         """Handle scroll events."""
         if event.delta:
@@ -174,6 +181,7 @@ class SQLText(Text):
             self.yview_scroll(1, "units")
 
         self.draw_line_numbers()
+        self.highlight_visible()  # Highlight newly visible lines
         return "break"
 
     def draw_line_numbers(self):
@@ -435,6 +443,10 @@ class SQLText(Text):
 
     def on_key_release(self, event=None):
         """Highlight SQL syntax on key release."""
+        self.highlight()
+
+    def refresh_highlighting(self):
+        """Refresh syntax highlighting for all content. Call this after programmatically setting text."""
         self.highlight()
 
     def _do_highlight(self):
