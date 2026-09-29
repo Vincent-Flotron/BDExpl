@@ -51,6 +51,48 @@ class SQLText(Text):
         # Reset the flag on any other key press
         self.bind("<Key>",             self.reset_ctrl_k_flag, add="+")
 
+        # Column Selection Mode (like VSCode's SHIFT+ALT + Click)
+        self.column_selection_active = False
+        self.column_selection_start = None  # (line, col) tuple - where selection starts
+        self.column_selection_end = None    # (line, col) tuple - where selection ends
+        self.column_selection_anchor = None # (line, col) tuple - cursor position when SHIFT+ALT pressed
+        self._column_selection_tags = []    # Track selection tags
+        self._column_mode_enabled = False   # SHIFT+ALT is currently held
+        
+        # Bind SHIFT+ALT for column selection mode
+        self.bind("<Shift-Alt_L>",     self.on_alt_shift_press)
+        self.bind("<Shift-Alt_R>",     self.on_alt_shift_press)
+        self.bind("<Alt-Shift_L>",     self.on_alt_shift_press)
+        self.bind("<Alt-Shift_R>",     self.on_alt_shift_press)
+        self.bind("<KeyRelease-Alt_L>", self.on_modifier_release)
+        self.bind("<KeyRelease-Alt_R>", self.on_modifier_release)
+        self.bind("<KeyRelease-Shift_L>", self.on_modifier_release)
+        self.bind("<KeyRelease-Shift_R>", self.on_modifier_release)
+        
+        # Bind mouse click for column selection (when SHIFT+ALT is held)
+        self.bind("<Alt-Button-1>", self.on_alt_click)
+        
+        # Bind key/mouse events to clear column selection
+        self.bind("<Button-1>", self.on_mouse_click_clear_column)
+        self.bind("<Left>",     self.on_cursor_movement_clear_column)
+        self.bind("<Right>",    self.on_cursor_movement_clear_column)
+        self.bind("<Up>",       self.on_cursor_movement_clear_column)
+        self.bind("<Down>",     self.on_cursor_movement_clear_column)
+        self.bind("<Home>",     self.on_cursor_movement_clear_column)
+        self.bind("<End>",      self.on_cursor_movement_clear_column)
+        self.bind("<Prior>",    self.on_cursor_movement_clear_column)  # Page Up
+        self.bind("<Next>",     self.on_cursor_movement_clear_column)  # Page Down
+        
+        # Bind key events for column selection mode
+        self.bind("<Key>",             self.handle_column_selection_key)
+        self.bind("<BackSpace>",       self.handle_column_selection_backspace)
+        self.bind("<Delete>",          self.handle_column_selection_delete)
+        self.bind("<Control-c>",       self.handle_column_selection_copy)
+        self.bind("<Control-C>",       self.handle_column_selection_copy)
+        self.bind("<Control-v>",       self.handle_column_selection_paste)
+        self.bind("<Control-V>",       self.handle_column_selection_paste)
+        self.bind("<Escape>",          self.clear_column_selection)
+
         # Define colors for syntax highlighting
         self.colors = {
             'keyword':   'blue',
@@ -625,3 +667,330 @@ class SQLText(Text):
         finally:
             self.panel_sql_query_editor.insert_edit_separator_in_actual_tab() # for undo/redo
         return "break"
+
+    def on_alt_shift_press(self, event=None):
+        """Handle Alt+Shift key press - store cursor position as anchor for column selection."""
+        self._column_mode_enabled = True
+        # Store current cursor position as the anchor point for column selection
+        self.column_selection_anchor = self.index("insert")
+        self.update_line_numbers_style()
+        return None  # Allow normal key propagation
+
+    def on_modifier_release(self, event=None):
+        """Handle modifier key release."""
+        self._column_mode_enabled = False
+        self.update_line_numbers_style()
+        return None
+
+    def on_alt_click(self, event=None):
+        """Handle click while SHIFT+ALT is held - create column selection from anchor to click."""
+        if self._column_mode_enabled and self.column_selection_anchor:
+            # Get the click position
+            click_pos = self.index(f"@{event.x},{event.y}")
+            # Create column selection from anchor to click position
+            self.column_selection_start = self.column_selection_anchor
+            self.column_selection_end = click_pos
+            self.column_selection_active = True
+            self.update_column_selection()
+            return "break"
+        return None
+
+    def on_mouse_click_clear_column(self, event=None):
+        """Clear column selection on normal mouse click (when not in SHIFT+ALT mode)."""
+        # Only clear if not in column mode (SHIFT+ALT not held)
+        if not self._column_mode_enabled and self.column_selection_active:
+            # Schedule clearing after the click is processed
+            self.after(10, self.clear_column_selection)
+        return None
+
+    def on_cursor_movement_clear_column(self, event=None):
+        """Clear column selection on cursor movement keys."""
+        # Only clear if not actively in column selection mode
+        if not self._column_mode_enabled:
+            self.clear_column_selection()
+        return None
+
+    def update_line_numbers_style(self):
+        """Update line numbers background to indicate column selection mode."""
+        if self._column_mode_enabled or self.column_selection_active:
+            self.line_numbers.config(bg='#fff3cd')  # Yellow-ish background
+        else:
+            self.line_numbers.config(bg='#f0f0f0')  # Default background
+
+    def update_column_selection(self):
+        """Update the visual column selection highlighting."""
+        # Remove previous column selection tags
+        for tag in self._column_selection_tags:
+            try:
+                self.tag_delete(tag)
+            except tk.TclError:
+                pass
+        self._column_selection_tags = []
+
+        if not self.column_selection_start or not self.column_selection_end:
+            return
+
+        # Parse start and end positions
+        start_line, start_col = map(int, self.column_selection_start.split('.'))
+        end_line, end_col = map(int, self.column_selection_end.split('.'))
+
+        # Normalize so start is always before end
+        if start_line > end_line or (start_line == end_line and start_col > end_col):
+            start_line, end_line = end_line, start_line
+            start_col, end_col = end_col, start_col
+
+        # Create column selection - select same columns across all lines
+        tag_index = 0
+        for line in range(start_line, end_line + 1):
+            # Get the line content to handle short lines
+            try:
+                line_end = int(self.index(f"{line}.end").split('.')[1])
+                # Clamp column positions to line length
+                actual_start_col = min(start_col, line_end)
+                actual_end_col = min(end_col, line_end)
+                
+                if actual_start_col < actual_end_col:
+                    tag_name = f"column_sel_{tag_index}"
+                    self.tag_config(tag_name, background='#3390ff', foreground='white')
+                    self.tag_add(tag_name, f"{line}.{actual_start_col}", f"{line}.{actual_end_col}")
+                    self._column_selection_tags.append(tag_name)
+                    tag_index += 1
+            except tk.TclError:
+                break
+
+        # Remove normal selection since we're using custom column selection
+        self.tag_remove("sel", "1.0", "end")
+
+    def get_column_selection_text(self):
+        """Get the text from column selection."""
+        if not self.column_selection_start or not self.column_selection_end:
+            return ""
+
+        # Parse start and end positions
+        start_line, start_col = map(int, self.column_selection_start.split('.'))
+        end_line, end_col = map(int, self.column_selection_end.split('.'))
+
+        # Normalize so start is always before end
+        if start_line > end_line or (start_line == end_line and start_col > end_col):
+            start_line, end_line = end_line, start_line
+            start_col, end_col = end_col, start_col
+
+        # Get column selection text
+        lines = []
+        for line in range(start_line, end_line + 1):
+            try:
+                line_end = int(self.index(f"{line}.end").split('.')[1])
+                actual_start_col = min(start_col, line_end)
+                actual_end_col = min(end_col, line_end)
+                line_text = self.get(f"{line}.{actual_start_col}", f"{line}.{actual_end_col}")
+                lines.append(line_text)
+            except tk.TclError:
+                break
+
+        return '\n'.join(lines)
+
+    def delete_column_selection(self):
+        """Delete the column selection and update selection positions."""
+        if not self.column_selection_start or not self.column_selection_end:
+            return
+
+        # Parse start and end positions
+        start_line, start_col = map(int, self.column_selection_start.split('.'))
+        end_line, end_col = map(int, self.column_selection_end.split('.'))
+
+        # Normalize so start is always before end
+        if start_line > end_line or (start_line == end_line and start_col > end_col):
+            start_line, end_line = end_line, start_line
+            start_col, end_col = end_col, start_col
+
+        # Calculate width of selection for later
+        selection_width = end_col - start_col
+
+        # Delete column by column (from bottom to top to preserve line numbers)
+        for line in range(end_line, start_line - 1, -1):
+            try:
+                line_end = int(self.index(f"{line}.end").split('.')[1])
+                actual_start_col = min(start_col, line_end)
+                actual_end_col = min(end_col, line_end)
+                if actual_start_col < actual_end_col:
+                    self.delete(f"{line}.{actual_start_col}", f"{line}.{actual_end_col}")
+            except tk.TclError:
+                break
+
+        # Update selection to new (collapsed) position
+        self.column_selection_end = f"{start_line}.{start_col}"
+        self.update_column_selection()
+
+    def insert_in_column_selection(self, text):
+        """Insert text at each line of column selection."""
+        if not self.column_selection_start or not self.column_selection_end:
+            return
+
+        # Parse start and end positions
+        start_line, start_col = map(int, self.column_selection_start.split('.'))
+        end_line, end_col = map(int, self.column_selection_end.split('.'))
+
+        # Normalize so start is always before end
+        if start_line > end_line or (start_line == end_line and start_col > end_col):
+            start_line, end_line = end_line, start_line
+            start_col, end_col = end_col, start_col
+
+        # Insert text at each line (from top to bottom to maintain correct line positions)
+        for line in range(start_line, end_line + 1):
+            try:
+                line_end = int(self.index(f"{line}.end").split('.')[1])
+                insert_col = min(start_col, line_end)
+                self.insert(f"{line}.{insert_col}", text)
+            except tk.TclError:
+                break
+
+        # Update selection to reflect new positions (shifted by text length)
+        text_len = len(text)
+        self.column_selection_start = f"{start_line}.{start_col + text_len}"
+        self.column_selection_end = f"{end_line}.{end_col + text_len}"
+        self.update_column_selection()
+
+    def clear_column_selection(self):
+        """Clear the column selection visual and state."""
+        # Remove column selection tags
+        for tag in self._column_selection_tags:
+            try:
+                self.tag_delete(tag)
+            except tk.TclError:
+                pass
+        self._column_selection_tags = []
+        self.column_selection_start = None
+        self.column_selection_end = None
+        self.column_selection_anchor = None
+        self.column_selection_active = False
+        self.update_line_numbers_style()
+
+    def handle_column_selection_key(self, event=None):
+        """Handle key press in column selection mode - insert character at each line of selection."""
+        # Only handle if column selection is active
+        if not self.column_selection_active or not self.column_selection_start or not self.column_selection_end:
+            return None
+
+        # Get the character to insert
+        char = event.char
+        if not char or len(char) != 1:
+            return None
+
+        # Delete current selection and insert character
+        self.panel_sql_query_editor.insert_edit_separator_in_actual_tab()
+        self.delete_and_insert_in_column_selection(char)
+        self.panel_sql_query_editor.insert_edit_separator_in_actual_tab()
+        return "break"
+
+    def delete_and_insert_in_column_selection(self, text):
+        """Delete column selection and insert text at each line - atomic operation."""
+        if not self.column_selection_start or not self.column_selection_end:
+            return
+
+        # Parse and normalize positions
+        start_line, start_col = map(int, self.column_selection_start.split('.'))
+        end_line, end_col = map(int, self.column_selection_end.split('.'))
+
+        if start_line > end_line or (start_line == end_line and start_col > end_col):
+            start_line, end_line = end_line, start_line
+            start_col, end_col = end_col, start_col
+
+        # For each line, delete the selection and insert new text
+        for line in range(start_line, end_line + 1):
+            try:
+                line_end = int(self.index(f"{line}.end").split('.')[1])
+                actual_start_col = min(start_col, line_end)
+                actual_end_col = min(end_col, line_end)
+                
+                # Delete the selected portion
+                if actual_start_col < actual_end_col:
+                    self.delete(f"{line}.{actual_start_col}", f"{line}.{actual_end_col}")
+                
+                # Insert the new text at the start position
+                self.insert(f"{line}.{actual_start_col}", text)
+            except tk.TclError:
+                break
+
+        # Update selection to reflect new positions (shifted by text length)
+        text_len = len(text)
+        self.column_selection_start = f"{start_line}.{start_col + text_len}"
+        self.column_selection_end = f"{end_line}.{end_col + text_len}"
+        self.update_column_selection()
+
+    def handle_column_selection_backspace(self, event=None):
+        """Handle backspace in column selection mode."""
+        if not self.column_selection_active or not self.column_selection_start or not self.column_selection_end:
+            return None
+
+        self.panel_sql_query_editor.insert_edit_separator_in_actual_tab()
+        self.delete_column_selection()
+        self.panel_sql_query_editor.insert_edit_separator_in_actual_tab()
+        return "break"
+
+    def handle_column_selection_delete(self, event=None):
+        """Handle delete in column selection mode."""
+        if not self.column_selection_active or not self.column_selection_start or not self.column_selection_end:
+            return None
+
+        self.panel_sql_query_editor.insert_edit_separator_in_actual_tab()
+        self.delete_column_selection()
+        self.panel_sql_query_editor.insert_edit_separator_in_actual_tab()
+        return "break"
+
+    def handle_column_selection_copy(self, event=None):
+        """Handle copy in column selection mode - copy column text to clipboard."""
+        if not self.column_selection_active or not self.column_selection_start or not self.column_selection_end:
+            return None
+
+        # Get the column selection text
+        column_text = self.get_column_selection_text()
+        if column_text:
+            self.clipboard_clear()
+            self.clipboard_append(column_text)
+            self.update_idletasks()
+        return "break"
+
+    def handle_column_selection_paste(self, event=None):
+        """Handle paste in column selection mode - paste clipboard content at each line."""
+        if not self.column_selection_active or not self.column_selection_start or not self.column_selection_end:
+            return None
+
+        try:
+            # Get clipboard content
+            clipboard_text = self.clipboard_get()
+            if not clipboard_text:
+                return None
+
+            self.panel_sql_query_editor.insert_edit_separator_in_actual_tab()
+            
+            # Delete current selection first
+            self.delete_column_selection()
+            
+            # Split clipboard into lines
+            lines_to_paste = clipboard_text.split('\n')
+            
+            # Parse selection positions
+            start_line, start_col = map(int, self.column_selection_start.split('.'))
+            end_line, end_col = map(int, self.column_selection_end.split('.'))
+            
+            # Normalize
+            if start_line > end_line or (start_line == end_line and start_col > end_col):
+                start_line, end_line = end_line, start_line
+                start_col, end_col = end_col, start_col
+            
+            # Insert each line at corresponding row
+            for i, line in enumerate(range(start_line, end_line + 1)):
+                try:
+                    line_end = int(self.index(f"{line}.end").split('.')[1])
+                    insert_col = min(start_col, line_end)
+                    # Get the corresponding clipboard line (cycle if needed)
+                    paste_line = lines_to_paste[i % len(lines_to_paste)]
+                    self.insert(f"{line}.{insert_col}", paste_line)
+                except tk.TclError:
+                    break
+            
+            self.clear_column_selection()
+            self.panel_sql_query_editor.insert_edit_separator_in_actual_tab()
+            return "break"
+        except tk.TclError:
+            return None
