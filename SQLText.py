@@ -26,10 +26,11 @@ class SQLText(Text):
         self.pack_forget()
         self.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
 
-        # Bind events - REMOVE DUPLICATE BINDINGS
-        self.bind("<KeyRelease>",      self.on_content_changed)
-        self.bind("<ButtonRelease-1>", self.on_content_changed)
-        self.bind("<Configure>",       self.on_content_changed)
+        # Bind events - optimized for performance
+        # Only KeyRelease triggers syntax highlighting (debounced)
+        self.bind("<KeyRelease>",      self.on_key_release_event)
+        self.bind("<ButtonRelease-1>", self.on_mouse_release)
+        self.bind("<Configure>",       self.on_configure)
         self.bind("<MouseWheel>",      self.on_scroll)
         self.bind("<Button-4>",        self.on_scroll)  # Linux scroll up
         self.bind("<Button-5>",        self.on_scroll)  # Linux scroll down
@@ -131,16 +132,37 @@ class SQLText(Text):
         for tag_name, color in self.colors.items():
             self.tag_config(tag_name, foreground=color)
 
+        # Debouncing for syntax highlighting (prevents freezing on large files)
+        self._highlight_timer = None
+        self._HIGHLIGHT_DELAY_MS = 150  # Delay in ms before highlighting after keystroke
+
         # Initialize zoom level
         self.zoom_level = 100  # Default 100%
 
         # Draw line numbers initially
         self.draw_line_numbers()
 
-    def on_content_changed(self, event=None):
-        """Handle key release for both syntax highlighting and line numbers."""
-        self.on_key_release(event)  # Call the original method for syntax highlighting
-        self.draw_line_numbers()    # Update line numbers
+    def on_key_release_event(self, event=None):
+        """Handle key release with debounced highlighting."""
+        # Cancel any pending highlight
+        if self._highlight_timer is not None:
+            self.after_cancel(self._highlight_timer)
+        
+        # Update line numbers immediately (fast operation)
+        self.draw_line_numbers()
+        
+        # Schedule highlighting after delay (instead of immediate)
+        self._highlight_timer = self.after(self._HIGHLIGHT_DELAY_MS, self._do_highlight)
+
+    def on_mouse_release(self, event=None):
+        """Handle mouse button release - only update line numbers."""
+        self.draw_line_numbers()
+        # Don't trigger highlighting on mouse click
+
+    def on_configure(self, event=None):
+        """Handle widget resize - only update line numbers."""
+        self.draw_line_numbers()
+        # Don't trigger highlighting on resize
 
     def on_scroll(self, event):
         """Handle scroll events."""
@@ -415,8 +437,58 @@ class SQLText(Text):
         """Highlight SQL syntax on key release."""
         self.highlight()
 
+    def _do_highlight(self):
+        """Perform syntax highlighting after debounce delay."""
+        self._highlight_timer = None
+        self.highlight_visible()
+
+    def highlight_visible(self):
+        """Apply syntax highlighting only to visible lines for better performance."""
+        try:
+            # Get visible range
+            first_line = int(self.index("@0,0").split('.')[0])
+            last_line = int(self.index(f"@0,{self.winfo_height()}").split('.')[0])
+            total_lines = int(self.index("end-1c").split('.')[0])
+            
+            # Add buffer lines above and below viewport for smoother scrolling
+            buffer = 5
+            start_line = max(1, first_line - buffer)
+            end_line = min(total_lines, last_line + buffer)
+            
+            # Get text for visible range only
+            start_pos = f"{start_line}.0"
+            end_pos = f"{end_line}.end"
+            text = self.get(start_pos, end_pos)
+            
+            # Remove tags only from visible range
+            for tag in self.colors.keys():
+                self.tag_remove(tag, start_pos, end_pos)
+            
+            if len(text.strip()) < 2:
+                return
+            
+            # Pre-split text into lines for efficient line-based processing
+            lines = text.split('\n')
+            
+            # Highlight in order of precedence
+            for tag_name in self.highlight_order:
+                compiled_pattern = self.compiled_patterns[tag_name]
+                current_line_num = start_line
+                
+                for line_content in lines:
+                    # Find all matches in this line
+                    for match in compiled_pattern.finditer(line_content):
+                        start_col = match.start()
+                        end_col = match.end()
+                        self.tag_add(tag_name, f"{current_line_num}.{start_col}", f"{current_line_num}.{end_col}")
+                    current_line_num += 1
+                    
+        except (ValueError, tk.TclError):
+            # Fallback to full highlight on error
+            self.highlight()
+
     def highlight(self):
-        """Apply SQL syntax highlighting using pre-compiled regex patterns."""
+        """Apply SQL syntax highlighting using pre-compiled regex patterns (full document)."""
         # Remove all tags
         for tag in self.colors.keys():
             self.tag_remove(tag, "1.0", "end")
