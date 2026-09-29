@@ -50,57 +50,86 @@ class SQLText(Text):
         # Reset the flag on any other key press
         self.bind("<Key>",             self.reset_ctrl_k_flag, add="+")
 
-        # Define regex patterns for SQL syntax
-        self.sql_keywords = r"\b(TO|ALL|ALTER|ALTER\s+SESSION|ALTER\s+SYSTEM|ANALYZE|AND|ANY|AS|AUDIT|AUTONOMOUS\s+TRANSACTION|BEGIN|"\
-            + r"ON\s+CONFLICT|ON\s+DELETE\s+CASCADE|DO\s+NOTHING|"\
-            + r"BETWEEN|BULK\s+COLLECT|CALL|CASE|CHECK|CLOSE|CLUSTER|COMMENT|COMMIT|COMMITTED|"\
-            + r"CONNECT|CONNECT\s+BY|CONSTRAINT|CONTINUE|CREATE|CROSS\s+JOIN|CURSOR|DECLARE|DECODE|DEFAULT|"\
-            + r"DELETE|DISCONNECT|DISTINCT|DROP|DUAL|DYNAMIC|ELSE|ELSIF|END|EXCEPTION|"\
-            + r"EXECUTE|EXISTS|EXIT|EXPLAIN|FETCH|FOR|FOR\s+UPDATE|FORALL|FOREIGN\s+KEY|FROM|"\
-            + r"FULL\s+JOIN|FULL\s+OUTER\s+JOIN|FUNCTION|GOTO|GRANT|GROUP\s+BY|HAVING|HINT|IF|IMMEDIATE|"\
-            + r"IN|INDEX|INNER\s+JOIN|INSERT|INTERSECT|IS\s+NOT\s+NULL|IS\s+NULL|ISOLATION\s+LEVEL|JOIN|LEFT\s+JOIN|"\
-            + r"LEFT\s+OUTER\s+JOIN|LEVEL|I?LIKE|SIMILAR\s+TO|LOCK|LOOP|MERGE|MINUS|NATURAL\s+JOIN|NOAUDIT|NOT\s+EXISTS|"\
-            + r"NOT\s+IN|NOT\s+NULL|NULL|NVL|OPEN|OPTIMIZER|OR|ORDER\s+BY|PACKAGE|PARTITION|PASSWORD|ASC|DESC|FIRST|ROWS|ONLY|"\
-            + r"PLAN|PRIMARY\s+KEY|PRIOR|PROCEDURE|PROFILE|RAISE|READ\s+ONLY|RECORD|RENAME|RESOURCE|"\
-            + r"RETURN|REVOKE|RIGHT\s+JOIN|RIGHT\s+OUTER\s+JOIN|ROLE|ROLLBACK|ROWID|ROWNUM|SAVEPOINT|SELECT|"\
-            + r"SET\s+ROLE|SET\s+TRANSACTION|SHUTDOWN|SOME|START\s+WITH|STARTUP|SUBPARTITION|SYSDATE|SYSTIMESTAMP|THEN|"\
-            + r"TRUNCATE|TYPE|UNION|UNION\s+ALL|UNIQUE|UNLIMITED|UPDATE|USER|USING|WHEN|"\
-            + r"WHERE|WHILE|WITH|TABLE|VALUES|ADD|REFERENCES|SET|"\
-            + r"LIMIT|ON|VIEW|INTO|TIME +ZONE|WITHOUT +TIME +ZONE|RETURNS|TRIGGER|LANGUAGE|BEFORE|EACH|ROW|RESTRICT|REPLACE|"\
-            + r"NOTICE|RETURNING|YEAR|FALSE|TRUE|GENERATED\s+BY|IDENTITY|SCHEMA|SHOW|TIMEZONE|COLLATE|CURRENT)\b"
-
-        self.sql_operators = r"=|!=|<>|<=|>=|<|>|\+|-|\*|/|%"
-
-        self.sql_functions = r"\b(ABS|ACOS|ADD_MONTHS|ASCII|ASIN|ATAN|ATAN2|AVG|AVG|AVG|"\
-            + r"CASE\s+WHEN|CAST|CEIL|CHR|COALESCE|CONCAT|COS|COUNT|CURRENT_DATE|CURRENT_TIMESTAMP|"\
-            + r"DECODE|DENSE_RANK|DENSE_RANK|EXP|EXTRACT|FIRST_VALUE|FIRST_VALUE|FLOOR|GROUPING|"\
-            + r"HEXTORAW|INITCAP|INSTR|LAG|LAG|LAST_DAY|LAST_VALUE|LAST_VALUE|LEAD|LEAD|"\
-            + r"LENGTH|LISTAGG|LN|LOCALTIMESTAMP|LOG|LOWER|LPAD|LTRIM|MAX|MIN|"\
-            + r"MOD|MONTHS_BETWEEN|NEXT_DAY|NULLIF|NUMTODSINTERVAL|NUMTOYMINTERVAL|NVL|NVL2|POWER|RANK|"\
-            + r"RANK|RAWTOHEX|REGEXP_INSTR|REGEXP_REPLACE|REGEXP_SUBSTR|ROUND|ROW_NUMBER|ROW_NUMBER|RPAD|"\
-            + r"RTRIM|SIN|SOUNDEX|SQRT|STDDEV|SUBSTR|SUM|SUM|SUM|"\
-            + r"TAN|TO_CHAR|TO_CHAR|TO_DATE|TO_DATE|TO_NUMBER|TO_TIMESTAMP|TO_TIMESTAMP|TRIM|"\
-            + r"TRUNC|UID|UPPER|USER|VARIANCE|VSIZE|clock_timestamp|NOW|ENUM|varying)\b"
-
-        self.sql_type = r"\b(TIMESTAMPG|TIMESTAMP|TIMESTAMPTZ|SERIAL|BIGSERIAL|VARCHAR|NUMERIC|BIGINT|"\
-            + r"TEXT|INTEGER|INT|DATE|BOOLEAN|plpgsql|character)\b"
-
-        self.sql_string_pattern  = r"'[^'\r\n]*'"
-        self.sql_string_pattern2 = r'"[^"\r\n]*"'
-        self.sql_comment_pattern = r"--.*?$|/\*.*?\*/"
-        self.sql_number_pattern  = r"\b\d+\b"
-
         # Define colors for syntax highlighting
         self.colors = {
             'keyword':   'blue',
             'operator':  'purple',
-            'function':"#997A24",
-            'type':    "#117E99",
-            'string':    'green',
-            'string2':   'green',
-            'comment':   'gray',
-            'number':  '#098658'
+            'function': "#997A24",
+            'type':     "#117E99",
+            'string':   'green',
+            'string2':  'green',
+            'comment':  'gray',
+            'number':   '#098658'
         }
+
+        # Pre-compile regex patterns for SQL syntax (optimized for speed)
+        self.compiled_patterns = {
+            'keyword': re.compile(
+                r"\b(TO|ALL|ALTER|ALTER\s+SESSION|ALTER\s+SYSTEM|ANALYZE|AND|ANY|AS|AUDIT|AUTONOMOUS\s+TRANSACTION|BEGIN|"
+                r"ON\s+CONFLICT|ON\s+DELETE\s+CASCADE|DO\s+NOTHING|"
+                r"BETWEEN|BULK\s+COLLECT|CALL|CASE|CHECK|CLOSE|CLUSTER|COMMENT|COMMIT|COMMITTED|"
+                r"CONNECT|CONNECT\s+BY|CONSTRAINT|CONTINUE|CREATE|CROSS\s+JOIN|CURSOR|DECLARE|DECODE|DEFAULT|"
+                r"DELETE|DISCONNECT|DISTINCT|DROP|DUAL|DYNAMIC|ELSE|ELSIF|END|EXCEPTION|"
+                r"EXECUTE|EXISTS|EXIT|EXPLAIN|FETCH|FOR|FOR\s+UPDATE|FORALL|FOREIGN\s+KEY|FROM|"
+                r"FULL\s+JOIN|FULL\s+OUTER\s+JOIN|FUNCTION|GOTO|GRANT|GROUP\s+BY|HAVING|HINT|IF|IMMEDIATE|"
+                r"IN|INDEX|INNER\s+JOIN|INSERT|INTERSECT|IS\s+NOT\s+NULL|IS\s+NULL|ISOLATION\s+LEVEL|JOIN|LEFT\s+JOIN|"
+                r"LEFT\s+OUTER\s+JOIN|LEVEL|I?LIKE|SIMILAR\s+TO|LOCK|LOOP|MERGE|MINUS|NATURAL\s+JOIN|NOAUDIT|NOT\s+EXISTS|"
+                r"NOT\s+IN|NOT\s+NULL|NULL|NVL|OPEN|OPTIMIZER|OR|ORDER\s+BY|PACKAGE|PARTITION|PASSWORD|ASC|DESC|FIRST|ROWS|ONLY|"
+                r"PLAN|PRIMARY\s+KEY|PRIOR|PROCEDURE|PROFILE|RAISE|READ\s+ONLY|RECORD|RENAME|RESOURCE|"
+                r"RETURN|REVOKE|RIGHT\s+JOIN|RIGHT\s+OUTER\s+JOIN|ROLE|ROLLBACK|ROWID|ROWNUM|SAVEPOINT|SELECT|"
+                r"SET\s+ROLE|SET\s+TRANSACTION|SHUTDOWN|SOME|START\s+WITH|STARTUP|SUBPARTITION|SYSDATE|SYSTIMESTAMP|THEN|"
+                r"TRUNCATE|TYPE|UNION|UNION\s+ALL|UNIQUE|UNLIMITED|UPDATE|USER|USING|WHEN|"
+                r"WHERE|WHILE|WITH|TABLE|VALUES|ADD|REFERENCES|SET|"
+                r"LIMIT|ON|VIEW|INTO|TIME +ZONE|WITHOUT +TIME +ZONE|RETURNS|TRIGGER|LANGUAGE|BEFORE|EACH|ROW|RESTRICT|REPLACE|"
+                r"NOTICE|RETURNING|YEAR|FALSE|TRUE|GENERATED\s+BY|IDENTITY|SCHEMA|SHOW|TIMEZONE|COLLATE|CURRENT)\b",
+                re.IGNORECASE | re.MULTILINE
+            ),
+            'operator': re.compile(
+                r"(=|!=|<>|<=|>=|<|>|\+|-|\*|/|%)",
+                re.MULTILINE
+            ),
+            'function': re.compile(
+                r"\b(ABS|ACOS|ADD_MONTHS|ASCII|ASIN|ATAN|ATAN2|AVG|"
+                r"CASE\s+WHEN|CAST|CEIL|CHR|COALESCE|CONCAT|COS|COUNT|CURRENT_DATE|CURRENT_TIMESTAMP|"
+                r"DECODE|DENSE_RANK|EXP|EXTRACT|FIRST_VALUE|FLOOR|GROUPING|"
+                r"HEXTORAW|INITCAP|INSTR|LAG|LAST_DAY|LAST_VALUE|LEAD|"
+                r"LENGTH|LISTAGG|LN|LOCALTIMESTAMP|LOG|LOWER|LPAD|LTRIM|MAX|MIN|"
+                r"MOD|MONTHS_BETWEEN|NEXT_DAY|NULLIF|NUMTODSINTERVAL|NUMTOYMINTERVAL|NVL|NVL2|POWER|RANK|"
+                r"RAWTOHEX|REGEXP_INSTR|REGEXP_REPLACE|REGEXP_SUBSTR|ROUND|ROW_NUMBER|RPAD|"
+                r"RTRIM|SIN|SOUNDEX|SQRT|STDDEV|SUBSTR|SUM|"
+                r"TAN|TO_CHAR|TO_DATE|TO_NUMBER|TO_TIMESTAMP|TRIM|"
+                r"TRUNC|UID|UPPER|USER|VARIANCE|VSIZE|clock_timestamp|NOW|ENUM|varying)\b",
+                re.IGNORECASE | re.MULTILINE
+            ),
+            'type': re.compile(
+                r"\b(TIMESTAMPG|TIMESTAMP|TIMESTAMPTZ|SERIAL|BIGSERIAL|VARCHAR|NUMERIC|BIGINT|"
+                r"TEXT|INTEGER|INT|DATE|BOOLEAN|plpgsql|character)\b",
+                re.IGNORECASE | re.MULTILINE
+            ),
+            'string': re.compile(
+                r"'[^'\r\n]*'",
+                re.MULTILINE
+            ),
+            'string2': re.compile(
+                r'"[^"\r\n]*"',
+                re.MULTILINE
+            ),
+            'comment': re.compile(
+                r"(--.*?$|/\*.*?\*/)",
+                re.MULTILINE
+            ),
+            'number': re.compile(
+                r"\b\d+\b",
+                re.MULTILINE
+            )
+        }
+
+        # Define tag order for proper highlighting precedence (strings/comments first to avoid keyword highlighting inside them)
+        self.highlight_order = ['string', 'string2', 'comment', 'keyword', 'function', 'type', 'operator', 'number']
+
+        # Configure tag colors once during initialization
+        for tag_name, color in self.colors.items():
+            self.tag_config(tag_name, foreground=color)
 
         # Initialize zoom level
         self.zoom_level = 100  # Default 100%
@@ -387,57 +416,23 @@ class SQLText(Text):
         self.highlight()
 
     def highlight(self):
-        """Apply SQL syntax highlighting using regex."""
-        self.mark_set("range_start", "1.0")
-        self.tag_remove("keyword",   "1.0", "end")
-        self.tag_remove("operator",  "1.0", "end")
-        self.tag_remove("function",  "1.0", "end")
-        self.tag_remove("type",      "1.0", "end")
-        self.tag_remove("string",    "1.0", "end")
-        self.tag_remove("string2",   "1.0", "end")
-        self.tag_remove("comment",   "1.0", "end")
-        self.tag_remove("number",    "1.0", "end")
+        """Apply SQL syntax highlighting using pre-compiled regex patterns."""
+        # Remove all tags
+        for tag in self.colors.keys():
+            self.tag_remove(tag, "1.0", "end")
 
         text = self.get("1.0", "end-1c")
 
         if len(text.strip()) > 1:
-            # Highlight keywords
-            self.highlight_pattern(self.sql_keywords,        "keyword",  self.colors["keyword"])
-
-            # Highlight operators
-            self.highlight_pattern(self.sql_operators,       "operator", self.colors["operator"])
-
-            # Highlight functions
-            self.highlight_pattern(self.sql_functions,       "function", self.colors["function"])
-
-            # Highlight types
-            self.highlight_pattern(self.sql_type,            "type",     self.colors["type"])
-
-            # Highlight strings
-            self.highlight_pattern(self.sql_string_pattern,  "string",   self.colors["string"])
-            self.highlight_pattern(self.sql_string_pattern2, "string2",  self.colors["string2"])
-
-            # Highlight comments
-            self.highlight_pattern(self.sql_comment_pattern, "comment",  self.colors["comment"])
-
-            # Highlight numbers
-            self.highlight_pattern(self.sql_number_pattern,  "number",   self.colors["number"])
-
-    def highlight_pattern(self, pattern, tag, color):
-        """Highlight a specific pattern in the text."""
-        self.mark_set("range_start", "1.0")
-        text = self.get("1.0", "end-1c")
-
-        # Remove extra whitespace and newlines from multi-line patterns
-        pattern = re.sub(r'\s+', ' ', pattern.strip())
-
-        matches_iter = re.finditer(pattern, text, re.IGNORECASE | re.MULTILINE)
-        for match in matches_iter:
-            start_pos = f"1.0 + {match.start()} chars"
-            end_pos   = f"1.0 + {match.end()} chars"
-
-            self.tag_add(tag, start_pos, end_pos)
-            self.tag_config(tag, foreground=color)
+            # Highlight in order of precedence (strings/comments first to avoid highlighting keywords inside them)
+            for tag_name in self.highlight_order:
+                compiled_pattern = self.compiled_patterns[tag_name]
+                
+                # Find and highlight all matches using pre-compiled pattern
+                for match in compiled_pattern.finditer(text):
+                    start_pos = f"1.0 + {match.start()} chars"
+                    end_pos = f"1.0 + {match.end()} chars"
+                    self.tag_add(tag_name, start_pos, end_pos)
 
     def insert_spaces(self, event):
         """Insert 2 spaces instead of a tab character."""
