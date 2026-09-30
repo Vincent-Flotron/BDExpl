@@ -288,6 +288,12 @@ class DBExp:
             self.config["search_use_regex"] = self.search_use_regex
         if hasattr(self, 'search_case_sensitive'):
             self.config["search_case_sensitive"] = self.search_case_sensitive
+        
+        # Save search history
+        if hasattr(self, 'search_history'):
+            self.config["search_history"] = list(self.search_history)
+        if hasattr(self, 'replace_history'):
+            self.config["replace_history"] = list(self.replace_history)
 
         with open(self.CONFIG_FILE, 'w') as f:
             json.dump(self.config, f)
@@ -308,6 +314,10 @@ class DBExp:
         # Initialize search settings with defaults
         self.search_use_regex = self.config.get("search_use_regex", False)
         self.search_case_sensitive = self.config.get("search_case_sensitive", False)
+        
+        # Initialize search history from config
+        self.search_history = self.config.get("search_history", [])
+        self.replace_history = self.config.get("replace_history", [])
 
     def setup_menu(self):
         """Create menu bar"""

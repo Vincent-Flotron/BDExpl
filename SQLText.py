@@ -2,11 +2,15 @@ from tkinter import Text, Toplevel, Frame, Label, Entry, Button, Scrollbar, Stri
 from tkinter import ttk
 import tkinter as tk
 import re
+import json
+from collections import deque
 
 class SearchReplaceDialog(Toplevel):
     """Search and Replace dialog like Notepad++ with CTRL+F - passes results to panel_query_result tab."""
     
-    def __init__(self, parent, sql_text_widget, panel_query_result, use_regex=False, case_sensitive=False):
+    MAX_HISTORY = 30
+    
+    def __init__(self, parent, sql_text_widget, panel_query_result, use_regex=False, case_sensitive=False, search_history=None, replace_history=None):
         super().__init__(parent)
         self.sql_text = sql_text_widget
         self.panel_query_result = panel_query_result
@@ -15,6 +19,10 @@ class SearchReplaceDialog(Toplevel):
         # Load settings from parameters (saved from config)
         self.use_regex = use_regex
         self.case_sensitive = case_sensitive
+        
+        # Load history from parameters
+        self.search_history = deque(search_history or [], maxlen=self.MAX_HISTORY)
+        self.replace_history = deque(replace_history or [], maxlen=self.MAX_HISTORY)
         
         # Center the dialog on the parent window
         self.transient(parent)
@@ -80,7 +88,8 @@ class SearchReplaceDialog(Toplevel):
         Label(search_frame, text="Find:").pack(side=tk.LEFT, padx=2)
         
         self.search_var = StringVar()
-        self.search_entry = Entry(search_frame, textvariable=self.search_var, width=50)
+        # Use Combobox for history dropdown
+        self.search_entry = ttk.Combobox(search_frame, textvariable=self.search_var, width=50, values=list(self.search_history))
         self.search_entry.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
         
         # Bind Enter key to search
@@ -124,7 +133,8 @@ class SearchReplaceDialog(Toplevel):
         Label(search_frame, text="Find:").pack(side=tk.LEFT, padx=2)
         
         self.replace_search_var = StringVar()
-        self.replace_search_entry = Entry(search_frame, textvariable=self.replace_search_var, width=50)
+        # Use Combobox for history dropdown
+        self.replace_search_entry = ttk.Combobox(search_frame, textvariable=self.replace_search_var, width=50, values=list(self.search_history))
         self.replace_search_entry.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
         
         # Replace bar frame
@@ -134,7 +144,8 @@ class SearchReplaceDialog(Toplevel):
         Label(replace_frame, text="Replace:").pack(side=tk.LEFT, padx=2)
         
         self.replace_var = StringVar()
-        self.replace_entry = Entry(replace_frame, textvariable=self.replace_var, width=50)
+        # Use Combobox for history dropdown
+        self.replace_entry = ttk.Combobox(replace_frame, textvariable=self.replace_var, width=50, values=list(self.replace_history))
         self.replace_entry.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
         
         # Options frame
@@ -203,6 +214,13 @@ class SearchReplaceDialog(Toplevel):
         
         if not search_text:
             return
+        
+        # Add to search history
+        if search_text not in self.search_history:
+            self.search_history.appendleft(search_text)
+            # Update combobox values
+            self.search_entry.config(values=list(self.search_history))
+            self.replace_search_entry.config(values=list(self.search_history))
         
         self.clear_highlights()
         self.matches = []
@@ -274,8 +292,7 @@ class SearchReplaceDialog(Toplevel):
             self.sql_text._search_tags = []
     
     def clear_results(self):
-        """Clear search results and highlights."""
-        self.search_var.set("")
+        """Clear search results and highlights without erasing search field."""
         self.results_label.config(text="")
         self.matches = []
         self.current_match_index = -1
@@ -329,9 +346,7 @@ class SearchReplaceDialog(Toplevel):
             self.replace_results_label.config(text=self.results_label.cget("text"))
     
     def replace_clear(self):
-        """Clear replace tab fields and results."""
-        self.replace_search_var.set("")
-        self.replace_var.set("")
+        """Clear replace tab results without erasing search/replace fields."""
         self.replace_results_label.config(text="")
         self.matches = []
         self.current_match_index = -1
@@ -391,6 +406,15 @@ class SearchReplaceDialog(Toplevel):
         if not search_text:
             return
         
+        # Add to history
+        if search_text not in self.search_history:
+            self.search_history.appendleft(search_text)
+            self.search_entry.config(values=list(self.search_history))
+            self.replace_search_entry.config(values=list(self.search_history))
+        if replace_text not in self.replace_history:
+            self.replace_history.appendleft(replace_text)
+            self.replace_entry.config(values=list(self.replace_history))
+        
         # Sync search tab vars from replace tab vars
         self.search_var.set(search_text)
         self.regex_var.set(use_regex)
@@ -433,6 +457,15 @@ class SearchReplaceDialog(Toplevel):
         
         if not search_text:
             return
+        
+        # Add to history
+        if search_text not in self.search_history:
+            self.search_history.appendleft(search_text)
+            self.search_entry.config(values=list(self.search_history))
+            self.replace_search_entry.config(values=list(self.search_history))
+        if replace_text not in self.replace_history:
+            self.replace_history.appendleft(replace_text)
+            self.replace_entry.config(values=list(self.replace_history))
         
         # Sync search tab vars from replace tab vars
         self.search_var.set(search_text)
@@ -1496,12 +1529,17 @@ class SQLText(Text):
         # Get search settings from the main app if available
         search_use_regex = False
         search_case_sensitive = False
-        if hasattr(self.panel_sql_query_editor, 'root') and hasattr(self.panel_sql_query_editor.root, 'search_use_regex'):
-            search_use_regex = self.panel_sql_query_editor.root.search_use_regex
-            search_case_sensitive = self.panel_sql_query_editor.root.search_case_sensitive
+        search_history = []
+        replace_history = []
+        if hasattr(self.panel_sql_query_editor, 'root'):
+            root = self.panel_sql_query_editor.root
+            search_use_regex = getattr(root, 'search_use_regex', False)
+            search_case_sensitive = getattr(root, 'search_case_sensitive', False)
+            search_history = getattr(root, 'search_history', [])
+            replace_history = getattr(root, 'replace_history', [])
         
         search_dialog = SearchReplaceDialog(self.master, self, self.panel_sql_query_editor.panel_query_result,
-                                            search_use_regex, search_case_sensitive)
+                                            search_use_regex, search_case_sensitive, search_history, replace_history)
         return "break"
     
     def open_replace_dialog(self, event=None):
@@ -1509,12 +1547,17 @@ class SQLText(Text):
         # Get search settings from the main app if available
         search_use_regex = False
         search_case_sensitive = False
-        if hasattr(self.panel_sql_query_editor, 'root') and hasattr(self.panel_sql_query_editor.root, 'search_use_regex'):
-            search_use_regex = self.panel_sql_query_editor.root.search_use_regex
-            search_case_sensitive = self.panel_sql_query_editor.root.search_case_sensitive
+        search_history = []
+        replace_history = []
+        if hasattr(self.panel_sql_query_editor, 'root'):
+            root = self.panel_sql_query_editor.root
+            search_use_regex = getattr(root, 'search_use_regex', False)
+            search_case_sensitive = getattr(root, 'search_case_sensitive', False)
+            search_history = getattr(root, 'search_history', [])
+            replace_history = getattr(root, 'replace_history', [])
         
         search_dialog = SearchReplaceDialog(self.master, self, self.panel_sql_query_editor.panel_query_result,
-                                            search_use_regex, search_case_sensitive)
+                                            search_use_regex, search_case_sensitive, search_history, replace_history)
         # Open with Replace tab focused
         search_dialog.open_replace_tab()
         return "break"
