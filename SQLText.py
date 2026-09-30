@@ -11,9 +11,14 @@ class SearchDialog(Toplevel):
         self.sql_text = sql_text_widget
         self.panel_query_result = panel_query_result
         self.title("Find")
-        self.geometry("400x150")
+        
+        # Center the dialog on the parent window
+        self.geometry("600x100")
         self.transient(parent)
-        self.grab_set()
+        
+        # Allow clicking outside the dialog to interact with other windows (like search results tab)
+        # Don't use grab_set() - it blocks interaction with other windows
+        self.focus_set()
         
         self.matches = []  # List of (line, col_start, col_end, text) tuples
         self.current_match_index = -1
@@ -21,6 +26,21 @@ class SearchDialog(Toplevel):
         self.setup_ui()
         self.bind("<Return>", lambda e: self.search())
         self.bind("<Escape>", lambda e: self.close())
+        
+        # Focus the search entry field
+        self.search_entry.focus_set()
+        
+        # Center the dialog on screen
+        self.update_idletasks()
+        dialog_width = 500
+        dialog_height = 180
+        parent_x = parent.winfo_x()
+        parent_y = parent.winfo_y()
+        parent_width = parent.winfo_width()
+        parent_height = parent.winfo_height()
+        x = parent_x + (parent_width - dialog_width) // 2
+        y = parent_y + (parent_height - dialog_height) // 2
+        self.geometry(f"{dialog_width}x{dialog_height}+{x}+{y}")
         
     def setup_ui(self):
         """Setup the search dialog UI - compact version since results go to tab."""

@@ -1272,6 +1272,8 @@ class PanelSQLQueryEditor:
             text_widget.mark_set("insert", f"{line_num}.{col}")
             # Scroll to make the line visible
             text_widget.see(f"{line_num}.{col}")
+            # Update line numbers display
+            text_widget.draw_line_numbers()
             # Focus the editor
             text_widget.focus_set()
         except tk.TclError:
