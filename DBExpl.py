@@ -218,6 +218,9 @@ class DBExp:
 
         # Apply saved zoom settings
         self.apply_saved_zoom_settings()
+        
+        # Apply saved search settings
+        self.apply_saved_search_settings()
 
     def setup_ui(self):
         """Create the three-panel interface"""
@@ -279,6 +282,12 @@ class DBExp:
             self.config["query_editor_zoom"] = self.panel_sql_query_editor.zoom_level
         if hasattr(self, 'panel_query_result'):
             self.config["query_result_zoom"] = self.panel_query_result.zoom_level
+        
+        # Save search settings
+        if hasattr(self, 'search_use_regex'):
+            self.config["search_use_regex"] = self.search_use_regex
+        if hasattr(self, 'search_case_sensitive'):
+            self.config["search_case_sensitive"] = self.search_case_sensitive
 
         with open(self.CONFIG_FILE, 'w') as f:
             json.dump(self.config, f)
@@ -293,6 +302,12 @@ class DBExp:
 
         if hasattr(self, 'panel_query_result') and "query_result_zoom" in self.config:
             self.panel_query_result.set_zoom(self.config["query_result_zoom"])
+    
+    def apply_saved_search_settings(self):
+        """Apply saved search settings"""
+        # Initialize search settings with defaults
+        self.search_use_regex = self.config.get("search_use_regex", False)
+        self.search_case_sensitive = self.config.get("search_case_sensitive", False)
 
     def setup_menu(self):
         """Create menu bar"""

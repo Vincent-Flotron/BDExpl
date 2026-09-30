@@ -6,14 +6,17 @@ import re
 class SearchDialog(Toplevel):
     """Search dialog like Notepad++ with CTRL+F - passes results to panel_query_result tab."""
     
-    def __init__(self, parent, sql_text_widget, panel_query_result):
+    def __init__(self, parent, sql_text_widget, panel_query_result, use_regex=False, case_sensitive=False):
         super().__init__(parent)
         self.sql_text = sql_text_widget
         self.panel_query_result = panel_query_result
         self.title("Find")
         
+        # Load settings from parameters (saved from config)
+        self.use_regex = use_regex
+        self.case_sensitive = case_sensitive
+        
         # Center the dialog on the parent window
-        self.geometry("600x100")
         self.transient(parent)
         
         # Allow clicking outside the dialog to interact with other windows (like search results tab)
@@ -30,24 +33,28 @@ class SearchDialog(Toplevel):
         # Focus the search entry field
         self.search_entry.focus_set()
         
-        # Center the dialog on screen
+        # Center the dialog on screen after UI is created
+        self.after(100, self.center_dialog)
+        
+    def center_dialog(self):
+        """Center the dialog on the parent window."""
         self.update_idletasks()
-        dialog_width = 500
-        dialog_height = 180
-        parent_x = parent.winfo_x()
-        parent_y = parent.winfo_y()
-        parent_width = parent.winfo_width()
-        parent_height = parent.winfo_height()
+        dialog_width = self.winfo_width()
+        dialog_height = self.winfo_height()
+        parent_x = self.master.winfo_x()
+        parent_y = self.master.winfo_y()
+        parent_width = self.master.winfo_width()
+        parent_height = self.master.winfo_height()
         x = parent_x + (parent_width - dialog_width) // 2
         y = parent_y + (parent_height - dialog_height) // 2
-        self.geometry(f"{dialog_width}x{dialog_height}+{x}+{y}")
+        self.geometry(f"+{x}+{y}")
         
     def setup_ui(self):
         """Setup the search dialog UI - compact version since results go to tab."""
         # Initialize search tags list on the SQLText widget
         self.sql_text._search_tags = []
         
-        # Search bar frame
+        # Search bar frame - row 0
         search_frame = Frame(self)
         search_frame.pack(fill=tk.X, padx=5, pady=10)
         
@@ -57,17 +64,41 @@ class SearchDialog(Toplevel):
         self.search_entry = Entry(search_frame, textvariable=self.search_var, width=50)
         self.search_entry.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
         
-        self.case_sensitive_var = BooleanVar(value=False)
-        case_check = tk.Checkbutton(search_frame, text="Match Case", variable=self.case_sensitive_var)
-        case_check.pack(side=tk.LEFT, padx=5)
+        # Options frame - row 1
+        options_frame = Frame(self)
+        options_frame.pack(fill=tk.X, padx=5, pady=5)
         
-        Button(search_frame, text="Find All", command=self.search).pack(side=tk.LEFT, padx=5)
-        Button(search_frame, text="Clear", command=self.clear_results).pack(side=tk.LEFT, padx=2)
-        Button(search_frame, text="Close", command=self.close).pack(side=tk.LEFT, padx=2)
+        self.case_sensitive_var = BooleanVar(value=self.case_sensitive)
+        case_check = tk.Checkbutton(options_frame, text="Match Case", variable=self.case_sensitive_var)
+        case_check.pack(side=tk.LEFT, padx=2)
         
-        # Results count label
+        self.regex_var = BooleanVar(value=self.use_regex)
+        regex_check = tk.Checkbutton(options_frame, text="Regex", variable=self.regex_var)
+        regex_check.pack(side=tk.LEFT, padx=2)
+        
+        # Bind checkbox changes to save settings
+        self.case_sensitive_var.trace_add("write", self.on_setting_changed)
+        self.regex_var.trace_add("write", self.on_setting_changed)
+        
+        # Buttons frame - row 2
+        button_frame = Frame(self)
+        button_frame.pack(fill=tk.X, padx=5, pady=5)
+        
+        Button(button_frame, text="Find All", command=self.search).pack(side=tk.LEFT, padx=2)
+        Button(button_frame, text="Find Next", command=self.find_next).pack(side=tk.LEFT, padx=2)
+        Button(button_frame, text="Clear", command=self.clear_results).pack(side=tk.LEFT, padx=2)
+        Button(button_frame, text="Close", command=self.close).pack(side=tk.LEFT, padx=2)
+        
+        # Results count label - row 3
         self.results_label = Label(self, text="")
         self.results_label.pack(fill=tk.X, padx=5, pady=5)
+    
+    def on_setting_changed(self, *args):
+        """Save search settings when checkboxes are toggled."""
+        # Update parent window's search settings through sql_text widget
+        if hasattr(self.sql_text, 'panel_sql_query_editor') and hasattr(self.sql_text.panel_sql_query_editor, 'root'):
+            self.sql_text.panel_sql_query_editor.root.search_use_regex = self.regex_var.get()
+            self.sql_text.panel_sql_query_editor.root.search_case_sensitive = self.case_sensitive_var.get()
         
     def search(self):
         """Perform search and send results to panel_query_result tab."""
@@ -86,18 +117,31 @@ class SearchDialog(Toplevel):
         if not self.case_sensitive_var.get():
             flags |= re.IGNORECASE
         
-        # Escape special regex characters for literal search
-        escaped_search = re.escape(search_text)
+        # Use regex or literal search based on checkbox
+        if self.regex_var.get():
+            # Use regex directly (user provides valid regex)
+            try:
+                pattern = search_text
+                re.compile(pattern, flags)  # Validate regex
+            except re.error as e:
+                self.results_label.config(text=f"Invalid regex: {e}")
+                return
+        else:
+            # Escape special regex characters for literal search
+            pattern = re.escape(search_text)
         
         # Find all matches
         for line_num, line in enumerate(full_text.split('\n'), 1):
-            for match in re.finditer(escaped_search, line, flags):
+            for match in re.finditer(pattern, line, flags):
                 col_start = match.start()
                 col_end = match.end()
                 preview = line[max(0, col_start-20):min(len(line), col_end+20)]
                 if col_start < 20:
                     preview = line[:min(len(line), col_end+20)]
                 self.matches.append((line_num, col_start, col_end, match.group(), preview))
+        
+        # Reset current match index
+        self.current_match_index = -1
         
         # Update results label
         self.results_label.config(text=f"Found {len(self.matches)} match(es)")
@@ -146,6 +190,25 @@ class SearchDialog(Toplevel):
         """Close the search dialog."""
         self.clear_highlights()
         self.destroy()
+    
+    def find_next(self):
+        """Navigate to the next match in the editor."""
+        if not self.matches:
+            return
+        
+        # Increment match index
+        self.current_match_index = (self.current_match_index + 1) % len(self.matches)
+        
+        # Get the match
+        line_num, col_start, col_end, matched_text, preview = self.matches[self.current_match_index]
+        
+        # Navigate to the match
+        self.sql_text.mark_set("insert", f"{line_num}.{col_start}")
+        self.sql_text.see(f"{line_num}.{col_start}")
+        self.sql_text.focus_set()
+        
+        # Update status label
+        self.results_label.config(text=f"Match {self.current_match_index + 1} of {len(self.matches)}")
 
 
 class SQLText(Text):
@@ -1149,5 +1212,13 @@ class SQLText(Text):
 
     def open_search_dialog(self, event=None):
         """Open the search dialog (CTRL+F)."""
-        search_dialog = SearchDialog(self.master, self, self.panel_sql_query_editor.panel_query_result)
+        # Get search settings from the main app if available
+        search_use_regex = False
+        search_case_sensitive = False
+        if hasattr(self.panel_sql_query_editor, 'root') and hasattr(self.panel_sql_query_editor.root, 'search_use_regex'):
+            search_use_regex = self.panel_sql_query_editor.root.search_use_regex
+            search_case_sensitive = self.panel_sql_query_editor.root.search_case_sensitive
+        
+        search_dialog = SearchDialog(self.master, self, self.panel_sql_query_editor.panel_query_result,
+                                      search_use_regex, search_case_sensitive)
         return "break"

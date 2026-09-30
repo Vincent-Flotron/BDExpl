@@ -230,6 +230,24 @@ class PanelQueryResult:
             self.panel_status_bar.set_status("Query Result")
         elif selected_tab == 1:  # Search Results tab
             self.panel_status_bar.set_status(f"Search Results ({len(self.search_results_data)} matches)")
+        
+        # Clear search highlights when leaving Search Results tab
+        if selected_tab != 1:
+            self.clear_search_highlights()
+    
+    def clear_search_highlights(self):
+        """Clear search highlights in the SQL editor."""
+        if self.panel_sql_query_editor:
+            _, info = self.panel_sql_query_editor.get_current_sql_tab()
+            if info and "widget" in info:
+                text_widget = info["widget"]
+                if hasattr(text_widget, '_search_tags'):
+                    for tag in text_widget._search_tags:
+                        try:
+                            text_widget.tag_delete(tag)
+                        except tk.TclError:
+                            pass
+                    text_widget._search_tags = []
 
     def on_search_result_click(self, event):
         """Handle single left-click on search result - navigate to line in editor."""
@@ -255,9 +273,11 @@ class PanelQueryResult:
         self.on_search_result_click(None)
 
     def clear_search_results(self, event=None):
-        """Clear search results."""
+        """Clear search results and highlights."""
         self.search_results_data = []
         self.search_tree.delete(*self.search_tree.get_children())
+        # Also clear highlights in the editor
+        self.clear_search_highlights()
         if self.panel_status_bar:
             self.panel_status_bar.set_status("Search results cleared")
 
