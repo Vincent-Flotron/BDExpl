@@ -3,14 +3,14 @@ from tkinter import ttk
 import tkinter as tk
 import re
 
-class SearchDialog(Toplevel):
-    """Search dialog like Notepad++ with CTRL+F - passes results to panel_query_result tab."""
+class SearchReplaceDialog(Toplevel):
+    """Search and Replace dialog like Notepad++ with CTRL+F - passes results to panel_query_result tab."""
     
     def __init__(self, parent, sql_text_widget, panel_query_result, use_regex=False, case_sensitive=False):
         super().__init__(parent)
         self.sql_text = sql_text_widget
         self.panel_query_result = panel_query_result
-        self.title("Find")
+        self.title("Find and Replace")
         
         # Load settings from parameters (saved from config)
         self.use_regex = use_regex
@@ -27,11 +27,6 @@ class SearchDialog(Toplevel):
         self.current_match_index = -1
         
         self.setup_ui()
-        self.bind("<Return>", lambda e: self.search())
-        self.bind("<Escape>", lambda e: self.close())
-        
-        # Focus the search entry field
-        self.search_entry.focus_set()
         
         # Center the dialog on screen after UI is created
         self.after(100, self.center_dialog)
@@ -50,12 +45,31 @@ class SearchDialog(Toplevel):
         self.geometry(f"+{x}+{y}")
         
     def setup_ui(self):
-        """Setup the search dialog UI - compact version since results go to tab."""
+        """Setup the tabbed search/replace dialog UI."""
         # Initialize search tags list on the SQLText widget
         self.sql_text._search_tags = []
         
-        # Search bar frame - row 0
-        search_frame = Frame(self)
+        # Create notebook for tabs
+        self.notebook = ttk.Notebook(self)
+        self.notebook.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        # Create Search tab
+        self.search_tab = Frame(self.notebook)
+        self.notebook.add(self.search_tab, text="Search")
+        self.setup_search_tab()
+        
+        # Create Replace tab
+        self.replace_tab = Frame(self.notebook)
+        self.notebook.add(self.replace_tab, text="Replace")
+        self.setup_replace_tab()
+        
+        # Bind tab change event
+        self.notebook.bind("<<NotebookTabChanged>>", self.on_tab_changed)
+    
+    def setup_search_tab(self):
+        """Setup the Search tab UI."""
+        # Search bar frame
+        search_frame = Frame(self.search_tab)
         search_frame.pack(fill=tk.X, padx=5, pady=10)
         
         Label(search_frame, text="Find:").pack(side=tk.LEFT, padx=2)
@@ -64,8 +78,11 @@ class SearchDialog(Toplevel):
         self.search_entry = Entry(search_frame, textvariable=self.search_var, width=50)
         self.search_entry.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
         
-        # Options frame - row 1
-        options_frame = Frame(self)
+        # Bind Enter key to search
+        self.search_entry.bind("<Return>", lambda e: self.search())
+        
+        # Options frame
+        options_frame = Frame(self.search_tab)
         options_frame.pack(fill=tk.X, padx=5, pady=5)
         
         self.case_sensitive_var = BooleanVar(value=self.case_sensitive)
@@ -80,8 +97,8 @@ class SearchDialog(Toplevel):
         self.case_sensitive_var.trace_add("write", self.on_setting_changed)
         self.regex_var.trace_add("write", self.on_setting_changed)
         
-        # Buttons frame - row 2
-        button_frame = Frame(self)
+        # Buttons frame
+        button_frame = Frame(self.search_tab)
         button_frame.pack(fill=tk.X, padx=5, pady=5)
         
         Button(button_frame, text="Find All", command=self.search).pack(side=tk.LEFT, padx=2)
@@ -89,9 +106,75 @@ class SearchDialog(Toplevel):
         Button(button_frame, text="Clear", command=self.clear_results).pack(side=tk.LEFT, padx=2)
         Button(button_frame, text="Close", command=self.close).pack(side=tk.LEFT, padx=2)
         
-        # Results count label - row 3
-        self.results_label = Label(self, text="")
+        # Results count label
+        self.results_label = Label(self.search_tab, text="")
         self.results_label.pack(fill=tk.X, padx=5, pady=5)
+    
+    def setup_replace_tab(self):
+        """Setup the Replace tab UI."""
+        # Search bar frame
+        search_frame = Frame(self.replace_tab)
+        search_frame.pack(fill=tk.X, padx=5, pady=10)
+        
+        Label(search_frame, text="Find:").pack(side=tk.LEFT, padx=2)
+        
+        self.replace_search_var = StringVar()
+        self.replace_search_entry = Entry(search_frame, textvariable=self.replace_search_var, width=50)
+        self.replace_search_entry.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
+        
+        # Replace bar frame
+        replace_frame = Frame(self.replace_tab)
+        replace_frame.pack(fill=tk.X, padx=5, pady=5)
+        
+        Label(replace_frame, text="Replace:").pack(side=tk.LEFT, padx=2)
+        
+        self.replace_var = StringVar()
+        self.replace_entry = Entry(replace_frame, textvariable=self.replace_var, width=50)
+        self.replace_entry.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
+        
+        # Options frame
+        options_frame = Frame(self.replace_tab)
+        options_frame.pack(fill=tk.X, padx=5, pady=5)
+        
+        self.replace_case_sensitive_var = BooleanVar(value=self.case_sensitive)
+        case_check = tk.Checkbutton(options_frame, text="Match Case", variable=self.replace_case_sensitive_var)
+        case_check.pack(side=tk.LEFT, padx=2)
+        
+        self.replace_regex_var = BooleanVar(value=self.use_regex)
+        regex_check = tk.Checkbutton(options_frame, text="Regex", variable=self.replace_regex_var)
+        regex_check.pack(side=tk.LEFT, padx=2)
+        
+        # Bind checkbox changes to save settings
+        self.replace_case_sensitive_var.trace_add("write", self.on_setting_changed)
+        self.replace_regex_var.trace_add("write", self.on_setting_changed)
+        
+        # Buttons frame row 1
+        button_frame = Frame(self.replace_tab)
+        button_frame.pack(fill=tk.X, padx=5, pady=5)
+        
+        Button(button_frame, text="Find All", command=self.replace_find_all).pack(side=tk.LEFT, padx=2)
+        Button(button_frame, text="Find Next", command=self.replace_find_next).pack(side=tk.LEFT, padx=2)
+        Button(button_frame, text="Clear", command=self.replace_clear).pack(side=tk.LEFT, padx=2)
+        Button(button_frame, text="Close", command=self.close).pack(side=tk.LEFT, padx=2)
+        
+        # Buttons frame row 2
+        replace_button_frame = Frame(self.replace_tab)
+        replace_button_frame.pack(fill=tk.X, padx=5, pady=5)
+        
+        Button(replace_button_frame, text="Replace", command=self.replace_one).pack(side=tk.LEFT, padx=2)
+        Button(replace_button_frame, text="Replace All", command=self.replace_all).pack(side=tk.LEFT, padx=2)
+        
+        # Results count label
+        self.replace_results_label = Label(self.replace_tab, text="")
+        self.replace_results_label.pack(fill=tk.X, padx=5, pady=5)
+    
+    def on_tab_changed(self, event):
+        """Handle tab change event."""
+        selected_tab = self.notebook.index(self.notebook.select())
+        if selected_tab == 0:  # Search tab
+            self.search_entry.focus_set()
+        else:  # Replace tab
+            self.replace_search_entry.focus_set()
     
     def on_setting_changed(self, *args):
         """Save search settings when checkboxes are toggled."""
@@ -99,10 +182,20 @@ class SearchDialog(Toplevel):
         if hasattr(self.sql_text, 'panel_sql_query_editor') and hasattr(self.sql_text.panel_sql_query_editor, 'root'):
             self.sql_text.panel_sql_query_editor.root.search_use_regex = self.regex_var.get()
             self.sql_text.panel_sql_query_editor.root.search_case_sensitive = self.case_sensitive_var.get()
-        
-    def search(self):
+    
+    def get_search_flags(self, use_regex_var, case_sensitive_var):
+        """Get regex flags based on settings."""
+        flags = re.MULTILINE
+        if not case_sensitive_var.get():
+            flags |= re.IGNORECASE
+        return flags
+    
+    def search(self, event=None):
         """Perform search and send results to panel_query_result tab."""
         search_text = self.search_var.get()
+        use_regex = self.regex_var.get()
+        case_sensitive = self.case_sensitive_var.get()
+        
         if not search_text:
             return
         
@@ -114,11 +207,11 @@ class SearchDialog(Toplevel):
         
         # Determine flags for regex
         flags = re.MULTILINE
-        if not self.case_sensitive_var.get():
+        if not case_sensitive:
             flags |= re.IGNORECASE
         
         # Use regex or literal search based on checkbox
-        if self.regex_var.get():
+        if use_regex:
             # Use regex directly (user provides valid regex)
             try:
                 pattern = search_text
@@ -152,7 +245,7 @@ class SearchDialog(Toplevel):
         # Send results to panel_query_result tab
         if self.panel_query_result:
             self.panel_query_result.display_search_results(self.matches, search_text)
-        
+    
     def highlight_all_matches(self):
         """Highlight all found matches in the editor."""
         self.clear_highlights()
@@ -185,7 +278,7 @@ class SearchDialog(Toplevel):
         # Also clear the tab results
         if self.panel_query_result:
             self.panel_query_result.clear_search_results()
-        
+    
     def close(self):
         """Close the search dialog."""
         self.clear_highlights()
@@ -209,6 +302,187 @@ class SearchDialog(Toplevel):
         
         # Update status label
         self.results_label.config(text=f"Match {self.current_match_index + 1} of {len(self.matches)}")
+    
+    # Replace tab methods
+    def replace_find_all(self, event=None):
+        """Perform search from Replace tab."""
+        # Temporarily sync search tab vars from replace tab vars
+        self.search_var.set(self.replace_search_var.get())
+        self.regex_var.set(self.replace_regex_var.get())
+        self.case_sensitive_var.set(self.replace_case_sensitive_var.get())
+        self.search()
+        # Update the replace tab label
+        self.replace_results_label.config(text=self.results_label.cget("text"))
+    
+    def replace_find_next(self, event=None):
+        """Find next match from Replace tab."""
+        # If no matches yet, do a search first
+        if not self.matches:
+            self.replace_find_all()
+        else:
+            self.find_next()
+            self.replace_results_label.config(text=self.results_label.cget("text"))
+    
+    def replace_clear(self):
+        """Clear replace tab fields and results."""
+        self.replace_search_var.set("")
+        self.replace_var.set("")
+        self.replace_results_label.config(text="")
+        self.matches = []
+        self.current_match_index = -1
+        self.clear_highlights()
+        if self.panel_query_result:
+            self.panel_query_result.clear_search_results()
+    
+    def _do_replace(self, match_text, replace_text, use_regex):
+        """Perform a single replacement at the current match location."""
+        if not self.matches:
+            return False
+        
+        # Get current match
+        line_num, col_start, col_end, matched_text, preview = self.matches[self.current_match_index]
+        
+        # Get the text widget content
+        full_text = self.sql_text.get("1.0", "end-1c")
+        lines = full_text.split('\n')
+        
+        if use_regex:
+            # For regex, use re.sub with the replacement
+            # Support for capture groups $1, $2, etc. - convert to \1, \2
+            py_replace_text = re.sub(r'\$(\d+)', r'\\\1', replace_text)
+            try:
+                new_text = re.sub(match_text, py_replace_text, lines[line_num - 1], count=1)
+            except re.error:
+                return False
+        else:
+            # Literal replacement
+            new_text = lines[line_num - 1].replace(matched_text, replace_text, 1)
+        
+        # Update the line
+        lines[line_num - 1] = new_text
+        new_full_text = '\n'.join(lines)
+        
+        # Save undo state before modification
+        if hasattr(self.sql_text, 'panel_sql_query_editor'):
+            self.sql_text.panel_sql_query_editor.add_undo_cyclic_separator()
+        
+        # Update the text widget
+        self.sql_text.delete("1.0", "end")
+        self.sql_text.insert("1.0", new_full_text)
+        
+        # Re-run search to update matches
+        self.search()
+        self.replace_results_label.config(text=self.results_label.cget("text"))
+        
+        return True
+    
+    def replace_one(self, event=None):
+        """Replace the current match."""
+        search_text = self.replace_search_var.get()
+        replace_text = self.replace_var.get()
+        use_regex = self.replace_regex_var.get()
+        case_sensitive = self.replace_case_sensitive_var.get()
+        
+        if not search_text:
+            return
+        
+        # Sync search tab vars from replace tab vars
+        self.search_var.set(search_text)
+        self.regex_var.set(use_regex)
+        self.case_sensitive_var.set(case_sensitive)
+        
+        # If no matches yet, do a search first
+        if not self.matches:
+            self.search()
+            self.replace_results_label.config(text=self.results_label.cget("text"))
+            if not self.matches:
+                return
+        
+        # Navigate to first match if not yet positioned
+        if self.current_match_index == -1:
+            self.current_match_index = 0
+            line_num, col_start, col_end, matched_text, preview = self.matches[self.current_match_index]
+            self.sql_text.mark_set("insert", f"{line_num}.{col_start}")
+            self.sql_text.see(f"{line_num}.{col_start}")
+            self.sql_text.focus_set()
+            self.replace_results_label.config(text=f"Match {self.current_match_index + 1} of {len(self.matches)}")
+            return
+        
+        # Perform replacement
+        if self._do_replace(search_text, replace_text, use_regex):
+            # Move to next match
+            if self.matches:
+                self.current_match_index = (self.current_match_index + 1) % len(self.matches)
+                line_num, col_start, col_end, matched_text, preview = self.matches[self.current_match_index]
+                self.sql_text.mark_set("insert", f"{line_num}.{col_start}")
+                self.sql_text.see(f"{line_num}.{col_start}")
+                self.sql_text.focus_set()
+                self.replace_results_label.config(text=f"Match {self.current_match_index + 1} of {len(self.matches)}")
+    
+    def replace_all(self, event=None):
+        """Replace all matches in the document."""
+        search_text = self.replace_search_var.get()
+        replace_text = self.replace_var.get()
+        use_regex = self.replace_regex_var.get()
+        case_sensitive = self.replace_case_sensitive_var.get()
+        
+        if not search_text:
+            return
+        
+        # Sync search tab vars from replace tab vars
+        self.search_var.set(search_text)
+        self.regex_var.set(use_regex)
+        self.case_sensitive_var.set(case_sensitive)
+        
+        # Do initial search
+        self.search()
+        
+        if not self.matches:
+            self.replace_results_label.config(text="No matches found")
+            return
+        
+        flags = re.MULTILINE
+        if not case_sensitive:
+            flags |= re.IGNORECASE
+        
+        # Get the text widget content
+        full_text = self.sql_text.get("1.0", "end-1c")
+        
+        if use_regex:
+            # For regex, use re.sub with the replacement
+            # Support for capture groups $1, $2, etc. - convert to \1, \2
+            py_replace_text = re.sub(r'\$(\d+)', r'\\\1', replace_text)
+            try:
+                new_text = re.sub(search_text, py_replace_text, full_text, flags=flags)
+            except re.error as e:
+                self.replace_results_label.config(text=f"Invalid regex: {e}")
+                return
+        else:
+            # Literal replacement
+            new_text = full_text.replace(search_text, replace_text)
+        
+        # Save undo state before modification
+        if hasattr(self.sql_text, 'panel_sql_query_editor'):
+            self.sql_text.panel_sql_query_editor.add_undo_cyclic_separator()
+        
+        # Update the text widget
+        self.sql_text.delete("1.0", "end")
+        self.sql_text.insert("1.0", new_text)
+        
+        # Clear highlights and re-search
+        self.clear_highlights()
+        self.matches = []
+        self.current_match_index = -1
+        
+        # Search again in the modified text to show updated results
+        self.search()
+        
+        count = len(self.matches)
+        self.replace_results_label.config(text=f"Replaced all occurrences. Found {count} remaining match(es).")
+        
+        # Clear the tab results
+        if self.panel_query_result:
+            self.panel_query_result.clear_search_results()
 
 
 class SQLText(Text):
@@ -1211,7 +1485,7 @@ class SQLText(Text):
             return None
 
     def open_search_dialog(self, event=None):
-        """Open the search dialog (CTRL+F)."""
+        """Open the search and replace dialog (CTRL+F)."""
         # Get search settings from the main app if available
         search_use_regex = False
         search_case_sensitive = False
@@ -1219,6 +1493,6 @@ class SQLText(Text):
             search_use_regex = self.panel_sql_query_editor.root.search_use_regex
             search_case_sensitive = self.panel_sql_query_editor.root.search_case_sensitive
         
-        search_dialog = SearchDialog(self.master, self, self.panel_sql_query_editor.panel_query_result,
-                                      search_use_regex, search_case_sensitive)
+        search_dialog = SearchReplaceDialog(self.master, self, self.panel_sql_query_editor.panel_query_result,
+                                            search_use_regex, search_case_sensitive)
         return "break"
