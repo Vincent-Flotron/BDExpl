@@ -1,6 +1,175 @@
-from tkinter import Text
+from tkinter import Text, Toplevel, Frame, Label, Entry, Button, Scrollbar, StringVar, BooleanVar
+from tkinter import ttk
 import tkinter as tk
 import re
+
+class SearchDialog(Toplevel):
+    """Search dialog like Notepad++ with CTRL+F - shows all matches in a scrollable table."""
+    
+    def __init__(self, parent, sql_text_widget):
+        super().__init__(parent)
+        self.sql_text = sql_text_widget
+        self.title("Find")
+        self.geometry("600x400")
+        self.transient(parent)
+        self.grab_set()
+        
+        self.matches = []  # List of (line, col_start, col_end, text) tuples
+        self.current_match_index = -1
+        
+        self.setup_ui()
+        self.bind("<Return>", lambda e: self.search())
+        self.bind("<Escape>", lambda e: self.close())
+        
+    def setup_ui(self):
+        """Setup the search dialog UI."""
+        # Initialize search tags list on the SQLText widget
+        self.sql_text._search_tags = []
+        
+        # Search bar frame
+        search_frame = Frame(self)
+        search_frame.pack(fill=tk.X, padx=5, pady=5)
+        
+        Label(search_frame, text="Find:").pack(side=tk.LEFT, padx=2)
+        
+        self.search_var = StringVar()
+        self.search_entry = Entry(search_frame, textvariable=self.search_var, width=50)
+        self.search_entry.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
+        
+        self.case_sensitive_var = BooleanVar(value=False)
+        case_check = tk.Checkbutton(search_frame, text="Match Case", variable=self.case_sensitive_var)
+        case_check.pack(side=tk.LEFT, padx=5)
+        
+        Button(search_frame, text="Find All", command=self.search).pack(side=tk.LEFT, padx=5)
+        Button(search_frame, text="Clear", command=self.clear_results).pack(side=tk.LEFT, padx=2)
+        Button(search_frame, text="Close", command=self.close).pack(side=tk.LEFT, padx=2)
+        
+        # Results count label
+        self.results_label = Label(self, text="")
+        self.results_label.pack(fill=tk.X, padx=5, pady=2)
+        
+        # Results table frame
+        results_frame = Frame(self)
+        results_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        # Create Treeview for results
+        columns = ("Line", "Column", "Preview")
+        self.results_tree = ttk.Treeview(results_frame, columns=columns, show="headings", selectmode="browse")
+        
+        self.results_tree.heading("Line", text="Line")
+        self.results_tree.heading("Column", text="Column")
+        self.results_tree.heading("Preview", text="Preview")
+        
+        self.results_tree.column("Line", width=60)
+        self.results_tree.column("Column", width=60)
+        self.results_tree.column("Preview", width=400)
+        
+        # Scrollbars
+        y_scroll = Scrollbar(results_frame, orient=tk.VERTICAL, command=self.results_tree.yview)
+        x_scroll = Scrollbar(results_frame, orient=tk.HORIZONTAL, command=self.results_tree.xview)
+        self.results_tree.configure(yscrollcommand=y_scroll.set, xscrollcommand=x_scroll.set)
+        
+        self.results_tree.grid(row=0, column=0, sticky="nsew")
+        y_scroll.grid(row=0, column=1, sticky="ns")
+        x_scroll.grid(row=1, column=0, sticky="ew")
+        
+        results_frame.grid_rowconfigure(0, weight=1)
+        results_frame.grid_columnconfigure(0, weight=1)
+        
+        # Bind double-click to go to match
+        self.results_tree.bind("<Double-Button-1>", self.on_result_double_click)
+        
+    def search(self):
+        """Perform search and populate results table."""
+        search_text = self.search_var.get()
+        if not search_text:
+            return
+        
+        self.clear_highlights()
+        self.matches = []
+        
+        # Get all text
+        full_text = self.sql_text.get("1.0", "end-1c")
+        
+        # Determine flags for regex
+        flags = re.MULTILINE
+        if not self.case_sensitive_var.get():
+            flags |= re.IGNORECASE
+        
+        # Escape special regex characters for literal search
+        escaped_search = re.escape(search_text)
+        
+        # Find all matches
+        for line_num, line in enumerate(full_text.split('\n'), 1):
+            for match in re.finditer(escaped_search, line, flags):
+                col_start = match.start()
+                col_end = match.end()
+                preview = line[max(0, col_start-20):min(len(line), col_end+20)]
+                if col_start < 20:
+                    preview = line[:min(len(line), col_end+20)]
+                self.matches.append((line_num, col_start, col_end, match.group(), preview))
+        
+        # Populate results table
+        self.results_tree.delete(*self.results_tree.get_children())
+        for line_num, col_start, col_end, matched_text, preview in self.matches:
+            self.results_tree.insert("", "end", values=(line_num, col_start + 1, preview))
+        
+        # Update results label
+        self.results_label.config(text=f"Found {len(self.matches)} match(es)")
+        
+        # Highlight all matches in editor
+        self.highlight_all_matches()
+        
+    def highlight_all_matches(self):
+        """Highlight all found matches in the editor."""
+        self.clear_highlights()
+        
+        for i, (line_num, col_start, col_end, matched_text, preview) in enumerate(self.matches):
+            tag_name = f"search_match_{i}"
+            start_pos = f"{line_num}.{col_start}"
+            end_pos = f"{line_num}.{col_end}"
+            self.sql_text.tag_config(tag_name, background="#ffff00", foreground="black")
+            self.sql_text.tag_add(tag_name, start_pos, end_pos)
+            self.sql_text._search_tags.append(tag_name)
+    
+    def clear_highlights(self):
+        """Clear search highlights from editor."""
+        if hasattr(self.sql_text, '_search_tags'):
+            for tag in self.sql_text._search_tags:
+                try:
+                    self.sql_text.tag_delete(tag)
+                except tk.TclError:
+                    pass
+            self.sql_text._search_tags = []
+    
+    def clear_results(self):
+        """Clear search results and highlights."""
+        self.search_var.set("")
+        self.results_tree.delete(*self.results_tree.get_children())
+        self.results_label.config(text="")
+        self.matches = []
+        self.current_match_index = -1
+        self.clear_highlights()
+        
+    def on_result_double_click(self, event):
+        """Handle double-click on a result - navigate to that match."""
+        selection = self.results_tree.selection()
+        if not selection:
+            return
+        
+        item_index = self.results_tree.index(selection[0])
+        if 0 <= item_index < len(self.matches):
+            line_num, col_start, col_end, matched_text, preview = self.matches[item_index]
+            # Navigate to the match
+            self.sql_text.mark_set("insert", f"{line_num}.{col_start}")
+            self.sql_text.see(f"{line_num}.{col_start}")
+            self.sql_text.focus_set()
+    
+    def close(self):
+        """Close the search dialog."""
+        self.clear_highlights()
+        self.destroy()
+
 
 class SQLText(Text):
     """A Text widget with SQL syntax highlighting using regex."""
@@ -50,6 +219,12 @@ class SQLText(Text):
 
         # Reset the flag on any other key press
         self.bind("<Key>",             self.reset_ctrl_k_flag, add="+")
+
+        # Initialize search tags list
+        self._search_tags = []
+
+        # Bind CTRL+F for search dialog
+        self.bind("<Control-f>",       self.open_search_dialog)
 
         # Column Selection Mode (like VSCode's SHIFT+ALT + Click)
         self.column_selection_active = False
@@ -994,3 +1169,8 @@ class SQLText(Text):
             return "break"
         except tk.TclError:
             return None
+
+    def open_search_dialog(self, event=None):
+        """Open the search dialog (CTRL+F)."""
+        search_dialog = SearchDialog(self.master, self)
+        return "break"
