@@ -612,15 +612,15 @@ class SQLText(Text):
         self.bind("<Prior>",    self.on_cursor_movement_clear_column)  # Page Up
         self.bind("<Next>",     self.on_cursor_movement_clear_column)  # Page Down
         
-        # Bind key events for column selection mode
-        self.bind("<Key>",             self.handle_column_selection_key)
-        self.bind("<BackSpace>",       self.handle_column_selection_backspace)
-        self.bind("<Delete>",          self.handle_column_selection_delete)
-        self.bind("<Control-c>",       self.handle_column_selection_copy)
-        self.bind("<Control-C>",       self.handle_column_selection_copy)
-        self.bind("<Control-v>",       self.handle_column_selection_paste)
-        self.bind("<Control-V>",       self.handle_column_selection_paste)
-        self.bind("<Escape>",          self.clear_column_selection)
+        # Bind key events for column selection mode (using add="+" to not overwrite existing bindings)
+        self.bind("<Key>",             self.handle_column_selection_key, add="+")
+        self.bind("<BackSpace>",       self.handle_column_selection_backspace, add="+")
+        self.bind("<Delete>",          self.handle_column_selection_delete, add="+")
+        self.bind("<Control-c>",       self.handle_column_selection_copy, add="+")
+        self.bind("<Control-C>",       self.handle_column_selection_copy, add="+")
+        self.bind("<Control-v>",       self.handle_column_selection_paste, add="+")
+        self.bind("<Control-V>",       self.handle_column_selection_paste, add="+")
+        self.bind("<Escape>",          self.clear_column_selection, add="+")
 
         # Define colors for syntax highlighting
         self.colors = {
@@ -1379,7 +1379,7 @@ class SQLText(Text):
         self.column_selection_end = f"{end_line}.{end_col + text_len}"
         self.update_column_selection()
 
-    def clear_column_selection(self):
+    def clear_column_selection(self, event=None):
         """Clear the column selection visual and state."""
         # Remove column selection tags
         for tag in self._column_selection_tags:
@@ -1393,6 +1393,10 @@ class SQLText(Text):
         self.column_selection_anchor = None
         self.column_selection_active = False
         self.update_line_numbers_style()
+    
+    def on_content_changed(self):
+        """Notify that content has changed - for undo/redo tracking."""
+        pass
 
     def handle_column_selection_key(self, event=None):
         """Handle key press in column selection mode - insert character at each line of selection."""
