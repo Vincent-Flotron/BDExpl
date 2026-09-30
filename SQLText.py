@@ -30,6 +30,11 @@ class SearchReplaceDialog(Toplevel):
         
         # Center the dialog on screen after UI is created
         self.after(100, self.center_dialog)
+    
+    def open_replace_tab(self):
+        """Open the dialog with Replace tab focused."""
+        self.notebook.select(1)  # Select Replace tab (index 1)
+        self.replace_search_entry.focus_set()
         
     def center_dialog(self):
         """Center the dialog on the parent window."""
@@ -539,6 +544,8 @@ class SQLText(Text):
 
         # Bind CTRL+F for search dialog
         self.bind("<Control-f>",       self.open_search_dialog)
+        # Bind CTRL+H for replace dialog
+        self.bind("<Control-h>",       self.open_replace_dialog)
 
         # Column Selection Mode (like VSCode's SHIFT+ALT + Click)
         self.column_selection_active = False
@@ -1495,4 +1502,19 @@ class SQLText(Text):
         
         search_dialog = SearchReplaceDialog(self.master, self, self.panel_sql_query_editor.panel_query_result,
                                             search_use_regex, search_case_sensitive)
+        return "break"
+    
+    def open_replace_dialog(self, event=None):
+        """Open the search and replace dialog focused on Replace tab (CTRL+H)."""
+        # Get search settings from the main app if available
+        search_use_regex = False
+        search_case_sensitive = False
+        if hasattr(self.panel_sql_query_editor, 'root') and hasattr(self.panel_sql_query_editor.root, 'search_use_regex'):
+            search_use_regex = self.panel_sql_query_editor.root.search_use_regex
+            search_case_sensitive = self.panel_sql_query_editor.root.search_case_sensitive
+        
+        search_dialog = SearchReplaceDialog(self.master, self, self.panel_sql_query_editor.panel_query_result,
+                                            search_use_regex, search_case_sensitive)
+        # Open with Replace tab focused
+        search_dialog.open_replace_tab()
         return "break"
