@@ -1217,6 +1217,8 @@ class PanelSQLQueryEditor:
                     result["rows"],
                     result["description"],
                 )
+                # Show query result tab (smart tab display)
+                self.panel_query_result.show_query_result_tab()
             else:
                 # Store the message for this tab
                 self.tab_results[tab_id] = {
@@ -1224,6 +1226,8 @@ class PanelSQLQueryEditor:
                     "message": result["message"]
                 }
                 self.panel_query_result.display_message(result["message"])
+                # Show query result tab for messages too
+                self.panel_query_result.show_query_result_tab()
         else:
             # Store the error for this tab
             self.tab_results[tab_id] = {
@@ -1231,6 +1235,8 @@ class PanelSQLQueryEditor:
                 "error": result["error"]
             }
             self.panel_query_result.display_error(result["error"])
+            # Show query result tab for errors too
+            self.panel_query_result.show_query_result_tab()
 
     def close_tab(self, tab_id):
         """Close the specified tab"""
@@ -1253,4 +1259,21 @@ class PanelSQLQueryEditor:
     def display_message(self, message: str):
         """Display message in result panel"""
         self.panel_query_result.display_message(message)
+
+    def go_to_line(self, line_num, col=0):
+        """Navigate to the specified line and column in the current SQL editor tab."""
+        _, info = self.get_current_sql_tab()
+        if not info or "widget" not in info:
+            return
+        
+        text_widget = info["widget"]
+        try:
+            # Position cursor at the specified line and column
+            text_widget.mark_set("insert", f"{line_num}.{col}")
+            # Scroll to make the line visible
+            text_widget.see(f"{line_num}.{col}")
+            # Focus the editor
+            text_widget.focus_set()
+        except tk.TclError:
+            pass
 

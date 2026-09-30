@@ -11,6 +11,9 @@ except ImportError:
     OPENPYXL_AVAILABLE = False
 
 class PanelQueryResult:
+    # Constants for tab identification
+    TAB_QUERY_RESULT = "query_result"
+    TAB_SEARCH_RESULT = "search_result"
     def __init__(self, root, panel_status_bar):
         self.root                    = root
         self.current_codepage        = 'utf-8'
@@ -80,15 +83,38 @@ class PanelQueryResult:
     # SETUP
     # ─────────────────────────────────────────────────────────────────
     def setup(self, parent, config):
-        """Panel 3: Query Result Grid"""
+        """Panel 3: Query Result Grid with tabs for Query Result and Search Result"""
         self.parent = parent
         self.config = config
 
         result_frame = ttk.Frame(self.parent, style='TFrame')
         self.parent.add(result_frame, weight=1)
 
+        # Create notebook for tabs
+        self.result_notebook = ttk.Notebook(result_frame, style='TNotebook')
+        self.result_notebook.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        # Create Query Result tab
+        self.query_result_frame = ttk.Frame(self.result_notebook, style='TFrame')
+        self.result_notebook.add(self.query_result_frame, text="Query Result")
+        
+        # Create Search Result tab
+        self.search_result_frame = ttk.Frame(self.result_notebook, style='TFrame')
+        self.result_notebook.add(self.search_result_frame, text="Search Results")
+        
+        # Setup Query Result tab
+        self._setup_query_result_tab()
+        
+        # Setup Search Result tab
+        self._setup_search_result_tab()
+        
+        # Bind tab change event
+        self.result_notebook.bind("<<NotebookTabChanged>>", self.on_result_tab_changed)
+
+    def _setup_query_result_tab(self):
+        """Setup the Query Result tab content."""
         # ── Header ───────────────────────────────────────────────────
-        header = ttk.Frame(result_frame, style='TFrame')
+        header = ttk.Frame(self.query_result_frame, style='TFrame')
         header.pack(fill=tk.X, padx=5, pady=5)
         ttk.Label(header, text="Query Result", style='Bold.TLabel').pack(side=tk.LEFT)
 
@@ -104,7 +130,7 @@ class PanelQueryResult:
         ttk.Button(zoom_frame, text="↻", command=self.reset_zoom, width=2).pack(side=tk.RIGHT, padx=2)
 
         # ── Result grid ───────────────────────────────────────────────
-        grid_container = ttk.Frame(result_frame, style='TFrame')
+        grid_container = ttk.Frame(self.query_result_frame, style='TFrame')
         grid_container.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
         self.result_tree = Helper.create_treeview_with_scrollbars(grid_container, show='tree headings')
@@ -129,6 +155,115 @@ class PanelQueryResult:
 
         # Stocker le texte brut des erreurs pour rafraîchissement
         self.raw_error_text = None
+
+    def _setup_search_result_tab(self):
+        """Setup the Search Result tab content."""
+        # Header
+        header = ttk.Frame(self.search_result_frame, style='TFrame')
+        header.pack(fill=tk.X, padx=5, pady=5)
+        ttk.Label(header, text="Search Results", style='Bold.TLabel').pack(side=tk.LEFT)
+        
+        # Search results grid
+        grid_container = ttk.Frame(self.search_result_frame, style='TFrame')
+        grid_container.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        self.search_tree = Helper.create_treeview_with_scrollbars(grid_container, show='tree headings')
+        self.search_tree.configure(style='ResultTree.Treeview')
+        self.search_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        
+        # Bind single left-click to navigate to line in editor (more intuitive)
+        self.search_tree.bind("<ButtonRelease-1>", self.on_search_result_click)
+        
+        # Context menu for search results
+        search_commands = [
+            ("Clear Results", self.clear_search_results),
+        ]
+        self.search_context_menu = Helper.create_context_menu(self.search_tree, search_commands)
+        self.search_tree.bind("<Button-3>", self.show_search_context_menu)
+        
+        # Store search results data
+        self.search_results_data = []
+
+    def display_search_results(self, matches, search_term):
+        """Display search results in the Search Results tab."""
+        self.search_results_data = matches
+        
+        # Clear existing items
+        self.search_tree.delete(*self.search_tree.get_children())
+        
+        # Setup columns
+        columns = ("Line", "Column", "Preview")
+        self.search_tree['columns'] = columns
+        self.search_tree.column('#0', width=0, stretch=tk.NO)
+        
+        self.search_tree.heading("Line", text="Line")
+        self.search_tree.heading("Column", text="Column")
+        self.search_tree.heading("Preview", text="Preview")
+        
+        self.search_tree.column("Line", width=60, anchor=tk.E)
+        self.search_tree.column("Column", width=60, anchor=tk.E)
+        self.search_tree.column("Preview", width=400, anchor=tk.W)
+        
+        # Populate with matches
+        for i, (line_num, col_start, col_end, matched_text, preview) in enumerate(matches):
+            self.search_tree.insert("", "end", values=(line_num, col_start + 1, preview), iid=str(i))
+        
+        # Update status bar
+        if self.panel_status_bar:
+            self.panel_status_bar.set_status(f"Found {len(matches)} match(es) for '{search_term}'")
+        
+        # Switch to search results tab
+        self.show_search_result_tab()
+
+    def show_search_result_tab(self):
+        """Show the Search Results tab."""
+        self.result_notebook.select(self.search_result_frame)
+
+    def show_query_result_tab(self):
+        """Show the Query Result tab."""
+        self.result_notebook.select(self.query_result_frame)
+
+    def on_result_tab_changed(self, event):
+        """Handle tab change in result notebook."""
+        selected_tab = self.result_notebook.index(self.result_notebook.select())
+        if selected_tab == 0:  # Query Result tab
+            self.panel_status_bar.set_status("Query Result")
+        elif selected_tab == 1:  # Search Results tab
+            self.panel_status_bar.set_status(f"Search Results ({len(self.search_results_data)} matches)")
+
+    def on_search_result_click(self, event):
+        """Handle single left-click on search result - navigate to line in editor."""
+        selection = self.search_tree.selection()
+        if not selection:
+            return
+        
+        # Get the item data
+        item_id = selection[0]
+        try:
+            item_index = int(item_id)
+            if 0 <= item_index < len(self.search_results_data):
+                line_num, col_start, col_end, matched_text, preview = self.search_results_data[item_index]
+                
+                # Navigate to the line in SQL editor
+                if self.panel_sql_query_editor:
+                    self.panel_sql_query_editor.go_to_line(line_num, col_start)
+        except (ValueError, IndexError):
+            pass
+
+    def go_to_search_result_line(self, event=None):
+        """Navigate to the selected search result line in the SQL editor (context menu)."""
+        self.on_search_result_click(None)
+
+    def clear_search_results(self, event=None):
+        """Clear search results."""
+        self.search_results_data = []
+        self.search_tree.delete(*self.search_tree.get_children())
+        if self.panel_status_bar:
+            self.panel_status_bar.set_status("Search results cleared")
+
+    def show_search_context_menu(self, event):
+        """Show context menu for search results."""
+        self.search_context_menu.post(event.x_root, event.y_root)
 
     # ─────────────────────────────────────────────────────────────────
     # PUBLIC DISPLAY METHODS

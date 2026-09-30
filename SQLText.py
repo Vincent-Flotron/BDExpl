@@ -4,13 +4,14 @@ import tkinter as tk
 import re
 
 class SearchDialog(Toplevel):
-    """Search dialog like Notepad++ with CTRL+F - shows all matches in a scrollable table."""
+    """Search dialog like Notepad++ with CTRL+F - passes results to panel_query_result tab."""
     
-    def __init__(self, parent, sql_text_widget):
+    def __init__(self, parent, sql_text_widget, panel_query_result):
         super().__init__(parent)
         self.sql_text = sql_text_widget
+        self.panel_query_result = panel_query_result
         self.title("Find")
-        self.geometry("600x400")
+        self.geometry("400x150")
         self.transient(parent)
         self.grab_set()
         
@@ -22,13 +23,13 @@ class SearchDialog(Toplevel):
         self.bind("<Escape>", lambda e: self.close())
         
     def setup_ui(self):
-        """Setup the search dialog UI."""
+        """Setup the search dialog UI - compact version since results go to tab."""
         # Initialize search tags list on the SQLText widget
         self.sql_text._search_tags = []
         
         # Search bar frame
         search_frame = Frame(self)
-        search_frame.pack(fill=tk.X, padx=5, pady=5)
+        search_frame.pack(fill=tk.X, padx=5, pady=10)
         
         Label(search_frame, text="Find:").pack(side=tk.LEFT, padx=2)
         
@@ -46,41 +47,10 @@ class SearchDialog(Toplevel):
         
         # Results count label
         self.results_label = Label(self, text="")
-        self.results_label.pack(fill=tk.X, padx=5, pady=2)
-        
-        # Results table frame
-        results_frame = Frame(self)
-        results_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-        
-        # Create Treeview for results
-        columns = ("Line", "Column", "Preview")
-        self.results_tree = ttk.Treeview(results_frame, columns=columns, show="headings", selectmode="browse")
-        
-        self.results_tree.heading("Line", text="Line")
-        self.results_tree.heading("Column", text="Column")
-        self.results_tree.heading("Preview", text="Preview")
-        
-        self.results_tree.column("Line", width=60)
-        self.results_tree.column("Column", width=60)
-        self.results_tree.column("Preview", width=400)
-        
-        # Scrollbars
-        y_scroll = Scrollbar(results_frame, orient=tk.VERTICAL, command=self.results_tree.yview)
-        x_scroll = Scrollbar(results_frame, orient=tk.HORIZONTAL, command=self.results_tree.xview)
-        self.results_tree.configure(yscrollcommand=y_scroll.set, xscrollcommand=x_scroll.set)
-        
-        self.results_tree.grid(row=0, column=0, sticky="nsew")
-        y_scroll.grid(row=0, column=1, sticky="ns")
-        x_scroll.grid(row=1, column=0, sticky="ew")
-        
-        results_frame.grid_rowconfigure(0, weight=1)
-        results_frame.grid_columnconfigure(0, weight=1)
-        
-        # Bind double-click to go to match
-        self.results_tree.bind("<Double-Button-1>", self.on_result_double_click)
+        self.results_label.pack(fill=tk.X, padx=5, pady=5)
         
     def search(self):
-        """Perform search and populate results table."""
+        """Perform search and send results to panel_query_result tab."""
         search_text = self.search_var.get()
         if not search_text:
             return
@@ -109,16 +79,15 @@ class SearchDialog(Toplevel):
                     preview = line[:min(len(line), col_end+20)]
                 self.matches.append((line_num, col_start, col_end, match.group(), preview))
         
-        # Populate results table
-        self.results_tree.delete(*self.results_tree.get_children())
-        for line_num, col_start, col_end, matched_text, preview in self.matches:
-            self.results_tree.insert("", "end", values=(line_num, col_start + 1, preview))
-        
         # Update results label
         self.results_label.config(text=f"Found {len(self.matches)} match(es)")
         
         # Highlight all matches in editor
         self.highlight_all_matches()
+        
+        # Send results to panel_query_result tab
+        if self.panel_query_result:
+            self.panel_query_result.display_search_results(self.matches, search_text)
         
     def highlight_all_matches(self):
         """Highlight all found matches in the editor."""
@@ -145,26 +114,14 @@ class SearchDialog(Toplevel):
     def clear_results(self):
         """Clear search results and highlights."""
         self.search_var.set("")
-        self.results_tree.delete(*self.results_tree.get_children())
         self.results_label.config(text="")
         self.matches = []
         self.current_match_index = -1
         self.clear_highlights()
+        # Also clear the tab results
+        if self.panel_query_result:
+            self.panel_query_result.clear_search_results()
         
-    def on_result_double_click(self, event):
-        """Handle double-click on a result - navigate to that match."""
-        selection = self.results_tree.selection()
-        if not selection:
-            return
-        
-        item_index = self.results_tree.index(selection[0])
-        if 0 <= item_index < len(self.matches):
-            line_num, col_start, col_end, matched_text, preview = self.matches[item_index]
-            # Navigate to the match
-            self.sql_text.mark_set("insert", f"{line_num}.{col_start}")
-            self.sql_text.see(f"{line_num}.{col_start}")
-            self.sql_text.focus_set()
-    
     def close(self):
         """Close the search dialog."""
         self.clear_highlights()
@@ -1172,5 +1129,5 @@ class SQLText(Text):
 
     def open_search_dialog(self, event=None):
         """Open the search dialog (CTRL+F)."""
-        search_dialog = SearchDialog(self.master, self)
+        search_dialog = SearchDialog(self.master, self, self.panel_sql_query_editor.panel_query_result)
         return "break"
