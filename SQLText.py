@@ -781,13 +781,23 @@ class SQLText(Text):
         return result
 
     def on_scroll(self, event):
-        """Handle scroll events."""
-        if event.delta:
-            self.yview_scroll(-1*(event.delta//120), "units")
-        elif event.num == 4:  # Linux scroll up
-            self.yview_scroll(-1, "units")
-        elif event.num == 5:  # Linux scroll down
-            self.yview_scroll(1, "units")
+        """Handle scroll events. SHIFT+scroll for horizontal scrolling."""
+        # Check if Shift key is pressed for horizontal scrolling
+        if event.state & 0x1:  # Shift key is pressed
+            if event.delta:
+                self.xview_scroll(-1*(event.delta//120), "units")
+            elif event.num == 4:  # Linux scroll left
+                self.xview_scroll(-1, "units")
+            elif event.num == 5:  # Linux scroll right
+                self.xview_scroll(1, "units")
+        else:
+            # Normal vertical scrolling
+            if event.delta:
+                self.yview_scroll(-1*(event.delta//120), "units")
+            elif event.num == 4:  # Linux scroll up
+                self.yview_scroll(-1, "units")
+            elif event.num == 5:  # Linux scroll down
+                self.yview_scroll(1, "units")
 
         self.draw_line_numbers()
         self.highlight_visible()  # Highlight newly visible lines
@@ -819,6 +829,9 @@ class SQLText(Text):
 
         for line in range(first_visible_line, min(last_visible_line + 1, total_lines + 1)):
             bbox = self.bbox(f"{line}.0")
+            # Skip lines that are not visible (bbox returns None for lines outside viewport)
+            if bbox is None:
+                continue
             y = bbox[1] + line_height / 2  # Small adjustment for better vertical alignment
 
             self.line_numbers.create_text(

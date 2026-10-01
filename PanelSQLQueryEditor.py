@@ -1021,14 +1021,24 @@ class PanelSQLQueryEditor:
         content_frame = ttk.Frame(main_frame, style='TFrame')
         content_frame.pack(fill=tk.BOTH, expand=True)
 
-        text_scroll = ttk.Scrollbar(content_frame, style='TScrollbar')
-        text_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        # Create a frame to hold the text widget and scrollbars
+        scroll_frame = ttk.Frame(content_frame, style='TFrame')
+        scroll_frame.pack(fill=tk.BOTH, expand=True)
+
+        # Vertical scrollbar
+        text_v_scroll = ttk.Scrollbar(scroll_frame, style='TScrollbar', orient=tk.VERTICAL)
+        text_v_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # Horizontal scrollbar
+        text_h_scroll = ttk.Scrollbar(scroll_frame, style='TScrollbar', orient=tk.HORIZONTAL)
+        text_h_scroll.pack(side=tk.BOTTOM, fill=tk.X)
 
         text_widget = SQLText(
             self,
-            content_frame,
+            scroll_frame,
             wrap=tk.NONE,
-            yscrollcommand=text_scroll.set,
+            yscrollcommand=text_v_scroll.set,
+            xscrollcommand=text_h_scroll.set,
             undo=True,
             maxundo=1000,
             **self.theme.sql_editor_style
@@ -1039,7 +1049,8 @@ class PanelSQLQueryEditor:
         text_widget.bind("<Control-Shift-Z>", lambda e: (self.redo(), "break"))
 
         text_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        text_scroll.config(command=text_widget.yview)
+        text_v_scroll.config(command=text_widget.yview)
+        text_h_scroll.config(command=text_widget.xview)
 
         text_widget.edit_reset()
         text_widget.edit_modified(False)
