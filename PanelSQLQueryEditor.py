@@ -1005,8 +1005,12 @@ class PanelSQLQueryEditor:
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load table indexes: {str(e)}")
 
-    def new_sql_tab(self):
-        """Create new SQL editor tab with close button"""
+    def new_sql_tab(self, initial_text=None):
+        """Create new SQL editor tab with close button
+        
+        Args:
+            initial_text: Optional initial text content for the tab
+        """
         self.tab_counter += 1
         tab_id = f"tab_{self.tab_counter}"
 
@@ -1045,6 +1049,10 @@ class PanelSQLQueryEditor:
 
         # Set the initial zoom level for the new text widget
         text_widget.set_zoom(self.zoom_level)
+        
+        # Insert initial text if provided
+        if initial_text:
+            text_widget.insert('1.0', initial_text)
 
         # Add close button to the main frame (not content frame)
         close_btn = ttk.Button(

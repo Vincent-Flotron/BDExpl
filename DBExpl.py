@@ -90,9 +90,9 @@ class Theme:
                     background=[('active', '#55552a'), ('!active', refresh_color)],
                     relief=[('pressed', 'sunken'), ('!pressed', 'raised')])
 
-        # Style for button zoom frame (grey background)
+        # Style for button zoom frame (same background as other frames)
         self.style.configure('ButtonZoom.TFrame',
-                            background='#e0e0e0')  # Grey background
+                            background=bg_color)
 
         # Style for notebook (tabs)
         self.style.configure('TNotebook',

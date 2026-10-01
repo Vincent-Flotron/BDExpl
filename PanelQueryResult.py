@@ -2,6 +2,7 @@ from Panels import *
 import os
 import sys
 import subprocess
+import json
 from datetime import datetime
 try:
     from openpyxl import Workbook
@@ -161,11 +162,17 @@ class PanelQueryResult:
         self.result_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         self.result_tree.bind("<Shift-MouseWheel>", self.on_shift_mousewheel)
+        
+        # Store last click position for context menu actions
+        self.last_click_x = 0
+        self.last_click_y = 0
+        self.result_tree.bind("<Button-3>", self.on_result_tree_right_click)
 
         # Remove the result_info label from here since we'll use the status bar
         commands = [
             ("Copy Selected",       self.copy_selected_rows),
             ("Copy All",            self.copy_all_rows),
+            ("View as JSON",        self.view_as_json),
             ("Open into Excel",     self.open_into_excel),
             ("Export to Excel",     self.export_to_excel),
             ("Export to CSV",       self.export_to_csv),
@@ -173,7 +180,6 @@ class PanelQueryResult:
         ]
         self.result_context_menu = Helper.create_context_menu(self.result_tree, commands)
 
-        self.result_tree.bind("<Button-3>",   self.show_result_context_menu)
         self.result_tree.bind("<Configure>",  self.on_tree_configure)
 
         # Stocker le texte brut des erreurs pour rafraîchissement
@@ -516,6 +522,12 @@ class PanelQueryResult:
         """Handle Treeview configuration changes"""
         pass
 
+    def on_result_tree_right_click(self, event):
+        """Store click position and show context menu."""
+        self.last_click_x = event.x
+        self.last_click_y = event.y
+        self.show_result_context_menu(event)
+
     def show_result_context_menu(self, event):
         region = self.result_tree.identify_region(event.x, event.y)
         if region == "heading":
@@ -585,6 +597,63 @@ class PanelQueryResult:
         self.root.clipboard_clear()
         self.root.clipboard_append(header_line + '\n' + '\n'.join(lines))
         self.root.update()
+
+    def view_as_json(self):
+        """View the selected cell content as pretty-printed JSON in a new tab."""
+        selected = self.result_tree.selection()
+        if not selected:
+            messagebox.showinfo("No Selection", "Please select a row to view as JSON.")
+            return
+
+        # Get the selected item
+        item = selected[0]
+        values = self.result_tree.item(item)['values']
+        
+        # Get the column that was clicked (identify which cell)
+        region = self.result_tree.identify_region(self.last_click_x, self.last_click_y)
+        col_id = self.result_tree.identify_column(self.last_click_x)
+        
+        if not col_id or col_id == '#0':
+            messagebox.showwarning("Invalid Selection", "Please click on a data cell to view as JSON.")
+            return
+        
+        # Get the column index (col_id is like '#1', '#2', etc.)
+        col_index = int(col_id.replace('#', '')) - 1
+        
+        if col_index >= len(values):
+            messagebox.showwarning("Invalid Selection", "Column index out of range.")
+            return
+        
+        cell_value = values[col_index]
+        
+        if cell_value is None or cell_value == '':
+            messagebox.showinfo("Empty Cell", "The selected cell is empty.")
+            return
+        
+        # Try to parse as JSON
+        try:
+            # If it's already a string, parse it; otherwise convert to string first
+            if isinstance(cell_value, str):
+                json_data = json.loads(cell_value)
+            else:
+                json_data = json.loads(str(cell_value))
+            
+            # Pretty print the JSON
+            pretty_json = json.dumps(json_data, indent=2, ensure_ascii=False)
+            
+            # Open a new tab with the JSON content
+            if self.panel_sql_query_editor:
+                self.panel_sql_query_editor.new_sql_tab(pretty_json)
+            else:
+                messagebox.showerror("Error", "SQL Query Editor is not available.")
+                
+        except json.JSONDecodeError as e:
+            messagebox.showerror(
+                "Invalid JSON",
+                f"The cell content is not valid JSON.\n\nError: {str(e)}"
+            )
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to view as JSON: {str(e)}")
 
     def get_default_export_path(self):
         """Get the default export path from config or use Documents folder."""
