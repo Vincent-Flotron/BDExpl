@@ -388,6 +388,11 @@ class PanelSQLQueryEditor:
         widget.see(tk.INSERT)  # Scroll to make the insertion point visible
         widget.focus_set()     # Set focus back to the editor
         self.insert_edit_separator_in_actual_tab() # for undo/redo
+        
+        # Trigger syntax highlighting refresh
+        if hasattr(widget, 'highlight_visible'):
+            widget.highlight_visible()
+        
         widget.on_content_changed()
 
     def insert_order_by(self, col_name, direction):
