@@ -60,7 +60,7 @@ class Theme:
         self.style.configure('TButton',
                             font=('Helvetica', 9),
                             borderwidth=1,
-                            padding=8,
+                            padding=2,
                             background=primary_color,
                             foreground='white')
         self.style.map('TButton',
@@ -71,7 +71,7 @@ class Theme:
         self.style.configure('SQLHelper.TButton',
                             font=('Helvetica', 9),
                             borderwidth=1,
-                            padding=8,
+                            padding=2,
                             background=success_color,
                             foreground='white')
         self.style.map('SQLHelper.TButton',
@@ -89,7 +89,7 @@ class Theme:
         self.style.map('Refresh.TButton',
                     background=[('active', '#55552a'), ('!active', refresh_color)],
                     relief=[('pressed', 'sunken'), ('!pressed', 'raised')])
-        
+
         # Style for button zoom frame (grey background)
         self.style.configure('ButtonZoom.TFrame',
                             background='#e0e0e0')  # Grey background
@@ -165,7 +165,7 @@ class Theme:
                     padding=2,
                     background=error_color,
                     foreground='white')
-        
+
         # Monospace font
         self.style.configure('Error.Treeview', font=('Courier New', 10))  # Monospace font
 
@@ -222,7 +222,7 @@ class DBExp:
 
         # Apply saved zoom settings
         self.apply_saved_zoom_settings()
-        
+
         # Apply saved search settings
         self.apply_saved_search_settings()
 
@@ -236,8 +236,8 @@ class DBExp:
         self.panel_status_bar = PanelStatusBar(main_container, text="Not connected", style='Status.TLabel')
 
         # Main paned window for the rest of the UI
-        main_paned = ttk.PanedWindow(main_container, orient=tk.HORIZONTAL)
-        main_paned.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        self.main_paned = ttk.PanedWindow(main_container, orient=tk.HORIZONTAL)
+        self.main_paned.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
         self.panel_query_result     = PanelQueryResult(self.root, self.panel_status_bar)
         self.query_manager          = QueryManager(self.db_connection, self.panel_query_result)
@@ -245,21 +245,24 @@ class DBExp:
         self.panel_query_result.set_sql_query_editor(self.panel_sql_query_editor)
 
         # Left Panel: DB Treeview
-        self.panel_database_tree    = PanelDatabaseTree(main_paned, self.db_connection, self.panel_sql_query_editor, self.query_manager)
+        self.panel_database_tree    = PanelDatabaseTree(self.main_paned, self.db_connection, self.panel_sql_query_editor, self.query_manager)
         self.panel_database_tree.setup()
 
         # Right container for SQL Query and Query Result
-        right_paned = ttk.PanedWindow(main_paned, orient=tk.VERTICAL)
-        main_paned.add(right_paned, weight=3)
+        right_paned = ttk.PanedWindow(self.main_paned, orient=tk.VERTICAL)
+        self.main_paned.add(right_paned, weight=3)
 
         # Middle Panel: SQL Query Editor
         self.panel_sql_query_editor.setup(right_paned, self.root, self.theme)
 
         # Bottom Panel: Query Result
         self.panel_query_result.setup(right_paned, self.config)
-        
+
         # Apply button zoom to all panels after setup
         self.panel_sql_query_editor._apply_button_zoom()
+
+        # Restore saved paned window position
+        self.restore_paned_window_position()
 
         # Connection manager
         self.connection_manager = ConnectionManager(
@@ -290,13 +293,21 @@ class DBExp:
             self.config["button_zoom"] = self.panel_sql_query_editor.button_zoom_level
         if hasattr(self, 'panel_query_result'):
             self.config["query_result_zoom"] = self.panel_query_result.zoom_level
-        
+
+        # Save paned window position
+        if hasattr(self, 'main_paned'):
+            try:
+                sash_positions = self.main_paned.sashpos()
+                self.config["database_tree_panel_width"] = sash_positions[0] if sash_positions else None
+            except:
+                pass
+
         # Save search settings
         if hasattr(self, 'search_use_regex'):
             self.config["search_use_regex"] = self.search_use_regex
         if hasattr(self, 'search_case_sensitive'):
             self.config["search_case_sensitive"] = self.search_case_sensitive
-        
+
         # Save search history
         if hasattr(self, 'search_history'):
             self.config["search_history"] = list(self.search_history)
@@ -316,21 +327,32 @@ class DBExp:
 
         if hasattr(self, 'panel_query_result') and "query_result_zoom" in self.config:
             self.panel_query_result.set_zoom(self.config["query_result_zoom"])
-        
+
         # Apply saved button zoom
         if hasattr(self, 'panel_sql_query_editor') and "button_zoom" in self.config:
             self.panel_sql_query_editor.button_zoom_level = self.config["button_zoom"]
             self.panel_sql_query_editor._apply_button_zoom()
-    
+
     def apply_saved_search_settings(self):
         """Apply saved search settings"""
         # Initialize search settings with defaults
         self.search_use_regex = self.config.get("search_use_regex", False)
         self.search_case_sensitive = self.config.get("search_case_sensitive", False)
-        
+
         # Initialize search history from config
         self.search_history = self.config.get("search_history", [])
         self.replace_history = self.config.get("replace_history", [])
+
+    def restore_paned_window_position(self):
+        """Restore saved paned window position"""
+        if hasattr(self, 'main_paned') and "database_tree_panel_width" in self.config:
+            try:
+                width = self.config["database_tree_panel_width"]
+                if width is not None:
+                    # Use after_idle to ensure the widget is fully initialized
+                    self.root.after_idle(lambda: self.main_paned.sashpos(0, width))
+            except:
+                pass
 
     def setup_menu(self):
         """Create menu bar"""
@@ -477,61 +499,61 @@ class DBExp:
 
 class SettingsDialog:
     """Dialog for configuring export settings."""
-    
+
     def __init__(self, parent):
         self.parent = parent
         self.root = parent.root
         self.config = parent.config
         self.result = None
-        
+
         # Create top-level window
         self.dialog = tk.Toplevel(self.root)
         self.dialog.title("Settings")
         self.dialog.geometry("500x270")
         self.dialog.resizable(False, False)
-        
+
         # Center the dialog
         self.dialog.transient(self.root)
         self.dialog.grab_set()
-        
+
         self.setup_ui()
-        
+
     def setup_ui(self):
         """Setup the settings dialog UI."""
         main_frame = ttk.Frame(self.dialog, padding="20")
         main_frame.pack(fill=tk.BOTH, expand=True)
-        
+
         # Export Root Path section
         path_frame = ttk.LabelFrame(main_frame, text="Export Root Path", padding="10")
         path_frame.pack(fill=tk.X, pady=10)
-        
+
         # Current path label
         current_path = self.config.get('export_path', os.path.join(os.path.expanduser('~'), 'Documents'))
-        
+
         ttk.Label(path_frame, text="Default export location:").pack(anchor=tk.W, pady=(0, 5))
-        
+
         self.path_var = tk.StringVar(value=current_path)
         path_entry = ttk.Entry(path_frame, textvariable=self.path_var, width=50)
         path_entry.pack(fill=tk.X, pady=(0, 5))
-        
+
         # Browse button
         browse_frame = ttk.Frame(path_frame)
         browse_frame.pack(fill=tk.X, pady=(5, 0))
-        
+
         ttk.Button(browse_frame, text="Browse...", command=self.browse_path).pack(side=tk.LEFT)
-        
+
         # Status label
         self.status_var = tk.StringVar(value="")
         status_label = ttk.Label(browse_frame, textvariable=self.status_var, foreground='gray')
         status_label.pack(side=tk.LEFT, padx=10)
-        
+
         # Buttons frame
         button_frame = ttk.Frame(main_frame)
         button_frame.pack(fill=tk.X, pady=20)
-        
+
         ttk.Button(button_frame, text="OK", command=self.ok_action).pack(side=tk.RIGHT, padx=5)
         ttk.Button(button_frame, text="Cancel", command=self.cancel_action).pack(side=tk.RIGHT)
-        
+
     def browse_path(self):
         """Open folder browser dialog."""
         current_path = self.path_var.get()
@@ -539,12 +561,12 @@ class SettingsDialog:
             initial_dir = current_path
         else:
             initial_dir = os.path.expanduser('~')
-        
+
         selected_dir = filedialog.askdirectory(title="Select Export Root Path", initialdir=initial_dir)
         if selected_dir:
             self.path_var.set(selected_dir)
             self.status_var.set("Path selected")
-            
+
     def ok_action(self):
         """Handle OK button click."""
         selected_path = self.path_var.get()
@@ -555,12 +577,12 @@ class SettingsDialog:
             self.dialog.destroy()
         else:
             messagebox.showerror("Invalid Path", "The selected path is not a valid directory.")
-            
+
     def cancel_action(self):
         """Handle Cancel button click."""
         self.result = False
         self.dialog.destroy()
-        
+
     def show(self):
         """Show the dialog and return the result."""
         self.dialog.wait_window()
