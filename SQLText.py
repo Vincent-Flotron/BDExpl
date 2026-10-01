@@ -1473,6 +1473,7 @@ class SQLText(Text):
     def handle_column_selection_copy(self, event=None):
         """Handle copy in column selection mode - copy column text to clipboard."""
         if not self.column_selection_active or not self.column_selection_start or not self.column_selection_end:
+            # Allow default copy behavior when column selection is not active
             return None
 
         # Get the column selection text
