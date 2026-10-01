@@ -443,7 +443,7 @@ class DBExp:
 
     def close_keys_tab(self, frame):
         print("close_keys_tab")
-        self.panel_sql_query_editor.close_keys_tab(frame)
+        self.panel_sql_query_editor.close_result_tab(frame)
 
     def show_settings_dialog(self):
         """Show the settings dialog to configure export root path."""
@@ -567,7 +567,7 @@ def main():
         # Set it as the icon
         root.iconphoto(True, icon)  # The 'True' argument makes it apply to all future top-level windows too
         # Keep a reference to prevent garbage collection
-        root.icon = icon  # Store as an attribute
+        root._icon = icon  # Store as an attribute to prevent garbage collection
     except Exception as e:
         print(f"Could not load icon: {e}")
 
