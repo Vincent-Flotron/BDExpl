@@ -199,8 +199,11 @@ class SearchReplaceDialog(Toplevel):
         """Save search settings when checkboxes are toggled."""
         # Update parent window's search settings through sql_text widget
         if hasattr(self.sql_text, 'panel_sql_query_editor') and hasattr(self.sql_text.panel_sql_query_editor, 'root'):
-            self.sql_text.panel_sql_query_editor.root.search_use_regex = self.regex_var.get()
-            self.sql_text.panel_sql_query_editor.root.search_case_sensitive = self.case_sensitive_var.get()
+            root = self.sql_text.panel_sql_query_editor.root
+            if hasattr(root, 'db_exp'):
+                db_exp = root.db_exp
+                db_exp.search_use_regex = self.regex_var.get()
+                db_exp.search_case_sensitive = self.case_sensitive_var.get()
     
     def get_search_flags(self, use_regex_var, case_sensitive_var):
         """Get regex flags based on settings."""
@@ -305,13 +308,17 @@ class SearchReplaceDialog(Toplevel):
             self.panel_query_result.clear_search_results()
     
     def close(self):
-        """Close the search dialog."""
-        self.clear_highlights()
+        """Close the dialog and save history."""
         # Save history back to the root window before closing
         if hasattr(self.sql_text, 'panel_sql_query_editor') and hasattr(self.sql_text.panel_sql_query_editor, 'root'):
             root = self.sql_text.panel_sql_query_editor.root
-            root.search_history = list(self.search_history)
-            root.replace_history = list(self.replace_history)
+            # Get the DBExp instance from the root window
+            if hasattr(root, 'db_exp'):
+                db_exp = root.db_exp
+                db_exp.search_history = list(self.search_history)
+                db_exp.replace_history = list(self.replace_history)
+                # Save config to persist history
+                db_exp.save_config()
         self.destroy()
     
     def on_close(self):
@@ -1791,48 +1798,46 @@ class SQLText(Text):
 
     def open_search_dialog(self, event=None):
         """Open the search and replace dialog (CTRL+F)."""
-        # Get search settings from the main app if available
+        # Get search settings from the DBExp instance if available
         search_use_regex = False
         search_case_sensitive = False
         search_history = []
         replace_history = []
         if hasattr(self.panel_sql_query_editor, 'root'):
             root = self.panel_sql_query_editor.root
-            search_use_regex = getattr(root, 'search_use_regex', False)
-            search_case_sensitive = getattr(root, 'search_case_sensitive', False)
-            search_history = getattr(root, 'search_history', [])
-            replace_history = getattr(root, 'replace_history', [])
+            if hasattr(root, 'db_exp'):
+                db_exp = root.db_exp
+                search_use_regex = getattr(db_exp, 'search_use_regex', False)
+                search_case_sensitive = getattr(db_exp, 'search_case_sensitive', False)
+                search_history = getattr(db_exp, 'search_history', [])
+                replace_history = getattr(db_exp, 'replace_history', [])
         
         search_dialog = SearchReplaceDialog(self.master, self, self.panel_sql_query_editor.panel_query_result,
                                             search_use_regex, search_case_sensitive, search_history, replace_history)
         # Wait for dialog to be closed and then save config
         self.master.wait_window(search_dialog)
-        # Save config to persist history
-        if hasattr(self.panel_sql_query_editor, 'root') and hasattr(self.panel_sql_query_editor.root, 'save_config'):
-            self.panel_sql_query_editor.root.save_config()
         return "break"
     
     def open_replace_dialog(self, event=None):
         """Open the search and replace dialog focused on Replace tab (CTRL+H)."""
-        # Get search settings from the main app if available
+        # Get search settings from the DBExp instance if available
         search_use_regex = False
         search_case_sensitive = False
         search_history = []
         replace_history = []
         if hasattr(self.panel_sql_query_editor, 'root'):
             root = self.panel_sql_query_editor.root
-            search_use_regex = getattr(root, 'search_use_regex', False)
-            search_case_sensitive = getattr(root, 'search_case_sensitive', False)
-            search_history = getattr(root, 'search_history', [])
-            replace_history = getattr(root, 'replace_history', [])
+            if hasattr(root, 'db_exp'):
+                db_exp = root.db_exp
+                search_use_regex = getattr(db_exp, 'search_use_regex', False)
+                search_case_sensitive = getattr(db_exp, 'search_case_sensitive', False)
+                search_history = getattr(db_exp, 'search_history', [])
+                replace_history = getattr(db_exp, 'replace_history', [])
         
         search_dialog = SearchReplaceDialog(self.master, self, self.panel_sql_query_editor.panel_query_result,
                                             search_use_regex, search_case_sensitive, search_history, replace_history)
         # Open with Replace tab focused
         search_dialog.open_replace_tab()
-        # Wait for dialog to be closed and then save config
+        # Wait for dialog to be closed
         self.master.wait_window(search_dialog)
-        # Save config to persist history
-        if hasattr(self.panel_sql_query_editor, 'root') and hasattr(self.panel_sql_query_editor.root, 'save_config'):
-            self.panel_sql_query_editor.root.save_config()
         return "break"

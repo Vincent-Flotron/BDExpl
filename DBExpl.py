@@ -557,6 +557,7 @@ class SettingsDialog:
 def main():
     root = tk.Tk()
     app = DBExp(root)
+    root.db_exp = app  # Store reference to app instance on root window
 
     # Load the image
     resources_path = os.path.join(os.path.dirname(__file__), "resources")
