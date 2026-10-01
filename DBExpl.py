@@ -89,6 +89,10 @@ class Theme:
         self.style.map('Refresh.TButton',
                     background=[('active', '#55552a'), ('!active', refresh_color)],
                     relief=[('pressed', 'sunken'), ('!pressed', 'raised')])
+        
+        # Style for button zoom frame (grey background)
+        self.style.configure('ButtonZoom.TFrame',
+                            background='#e0e0e0')  # Grey background
 
         # Style for notebook (tabs)
         self.style.configure('TNotebook',
@@ -253,6 +257,9 @@ class DBExp:
 
         # Bottom Panel: Query Result
         self.panel_query_result.setup(right_paned, self.config)
+        
+        # Apply button zoom to all panels after setup
+        self.panel_sql_query_editor._apply_button_zoom()
 
         # Connection manager
         self.connection_manager = ConnectionManager(
@@ -280,6 +287,7 @@ class DBExp:
             self.config["database_tree_zoom"] = self.panel_database_tree.zoom_level
         if hasattr(self, 'panel_sql_query_editor'):
             self.config["query_editor_zoom"] = self.panel_sql_query_editor.zoom_level
+            self.config["button_zoom"] = self.panel_sql_query_editor.button_zoom_level
         if hasattr(self, 'panel_query_result'):
             self.config["query_result_zoom"] = self.panel_query_result.zoom_level
         
@@ -308,6 +316,11 @@ class DBExp:
 
         if hasattr(self, 'panel_query_result') and "query_result_zoom" in self.config:
             self.panel_query_result.set_zoom(self.config["query_result_zoom"])
+        
+        # Apply saved button zoom
+        if hasattr(self, 'panel_sql_query_editor') and "button_zoom" in self.config:
+            self.panel_sql_query_editor.button_zoom_level = self.config["button_zoom"]
+            self.panel_sql_query_editor._apply_button_zoom()
     
     def apply_saved_search_settings(self):
         """Apply saved search settings"""

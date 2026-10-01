@@ -17,7 +17,8 @@ class PanelSQLQueryEditor:
         self.db_connection       = db_connection
         self.query_manager       = query_manager
         self.tab_results         = {}  # Store results for each tab
-        self.zoom_level          = 100  # Default zoom level
+        self.zoom_level          = 100  # Default content zoom level
+        self.button_zoom_level   = 100  # Default button size zoom level
         self.last_created_tab_id = None
 
     def setup(self, parent, root, theme):
@@ -38,7 +39,7 @@ class PanelSQLQueryEditor:
 
         ttk.Label(header_frame, text="Query Editor", style='Bold.TLabel').pack(side=tk.LEFT, pady=2)
 
-        # Zoom controls
+        # Content zoom controls (affects treeview and text)
         zoom_frame = ttk.Frame(header_frame, style='TFrame')
         zoom_frame.pack(side=tk.RIGHT, padx=5)
 
@@ -48,6 +49,18 @@ class PanelSQLQueryEditor:
         ttk.Button(zoom_frame, text="+", command=self.zoom_in, width=2).pack(side=tk.RIGHT, padx=2)
         ttk.Button(zoom_frame, text="-", command=self.zoom_out, width=2).pack(side=tk.RIGHT, padx=2)
         ttk.Button(zoom_frame, text="↻", command=self.reset_zoom, width=2).pack(side=tk.RIGHT, padx=2)
+
+        # Button size zoom controls (affects button sizes only)
+        button_zoom_frame = ttk.Frame(header_frame, style='ButtonZoom.TFrame')
+        button_zoom_frame.pack(side=tk.RIGHT, padx=10)
+
+        ttk.Label(button_zoom_frame, text="Zoom buttons", style='Bold.TLabel').pack(side=tk.RIGHT, padx=5)
+        self.button_zoom_label = ttk.Label(button_zoom_frame, text=f"{self.button_zoom_level}%", style='TLabel')
+        self.button_zoom_label.pack(side=tk.RIGHT, padx=5)
+
+        ttk.Button(button_zoom_frame, text="+", command=self.button_zoom_in, width=2).pack(side=tk.RIGHT, padx=2)
+        ttk.Button(button_zoom_frame, text="-", command=self.button_zoom_out, width=2).pack(side=tk.RIGHT, padx=2)
+        ttk.Button(button_zoom_frame, text="↻", command=self.reset_button_zoom, width=2).pack(side=tk.RIGHT, padx=2)
 
         # SQL Helper Buttons Frame
         sql_helper_frame = ttk.Frame(editor_frame, style='TFrame')
@@ -98,7 +111,7 @@ class PanelSQLQueryEditor:
         self.zoom_label.config(text=f"{self.zoom_level}%")
 
     def _apply_zoom_to_all_tabs(self):
-        """Apply the current zoom level to all SQL text widgets."""
+        """Apply the current content zoom level to all SQL text widgets."""
         for tab_id, info in self.sql_files.items():
             if "widget" in info:
                 info["widget"].set_zoom(self.zoom_level)
@@ -108,6 +121,59 @@ class PanelSQLQueryEditor:
         self.zoom_level = max(50, min(200, zoom_level))
         self._apply_zoom_to_all_tabs()
         self.zoom_label.config(text=f"{self.zoom_level}%")
+
+    # Button zoom methods (control button sizes across all panels)
+    def button_zoom_in(self):
+        """Increase the button zoom level."""
+        self.button_zoom_level = min(200, self.button_zoom_level + 10)
+        self._apply_button_zoom()
+        self.button_zoom_label.config(text=f"{self.button_zoom_level}%")
+
+    def button_zoom_out(self):
+        """Decrease the button zoom level."""
+        self.button_zoom_level = max(50, self.button_zoom_level - 10)
+        self._apply_button_zoom()
+        self.button_zoom_label.config(text=f"{self.button_zoom_level}%")
+
+    def reset_button_zoom(self):
+        """Reset the button zoom level to default."""
+        self.button_zoom_level = 100
+        self._apply_button_zoom()
+        self.button_zoom_label.config(text=f"{self.button_zoom_level}%")
+
+    def _apply_button_zoom(self):
+        """Apply the button zoom level to all panels' buttons."""
+        import sys
+        if sys.platform.startswith('win'):
+            font_name = 'Consolas'
+        elif sys.platform == 'darwin':
+            font_name = 'Monaco'
+        else:
+            font_name = 'DejaVu Sans Mono'
+        
+        button_font_size = int(11 * (self.button_zoom_level / 100))
+        button_padding = int(8 * (self.button_zoom_level / 100))
+        style = ttk.Style()
+        style.configure('TLabel', font=(font_name, button_font_size))
+        style.configure('TButton', font=(font_name, button_font_size), padding=button_padding)
+        
+        # Apply zoom to green buttons (SQL helper buttons)
+        style.configure('SQLHelper.TButton', font=('Consolas', button_font_size), padding=button_padding)
+        
+        # Apply zoom to refresh button
+        style.configure('Refresh.TButton', font=('Consolas', button_font_size), padding=int(4 * (self.button_zoom_level / 100)), width=int(4 * (self.button_zoom_level / 100)))
+        
+        # Apply zoom to breadcrumb buttons
+        style.configure('Breadcrumb.TButton', font=('Segoe UI', button_font_size, 'bold'), padding=int(2 * (self.button_zoom_level / 100)))
+        
+        # Apply button zoom to other panels
+        if hasattr(self, 'panel_query_result') and hasattr(self.panel_query_result, '_apply_button_zoom'):
+            self.panel_query_result.button_zoom_level = self.button_zoom_level
+            self.panel_query_result._apply_button_zoom()
+        
+        if hasattr(self, 'root') and hasattr(self.root, 'panel_database_tree') and hasattr(self.root.panel_database_tree, '_apply_button_zoom'):
+            self.root.panel_database_tree.button_zoom_level = self.button_zoom_level
+            self.root.panel_database_tree._apply_button_zoom()
 
 
     def on_tab_changed(self, event):

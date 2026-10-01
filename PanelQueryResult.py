@@ -18,14 +18,15 @@ class PanelQueryResult:
         self.root                    = root
         self.current_codepage        = 'utf-8'
         self.zoom_level              = 100
+        self.button_zoom_level       = 100  # Default button zoom level
         self.panel_status_bar        = panel_status_bar
         self.panel_sql_query_editor  = None   # set later via set_sql_query_editor()
-        self.reg_thousand_sep1       = re.compile(r"^(-?)(\d{1,3})(\d{3})(?:(\.)(\d+))?$")
-        self.reg_thousand_sep2       = re.compile(r"^(-?)(\d{1,3})(\d{3})(\d{3})(?:(\.)(\d+))?$")
-        self.reg_thousand_sep3       = re.compile(r"^(-?)(\d{1,3})(\d{3})(\d{3})(\d{3})(?:(\.)(\d+))?$")
-        self.reg_thousand_sep4       = re.compile(r"^(-?)(\d{1,3})(\d{3})(\d{3})(\d{3})(\d{3})(?:(\.)(\d+))?$")
-        self.reg_thousand_sep5       = re.compile(r"^(-?)(\d{1,3})(\d{3})(\d{3})(\d{3})(\d{3})(\d{3})(?:(\.)(\d+))?$")
-        self.reg_thousand_sep6       = re.compile(r"^(-?)(\d{1,3})(\d{3})(\d{3})(\d{3})(\d{3})(\d{3})(\d{3})(?:(\.)(\d+))?$")
+        self.reg_thousand_sep1       = re.compile(r"^(-?)(\d{1,3})(\d{3})(?:(\.)?(\d+))?$")
+        self.reg_thousand_sep2       = re.compile(r"^(-?)(\d{1,3})(\d{3})(\d{3})(?:(\.)?(\d+))?$")
+        self.reg_thousand_sep3       = re.compile(r"^(-?)(\d{1,3})(\d{3})(\d{3})(\d{3})(?:(\.)?(\d+))?$")
+        self.reg_thousand_sep4       = re.compile(r"^(-?)(\d{1,3})(\d{3})(\d{3})(\d{3})(\d{3})(?:(\.)?(\d+))?$")
+        self.reg_thousand_sep5       = re.compile(r"^(-?)(\d{1,3})(\d{3})(\d{3})(\d{3})(\d{3})(\d{3})(?:(\.)?(\d+))?$")
+        self.reg_thousand_sep6       = re.compile(r"^(-?)(\d{1,3})(\d{3})(\d{3})(\d{3})(\d{3})(\d{3})(\d{3})(?:(\.)?(\d+))?$")
         self.thousand_sep            = "'"
         self.cols_anchor             = {}
         self.raw_data_rows           = []   # Store raw data for exports without formatting
@@ -57,7 +58,7 @@ class PanelQueryResult:
             self.zoom_label.config(text=f"{self.zoom_level}%")
 
     def _apply_zoom(self):
-        """Apply the current zoom level to the treeview."""
+        """Apply the current content zoom level to the treeview."""
         if not self.result_tree:
             return
 
@@ -71,6 +72,23 @@ class PanelQueryResult:
         # Update column widths after font change
         if self.result_tree.get_children():
             self.update_column_widths()
+
+    def _apply_button_zoom(self):
+        """Apply the button zoom level to buttons in this panel."""
+        button_font_size = int(11 * (self.button_zoom_level / 100))
+        button_padding = int(8 * (self.button_zoom_level / 100))
+        style = ttk.Style()
+        style.configure('TLabel', font=('Helvetica', button_font_size))
+        style.configure('TButton', font=('Helvetica', button_font_size), padding=button_padding)
+        
+        # Apply zoom to green buttons (SQL helper buttons)
+        style.configure('SQLHelper.TButton', font=('Helvetica', button_font_size), padding=button_padding)
+        
+        # Apply zoom to refresh button
+        style.configure('Refresh.TButton', font=('Helvetica', button_font_size), padding=int(4 * (self.button_zoom_level / 100)), width=int(4 * (self.button_zoom_level / 100)))
+        
+        # Apply zoom to breadcrumb buttons
+        style.configure('Breadcrumb.TButton', font=('Segoe UI', button_font_size, 'bold'), padding=int(2 * (self.button_zoom_level / 100)))
 
     def set_zoom(self, zoom_level):
         """Set the zoom level."""
@@ -110,6 +128,11 @@ class PanelQueryResult:
         
         # Bind tab change event
         self.result_notebook.bind("<<NotebookTabChanged>>", self.on_result_tab_changed)
+        
+        # Apply initial button zoom
+        if hasattr(self, 'panel_sql_query_editor') and self.panel_sql_query_editor and hasattr(self.panel_sql_query_editor, 'button_zoom_level'):
+            self.button_zoom_level = self.panel_sql_query_editor.button_zoom_level
+            self._apply_button_zoom()
 
     def _setup_query_result_tab(self):
         """Setup the Query Result tab content."""

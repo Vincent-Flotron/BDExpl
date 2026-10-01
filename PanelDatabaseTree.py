@@ -281,7 +281,8 @@ class PanelDatabaseTree:
         self.panel_sql_query_editor = panel_sql_query_editor
         self.queries = None  # Will be set based on connection type
         self.query_manager = query_manager
-        self.zoom_level = 100  # Default zoom level
+        self.zoom_level = 100  # Default content zoom level
+        self.button_zoom_level = 100  # Default button zoom level
 
     def setup(self):
         """Panel 1: Database object tree"""
@@ -459,6 +460,11 @@ class PanelDatabaseTree:
         self.db_tree.bind("<<TreeviewOpen>>",   self.on_tree_expand)
         self.db_tree.bind("<<TreeviewSelect>>", lambda e: self._update_search_checkboxes_state())
         self.db_tree.bind("<<TreeviewSelect>>", self._update_breadcrumbs)
+        
+        # Apply initial button zoom
+        if hasattr(self.panel_sql_query_editor, 'button_zoom_level'):
+            self.button_zoom_level = self.panel_sql_query_editor.button_zoom_level
+            self._apply_button_zoom()
 
 
 
@@ -1138,7 +1144,7 @@ class PanelDatabaseTree:
         self.zoom_label.config(text=f"{self.zoom_level}%")
 
     def _apply_zoom(self):
-            """Apply the current zoom level to the treeview."""
+            """Apply the current content zoom level to the treeview."""
             font_size = int(9 * (self.zoom_level / 100))
             row_height = font_size + 12
             
@@ -1154,6 +1160,31 @@ class PanelDatabaseTree:
             style = ttk.Style()
             style.configure('DBTree.Treeview', font=(font_name, font_size), rowheight=row_height)
             style.configure('DBTree.Treeview.Heading', font=(font_name, font_size, 'bold'))
+
+    def _apply_button_zoom(self):
+        """Apply the button zoom level to buttons in this panel."""
+        import sys
+        if sys.platform.startswith('win'):
+            font_name = 'Consolas'
+        elif sys.platform == 'darwin':
+            font_name = 'Monaco'
+        else:
+            font_name = 'DejaVu Sans Mono'
+        
+        button_font_size = int(11 * (self.button_zoom_level / 100))
+        button_padding = int(8 * (self.button_zoom_level / 100))
+        style = ttk.Style()
+        style.configure('TLabel', font=(font_name, button_font_size))
+        style.configure('TButton', font=(font_name, button_font_size), padding=button_padding)
+        
+        # Apply zoom to green buttons (SQL helper buttons)
+        style.configure('SQLHelper.TButton', font=('Consolas', button_font_size), padding=button_padding)
+        
+        # Apply zoom to refresh button
+        style.configure('Refresh.TButton', font=('Consolas', button_font_size), padding=int(4 * (self.button_zoom_level / 100)), width=int(4 * (self.button_zoom_level / 100)))
+        
+        # Apply zoom to breadcrumb buttons
+        style.configure('Breadcrumb.TButton', font=('Segoe UI', button_font_size, 'bold'), padding=int(2 * (self.button_zoom_level / 100)))
 
     def set_zoom(self, zoom_level):
         """Set the zoom level."""
