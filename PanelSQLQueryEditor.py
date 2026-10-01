@@ -1053,6 +1053,8 @@ class PanelSQLQueryEditor:
         # Insert initial text if provided
         if initial_text:
             text_widget.insert('1.0', initial_text)
+            # Trigger syntax highlighting for the inserted content
+            text_widget.refresh_highlighting()
 
         # Add close button to the main frame (not content frame)
         close_btn = ttk.Button(

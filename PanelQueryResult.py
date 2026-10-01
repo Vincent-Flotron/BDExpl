@@ -11,6 +11,121 @@ try:
 except ImportError:
     OPENPYXL_AVAILABLE = False
 
+
+class SeparatorDialog:
+    """Dialog for entering a separator character for pretty display."""
+    
+    def __init__(self, parent, title, prompt):
+        self.parent = parent
+        self.title = title
+        self.prompt = prompt
+        self.separator = None
+        self.result = None
+        
+    def show(self):
+        """Show the separator input dialog.
+        
+        Returns:
+            str: The entered separator, or None if cancelled
+        """
+        # Create top-level window
+        self.dialog = tk.Toplevel(self.parent)
+        self.dialog.title(self.title)
+        self.dialog.geometry("450x200")
+        self.dialog.transient(self.parent)
+        self.dialog.grab_set()
+        
+        # Main frame
+        main_frame = ttk.Frame(self.dialog, padding="20")
+        main_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Prompt label
+        ttk.Label(main_frame, text=self.prompt, style='Bold.TLabel').pack(pady=(0, 10))
+        
+        # Separator selection frame
+        select_frame = ttk.Frame(main_frame)
+        select_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        ttk.Label(select_frame, text="Common:", width=12).pack(side=tk.LEFT)
+        
+        # Dropdown with common separators
+        self.separator_var = tk.StringVar(value=',')
+        self.separator_combo = ttk.Combobox(
+            select_frame,
+            textvariable=self.separator_var,
+            values=[',', ';', '|', '\t', ':'],
+            width=25,
+            state='readonly'
+        )
+        self.separator_combo.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(5, 10))
+        
+        # Display labels for the combo values
+        separator_labels = [
+            (',', 'comma'),
+            (';', 'semicolon'),
+            ('|', 'pipe'),
+            ('\t', 'tab'),
+            (':', 'colon')
+        ]
+        
+        # Custom separator entry
+        custom_frame = ttk.Frame(main_frame)
+        custom_frame.pack(fill=tk.X, pady=(0, 15))
+        
+        ttk.Label(custom_frame, text="Custom:", width=12).pack(side=tk.LEFT)
+        self.custom_entry = ttk.Entry(custom_frame, width=30)
+        self.custom_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.custom_entry.insert(0, "")  # Empty by default
+        
+        # Info label
+        ttk.Label(
+            main_frame,
+            text="Leave custom empty to use the common separator above.",
+            font=('Helvetica', 8),
+            foreground='gray'
+        ).pack(pady=(0, 10))
+        
+        # Buttons frame
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(fill=tk.X, pady=(10, 0))
+        
+        ttk.Button(button_frame, text="Pretty Display", command=self.ok_action).pack(side=tk.RIGHT, padx=(5, 0))
+        ttk.Button(button_frame, text="Cancel", command=self.cancel_action).pack(side=tk.RIGHT)
+        
+        # Bind Enter key to OK
+        self.dialog.bind('<Return>', lambda e: self.ok_action())
+        self.dialog.bind('<Escape>', lambda e: self.cancel_action())
+        
+        # Focus on custom entry
+        self.custom_entry.focus_set()
+        
+        # Wait for dialog to close
+        self.parent.wait_window(self.dialog)
+        
+        return self.separator
+    
+    def ok_action(self):
+        """Handle Pretty Display button click."""
+        # Check if custom separator is filled
+        custom_sep = self.custom_entry.get().strip()
+        if custom_sep:
+            self.separator = custom_sep
+        else:
+            self.separator = self.separator_var.get()
+        
+        if not self.separator:
+            messagebox.showwarning("Invalid Input", "Please enter a separator.")
+            return
+        self.result = True
+        self.dialog.destroy()
+    
+    def cancel_action(self):
+        """Handle Cancel button click."""
+        self.separator = None
+        self.result = None
+        self.dialog.destroy()
+
+
 class PanelQueryResult:
     # Constants for tab identification
     TAB_QUERY_RESULT = "query_result"
@@ -173,6 +288,7 @@ class PanelQueryResult:
             ("Copy Selected",       self.copy_selected_rows),
             ("Copy All",            self.copy_all_rows),
             ("View as JSON",        self.view_as_json),
+            ("View as Pretty...",   self.view_as_pretty),
             ("Open into Excel",     self.open_into_excel),
             ("Export to Excel",     self.export_to_excel),
             ("Export to CSV",       self.export_to_csv),
@@ -654,6 +770,63 @@ class PanelQueryResult:
             )
         except Exception as e:
             messagebox.showerror("Error", f"Failed to view as JSON: {str(e)}")
+
+    def view_as_pretty(self):
+        """Show dialog to set separator, then display cell content with separators on new lines."""
+        selected = self.result_tree.selection()
+        if not selected:
+            messagebox.showinfo("No Selection", "Please select a row to view as pretty text.")
+            return
+
+        # Get the selected item
+        item = selected[0]
+        values = self.result_tree.item(item)['values']
+        
+        # Get the column that was clicked
+        col_id = self.result_tree.identify_column(self.last_click_x)
+        
+        if not col_id or col_id == '#0':
+            messagebox.showwarning("Invalid Selection", "Please click on a data cell.")
+            return
+        
+        # Get the column index
+        col_index = int(col_id.replace('#', '')) - 1
+        
+        if col_index >= len(values):
+            messagebox.showwarning("Invalid Selection", "Column index out of range.")
+            return
+        
+        cell_value = values[col_index]
+        
+        if cell_value is None or cell_value == '':
+            messagebox.showinfo("Empty Cell", "The selected cell is empty.")
+            return
+        
+        # Show dialog to get separator
+        dialog = SeparatorDialog(self.root, "View as Pretty Text", "Enter the separator used in the cell:")
+        separator = dialog.show()
+        
+        if not separator:
+            return  # User cancelled
+        
+        # Process the cell content: replace separator with separator + newline
+        try:
+            if isinstance(cell_value, str):
+                cell_text = cell_value
+            else:
+                cell_text = str(cell_value)
+            
+            # Replace each separator with separator + newline (pretty print)
+            pretty_text = cell_text.replace(separator, separator + '\n')
+            
+            # Open a new tab with the formatted content
+            if self.panel_sql_query_editor:
+                self.panel_sql_query_editor.new_sql_tab(pretty_text)
+            else:
+                messagebox.showerror("Error", "SQL Query Editor is not available.")
+                
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to format as pretty text: {str(e)}")
 
     def get_default_export_path(self):
         """Get the default export path from config or use Documents folder."""
