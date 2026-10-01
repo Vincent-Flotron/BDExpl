@@ -36,6 +36,9 @@ class SearchReplaceDialog(Toplevel):
         
         self.setup_ui()
         
+        # Handle window close event (X button)
+        self.protocol("WM_DELETE_WINDOW", self.on_close)
+        
         # Center the dialog on screen after UI is created
         self.after(100, self.center_dialog)
     
@@ -304,7 +307,16 @@ class SearchReplaceDialog(Toplevel):
     def close(self):
         """Close the search dialog."""
         self.clear_highlights()
+        # Save history back to the root window before closing
+        if hasattr(self.sql_text, 'panel_sql_query_editor') and hasattr(self.sql_text.panel_sql_query_editor, 'root'):
+            root = self.sql_text.panel_sql_query_editor.root
+            root.search_history = list(self.search_history)
+            root.replace_history = list(self.replace_history)
         self.destroy()
+    
+    def on_close(self):
+        """Handle window close event (X button)."""
+        self.close()
     
     def find_next(self):
         """Navigate to the next match in the editor."""
@@ -1793,6 +1805,11 @@ class SQLText(Text):
         
         search_dialog = SearchReplaceDialog(self.master, self, self.panel_sql_query_editor.panel_query_result,
                                             search_use_regex, search_case_sensitive, search_history, replace_history)
+        # Wait for dialog to be closed and then save config
+        self.master.wait_window(search_dialog)
+        # Save config to persist history
+        if hasattr(self.panel_sql_query_editor, 'root') and hasattr(self.panel_sql_query_editor.root, 'save_config'):
+            self.panel_sql_query_editor.root.save_config()
         return "break"
     
     def open_replace_dialog(self, event=None):
@@ -1813,4 +1830,9 @@ class SQLText(Text):
                                             search_use_regex, search_case_sensitive, search_history, replace_history)
         # Open with Replace tab focused
         search_dialog.open_replace_tab()
+        # Wait for dialog to be closed and then save config
+        self.master.wait_window(search_dialog)
+        # Save config to persist history
+        if hasattr(self.panel_sql_query_editor, 'root') and hasattr(self.panel_sql_query_editor.root, 'save_config'):
+            self.panel_sql_query_editor.root.save_config()
         return "break"
