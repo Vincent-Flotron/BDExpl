@@ -621,6 +621,17 @@ class SQLText(Text):
         self.bind("<Control-v>",       self.handle_column_selection_paste, add="+")
         self.bind("<Control-V>",       self.handle_column_selection_paste, add="+")
         self.bind("<Escape>",          self.clear_column_selection, add="+")
+        
+        # VSCode-like line moving: ALT+Up/Down to move lines
+        self.bind("<Alt-Up>",          self.move_line_up)
+        self.bind("<Alt-Down>",        self.move_line_down)
+        
+        # VSCode-like line copying: CTRL+D to copy line down
+        self.bind("<Control-d>",       self.copy_line_down)
+        
+        # Override double-click to select word including underscores
+        # Bind to our widget - returning "break" will prevent the default Text widget behavior
+        self.bind("<Double-Button-1>", self.select_word_under_cursor)
 
         # Define colors for syntax highlighting
         self.colors = {
@@ -1528,6 +1539,235 @@ class SQLText(Text):
             return "break"
         except tk.TclError:
             return None
+
+    # =========================================================================
+    # VSCode-like Line Moving and Copying
+    # =========================================================================
+    
+    def move_line_up(self, event=None):
+        """Move the current line or selected lines up by one line (Alt+Up)."""
+        if self._column_mode_enabled or self.column_selection_active:
+            return None  # Do nothing in column selection mode
+        
+        # Get selection range
+        try:
+            sel_start = self.index("sel.first")
+            sel_end = self.index("sel.last")
+            has_selection = True
+        except tk.TclError:
+            has_selection = False
+            sel_start = self.index("insert linestart")
+            sel_end = self.index("insert lineend")
+        
+        # Get line numbers
+        start_line_num = int(sel_start.split('.')[0])
+        end_line_num = int(sel_end.split('.')[0])
+        
+        # Can't move first line up
+        if start_line_num == 1:
+            return "break"
+        
+        # Get the text of the line(s) to move (without trailing newline)
+        lines_to_move = []
+        for line_num in range(start_line_num, end_line_num + 1):
+            line_text = self.get(f"{line_num}.0", f"{line_num}.end")
+            lines_to_move.append(line_text)
+        
+        # Get the text of the line above
+        prev_line_num = start_line_num - 1
+        prev_line_text = self.get(f"{prev_line_num}.0", f"{prev_line_num}.end")
+        
+        # Build the new text: lines_to_move + prev_line
+        # We'll replace from prev_line_num.0 to end of end_line_num
+        end_of_selection = self.index(f"{end_line_num}.end")
+        
+        # Create replacement text
+        new_text = '\n'.join(lines_to_move) + '\n' + prev_line_text
+        
+        # Delete and replace
+        self.delete(f"{prev_line_num}.0", end_of_selection)
+        self.insert(f"{prev_line_num}.0", new_text)
+        
+        # Restore selection on the moved lines (now at prev_line_num)
+        new_start_line = prev_line_num
+        new_end_line = prev_line_num + len(lines_to_move) - 1
+        self.tag_remove("sel", "1.0", "end")
+        self.tag_add("sel", f"{new_start_line}.0", f"{new_end_line}.end")
+        
+        self.panel_sql_query_editor.insert_edit_separator_in_actual_tab()
+        return "break"
+    
+    def move_line_down(self, event=None):
+        """Move the current line or selected lines down by one line (Alt+Down)."""
+        if self._column_mode_enabled or self.column_selection_active:
+            return None  # Do nothing in column selection mode
+        
+        # Get selection range
+        try:
+            sel_start = self.index("sel.first")
+            sel_end = self.index("sel.last")
+            has_selection = True
+        except tk.TclError:
+            has_selection = False
+            sel_start = self.index("insert linestart")
+            sel_end = self.index("insert lineend")
+        
+        # Get line numbers
+        start_line_num = int(sel_start.split('.')[0])
+        end_line_num = int(sel_end.split('.')[0])
+        
+        # Get total lines
+        last_line = int(self.index("end-1c").split('.')[0])
+        
+        # Can't move last line down
+        if end_line_num >= last_line:
+            return "break"
+        
+        # Get the text of the line(s) to move
+        lines_to_move = []
+        for line_num in range(start_line_num, end_line_num + 1):
+            line_text = self.get(f"{line_num}.0", f"{line_num}.end")
+            lines_to_move.append(line_text)
+        
+        # Get the text of the line below
+        next_line_num = end_line_num + 1
+        next_line_text = self.get(f"{next_line_num}.0", f"{next_line_num}.end")
+        
+        # Build the new text: next_line + lines_to_move
+        end_of_selection = self.index(f"{end_line_num}.end")
+        
+        # Create replacement text
+        new_text = next_line_text + '\n' + '\n'.join(lines_to_move)
+        
+        # Delete and replace
+        self.delete(f"{start_line_num}.0", f"{next_line_num}.end")
+        self.insert(f"{start_line_num}.0", new_text)
+        
+        # Restore selection on the moved lines (now shifted down by 1)
+        new_start_line = start_line_num + 1
+        new_end_line = start_line_num + len(lines_to_move)
+        self.tag_remove("sel", "1.0", "end")
+        self.tag_add("sel", f"{new_start_line}.0", f"{new_end_line}.end")
+        
+        self.panel_sql_query_editor.insert_edit_separator_in_actual_tab()
+        return "break"
+    
+    def copy_line_up(self, event=None):
+        """Copy the current line or selected lines above - DISABLED."""
+        # This functionality has been disabled. Use Ctrl+D to copy line down.
+        return None
+    
+    def copy_line_down(self, event=None):
+        """Copy the current line or selected lines below (Ctrl+D)."""
+        if self._column_mode_enabled or self.column_selection_active:
+            return None  # Do nothing in column selection mode
+        
+        # Get selection range
+        try:
+            sel_start = self.index("sel.first")
+            sel_end = self.index("sel.last")
+            has_selection = True
+        except tk.TclError:
+            has_selection = False
+        
+        if has_selection:
+            # Get the line numbers for the selection
+            start_line_num = int(sel_start.split('.')[0])
+            end_line_num = int(sel_end.split('.')[0])
+            
+            # Get the text of the selected lines (without trailing newline)
+            lines_to_copy = []
+            for line_num in range(start_line_num, end_line_num + 1):
+                line_text = self.get(f"{line_num}.0", f"{line_num}.end")
+                lines_to_copy.append(line_text)
+            
+            # Position to insert: after the last selected line
+            insert_pos = f"{end_line_num}.end"
+            
+            # Insert the copied lines below
+            text_to_insert = '\n' + '\n'.join(lines_to_copy)
+            self.insert(insert_pos, text_to_insert)
+            
+            # Select the copied lines
+            new_start_line = end_line_num + 1
+            new_end_line = new_start_line + len(lines_to_copy) - 1
+            self.tag_remove("sel", "1.0", "end")
+            self.tag_add("sel", f"{new_start_line}.0", f"{new_end_line}.end")
+        else:
+            # No selection - copy current line
+            current_line_num = int(self.index("insert").split('.')[0])
+            line_text = self.get(f"{current_line_num}.0", f"{current_line_num}.end")
+            
+            # Insert a copy below
+            insert_pos = f"{current_line_num}.end"
+            self.insert(insert_pos, '\n' + line_text)
+            
+            # Select the copied line
+            new_line_num = current_line_num + 1
+            self.tag_remove("sel", "1.0", "end")
+            self.tag_add("sel", f"{new_line_num}.0", f"{new_line_num}.end")
+        
+        self.panel_sql_query_editor.insert_edit_separator_in_actual_tab()
+        return "break"
+    
+    def select_word_under_cursor(self, event=None):
+        """Select the word under the cursor, including underscores but excluding punctuation.
+        
+        Double-click behavior similar to VSCode: selects identifiers with underscores,
+        but stops at punctuation like dots, commas, quotes, etc.
+        """
+        # Get the click position - format is "@x,y" (with comma, not @x@y)
+        click_pos = self.index(f"@{event.x},{event.y}")
+        
+        # Get the character at the click position
+        char = self.get(click_pos)
+        
+        # If it's whitespace or punctuation, don't select anything
+        punctuation = '.,;:()[]{}"\'`@#$%^&*+-=/|<>?\\'
+        if char and (char.isspace() or char in punctuation):
+            # Allow default behavior (which will deselect or do nothing)
+            return None
+        
+        # Define what characters are part of a "word" (alphanumeric + underscore)
+        # This matches VSCode's identifier selection behavior
+        def is_word_char(c):
+            return c.isalnum() or c == '_'
+        
+        # Get the line content
+        line_start = f"{click_pos} linestart"
+        line_end = f"{click_pos} lineend"
+        line_text = self.get(line_start, line_end)
+        
+        # Calculate the column position in the line
+        col = int(click_pos.split('.')[1])
+        
+        # Find the start of the word
+        word_start = col
+        while word_start > 0:
+            c = line_text[word_start - 1] if word_start > 0 else ''
+            if is_word_char(c):
+                word_start -= 1
+            else:
+                break
+        
+        # Find the end of the word
+        word_end = col
+        while word_end < len(line_text):
+            c = line_text[word_end] if word_end < len(line_text) else ''
+            if is_word_char(c):
+                word_end += 1
+            else:
+                break
+        
+        # Select the word
+        start_pos = f"{line_start} + {word_start} chars"
+        end_pos = f"{line_start} + {word_end} chars"
+        
+        self.tag_remove("sel", "1.0", "end")
+        self.tag_add("sel", start_pos, end_pos)
+        self.see(click_pos)
+        
+        return "break"
 
     def open_search_dialog(self, event=None):
         """Open the search and replace dialog (CTRL+F)."""
