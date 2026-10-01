@@ -197,45 +197,45 @@ class PanelSQLQueryEditor:
         if not self.db_connection.current_connection:
             messagebox.showwarning("Not Connected", "Please connect to a database first")
             return
-        
+
         # Get queries instance
         queries = self.get_queries_instance()
-        
+
         # Fetch available schemas
         try:
             cursor = self.db_connection.current_connection.cursor()
             cursor = self.query_manager.cursor_execute(queries.get_all_schemas_with_their_table_count(), cursor)
             schemas = cursor.fetchall()
-            
+
             if not schemas:
                 messagebox.showinfo("No Schemas", "No schemas available in the current database")
                 return
-            
+
             # Extract schema names for dropdown
             schema_names = [schema[0] for schema in schemas]
-            
+
             # Create dropdown dialog
             dialog = tk.Toplevel(self.parent)
             dialog.title("Set Schema")
             dialog.geometry("300x100")
             dialog.transient(self.root)
             dialog.grab_set()
-            
+
             ttk.Label(dialog, text="Select Schema:").pack(pady=10)
-            
+
             combobox = ttk.Combobox(dialog, values=schema_names, state="readonly", width=30)
             combobox.pack(pady=5)
             combobox.bind("<<ComboboxSelected>>", lambda e: self._apply_schema_selection(combobox.get(), queries, dialog))
-            
+
             # Focus on combobox
             combobox.focus_set()
-            
+
             # Center dialog
             dialog.update_idletasks()
             x = dialog.winfo_screenwidth() // 2 - 150
             y = dialog.winfo_screenheight() // 2 - 50
             dialog.geometry(f"+{x}+{y}")
-            
+
         except Exception as e:
             self.display_error(f"Failed to fetch schemas: {str(e)}")
 
@@ -251,10 +251,10 @@ class PanelSQLQueryEditor:
         if not self.db_connection.current_connection:
             messagebox.showwarning("Not Connected", "Please connect to a database first")
             return
-        
+
         # Get queries instance
         queries = self.get_queries_instance()
-        
+
         # Show dialog for schema and table selection
         from tkinter import ttk
         dialog = tk.Toplevel(self.parent)
@@ -262,12 +262,12 @@ class PanelSQLQueryEditor:
         dialog.geometry("400x250")
         dialog.transient(self.root)
         dialog.grab_set()
-        
+
         main_frame = ttk.Frame(dialog, padding="20")
         main_frame.pack(fill=tk.BOTH, expand=True)
-        
+
         ttk.Label(main_frame, text="Select a table to use as template (or leave blank for template):").pack(pady=(0, 10))
-        
+
         # Schema combobox
         schema_frame = ttk.Frame(main_frame)
         schema_frame.pack(fill=tk.X, pady=5)
@@ -275,7 +275,7 @@ class PanelSQLQueryEditor:
         schema_var = tk.StringVar()
         schema_combo = ttk.Combobox(schema_frame, textvariable=schema_var, state="readonly", width=30)
         schema_combo.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
-        
+
         # Table combobox
         table_frame = ttk.Frame(main_frame)
         table_frame.pack(fill=tk.X, pady=5)
@@ -283,9 +283,9 @@ class PanelSQLQueryEditor:
         table_var = tk.StringVar()
         table_combo = ttk.Combobox(table_frame, textvariable=table_var, state="readonly", width=30)
         table_combo.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
-        
+
         result = {'selected': False}
-        
+
         def on_schema_changed(event):
             """Fetch tables when schema is selected"""
             schema = schema_var.get()
@@ -300,17 +300,17 @@ class PanelSQLQueryEditor:
                     table_combo.set('---')
                 except Exception as e:
                     messagebox.showerror("Error", f"Failed to fetch tables: {str(e)}")
-        
+
         def on_ok():
             """Handle OK button click"""
             result['selected'] = True
             dialog.destroy()
-        
+
         def on_cancel():
             """Handle Cancel button click"""
             result['selected'] = False
             dialog.destroy()
-        
+
         # Fetch schemas
         try:
             cursor = self.db_connection.current_connection.cursor()
@@ -323,26 +323,26 @@ class PanelSQLQueryEditor:
             schema_combo.bind("<<ComboboxSelected>>", on_schema_changed)
         except Exception as e:
             messagebox.showerror("Error", f"Failed to fetch schemas: {str(e)}")
-        
+
         # Buttons
         button_frame = ttk.Frame(main_frame)
         button_frame.pack(pady=15)
         ttk.Button(button_frame, text="OK", command=on_ok).pack(side=tk.LEFT, padx=5)
         ttk.Button(button_frame, text="Cancel", command=on_cancel).pack(side=tk.LEFT, padx=5)
-        
+
         # Center dialog
         dialog.update_idletasks()
         x = self.root.winfo_screenwidth() // 2 - 200
         y = self.root.winfo_screenheight() // 2 - 90
         dialog.geometry(f"+{x}+{y}")
-        
+
         # Wait for dialog
         self.root.wait_window(dialog)
-        
+
         if result['selected']:
             schema = schema_var.get()
             table = table_var.get()
-            
+
             # If both schema and table are selected (not "---")
             if schema and schema != "---" and table and table != "---":
                 try:
@@ -351,11 +351,11 @@ class PanelSQLQueryEditor:
                     cursor = self.query_manager.cursor_execute(queries.get_table_structure(schema, table), cursor)
                     columns = cursor.fetchall()
                     cursor.close()
-                    
+
                     # Generate CREATE TABLE SQL
                     create_sql = queries.generate_create_table_sql(schema, table, columns)
                     self.insert_at_cursor(create_sql)
-                    
+
                 except Exception as e:
                     messagebox.showerror("Error", f"Failed to generate CREATE TABLE: {str(e)}")
             else:
@@ -388,11 +388,11 @@ class PanelSQLQueryEditor:
         widget.see(tk.INSERT)  # Scroll to make the insertion point visible
         widget.focus_set()     # Set focus back to the editor
         self.insert_edit_separator_in_actual_tab() # for undo/redo
-        
+
         # Trigger syntax highlighting refresh
         if hasattr(widget, 'highlight_visible'):
             widget.highlight_visible()
-        
+
         widget.on_content_changed()
 
     def insert_order_by(self, col_name, direction):
@@ -405,37 +405,37 @@ class PanelSQLQueryEditor:
         widget.edit_separator()
 
         current_text = widget.get("1.0", "end-1c")
-        
+
         # Pattern to match existing ORDER BY clauses (to replace)
         import re
         order_by_pattern = r'ORDER\s+BY\s+[A-Za-z0-9_\s\n,]*?(?:ASC|DESC)?'
         order_by_match = re.search(order_by_pattern, current_text, re.IGNORECASE)
-        
+
         # Pattern to match LIMIT or FETCH FIRST clauses
         limit_pattern = r'(LIMIT\s+\d+|FETCH\s+FIRST\s+\d+\s+ROWS\s+ONLY)'
         limit_match = re.search(limit_pattern, current_text, re.IGNORECASE)
-        
+
         if order_by_match:
             # Replace existing ORDER BY clause
             insert_start = order_by_match.start()
             insert_end = order_by_match.end()
-            
+
             # Find the start of the line containing ORDER BY
             line_start = current_text.rfind('\n', 0, insert_start) + 1
             if line_start == 0:
                 line_start = 0
-            
+
             # Check if there's content before ORDER BY on the same line
             prefix = "\n" if line_start > 0 and current_text[line_start-1] != '\n' else ""
-            
+
             # Find where the line ends
             line_end = current_text.find('\n', insert_end)
             if line_end == -1:
                 line_end = len(current_text)
-            
+
             # Replace the entire ORDER BY line
             new_text = f"{prefix}ORDER BY \"{col_name}\" {direction}"
-            
+
             self.insert_edit_separator_in_actual_tab()
             widget.delete(f"1.0+{line_start}c", f"1.0+{line_end}c")
             widget.insert(f"1.0+{line_start}c", new_text)
@@ -443,6 +443,7 @@ class PanelSQLQueryEditor:
             widget.see(f"1.0+{line_start}c")
             widget.focus_set()
             self.insert_edit_separator_in_actual_tab()
+            widget.refresh_highlighting()
             widget.on_content_changed()
         elif limit_match:
             # Insert before LIMIT clause
@@ -450,16 +451,17 @@ class PanelSQLQueryEditor:
             line_start = current_text.rfind('\n', 0, match_start) + 1
             if line_start == 0:
                 line_start = 0
-            
+
             insert_pos = f"1.0+{line_start}c"
             prefix = "\n" if line_start > 0 and current_text[line_start-1] != '\n' else ""
-            
+
             self.insert_edit_separator_in_actual_tab()
             widget.insert(insert_pos, f"{prefix}ORDER BY \"{col_name}\" {direction}\n")
             widget.edit_separator()
             widget.see(insert_pos)
             widget.focus_set()
             self.insert_edit_separator_in_actual_tab()
+            widget.refresh_highlighting()
             widget.on_content_changed()
         else:
             # Append at the end
@@ -471,6 +473,7 @@ class PanelSQLQueryEditor:
             widget.see(tk.END)
             widget.focus_set()
             self.insert_edit_separator_in_actual_tab()
+            widget.refresh_highlighting()
             widget.on_content_changed()
 
     def display_error(self, error: str):
@@ -542,48 +545,48 @@ class PanelSQLQueryEditor:
         commands = [
             ("Copy Selected", copy_command),
         ]
-        
+
         if copy_all_command:
             commands.append(("Copy All", copy_all_command))
-        
+
         if open_excel_command:
             commands.append(("Open into Excel", open_excel_command))
-        
+
         if export_excel_command:
             commands.append(("Export to Excel", export_excel_command))
-        
+
         commands.append(("Export to CSV", export_command))
-        
+
         context_menu = Helper.create_context_menu(tree, commands)
         return context_menu
 
     def _create_excel_workbook(self, tree):
         """Create an Excel workbook from treeview data.
-        
+
         Args:
             tree: The treeview widget containing the data
-            
+
         Returns:
             Workbook: The created openpyxl Workbook
         """
         wb = Workbook()
         ws = wb.active
         ws.title = "Export"
-        
+
         # Add header row with bold formatting
         header_font = Font(bold=True)
         header_fill = PatternFill(start_color="E7EEF5", end_color="E7EEF5", fill_type="solid")
-        
+
         # Use raw columns if available (to avoid formatted column names)
         columns = tree.raw_data_columns if hasattr(tree, 'raw_data_columns') and tree.raw_data_columns else tree['columns']
         ws.append(columns)
-        
+
         # Style the header row
         for col_num, cell in enumerate(ws[1], 1):
             cell.font = header_font
             cell.fill = header_fill
             cell.alignment = Alignment(horizontal='center')
-        
+
         # Add data rows - use raw data if available to avoid thousands separators
         if hasattr(tree, 'raw_data_rows') and tree.raw_data_rows:
             for row in tree.raw_data_rows:
@@ -599,7 +602,7 @@ class PanelSQLQueryEditor:
                     for v in tree.item(item)['values']
                 ]
                 ws.append(row_data)
-        
+
         # Auto-adjust column widths
         for column in ws.columns:
             max_length = 0
@@ -612,9 +615,9 @@ class PanelSQLQueryEditor:
                     pass
             adjusted_width = min(max_length + 2, 50)
             ws.column_dimensions[column_letter].width = adjusted_width
-        
+
         return wb
-    
+
     def _open_file(self, filepath):
         """Open a file with the default OS application."""
         if os.name == 'nt':  # Windows
@@ -622,17 +625,17 @@ class PanelSQLQueryEditor:
         else:
             opener = "open" if sys.platform == "darwin" else "xdg-open"
             subprocess.call([opener, filepath])
-    
+
     def _export_to_excel(self, tree, default_name):
         """Helper: Export treeview data to Excel with file dialog."""
         if not OPENPYXL_AVAILABLE:
             messagebox.showerror("Error", "openpyxl library not installed. Please run: pip install openpyxl")
             return
-        
+
         default_path = self.panel_query_result.get_default_export_path()
         datetime_tag = datetime.now().strftime("%Y%m%d_%H%M%S")
         default_filename = f"{default_name}_{datetime_tag}.xlsx"
-        
+
         filepath = filedialog.asksaveasfilename(
             title=f"Export {default_name} to Excel",
             defaultextension=".xlsx",
@@ -640,29 +643,29 @@ class PanelSQLQueryEditor:
             filetypes=[("Excel Files", "*.xlsx"), ("All Files", "*.*")],
             initialdir=default_path
         )
-        
+
         if filepath:
             try:
                 wb = self._create_excel_workbook(tree)
                 wb.save(filepath)
                 messagebox.showinfo("Success", f"{default_name} exported to {filepath}")
-                
+
                 if messagebox.askyesno("Open File", "Do you want to open the exported file?"):
                     self._open_file(filepath)
-                        
+
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to export {default_name}: {str(e)}")
-    
+
     def _open_into_excel(self, tree, default_name):
         """Helper: Export treeview data directly to Excel and open immediately."""
         if not OPENPYXL_AVAILABLE:
             messagebox.showerror("Error", "openpyxl library not installed. Please run: pip install openpyxl")
             return
-        
+
         default_path = self.panel_query_result.get_default_export_path()
         datetime_tag = datetime.now().strftime("%Y%m%d_%H%M%S")
         filepath = os.path.join(default_path, f"{default_name}_{datetime_tag}.xlsx")
-        
+
         try:
             wb = self._create_excel_workbook(tree)
             wb.save(filepath)
@@ -737,7 +740,7 @@ class PanelSQLQueryEditor:
 
     def show_table_keys(self, schema: str, table: str):
         """Fetch and display table or view keys (primary and foreign) with sequence info in a new tab.
-        
+
         For auto-increment columns (SERIAL, IDENTITY, AUTOINCREMENT), also displays:
         - Current value in the table (MAX of column)
         - Current sequence state (what next value will be)
@@ -761,34 +764,34 @@ class PanelSQLQueryEditor:
             #          Current Value, Sequence State, Is Up-to-Date
             columns = ["Key name", "Key Type", "Column name", "Ref. Schema", "Ref. Table", "Ref. Constraint",
                        "Current Value", "Sequence State", "Is Up-to-Date"]
-            
+
             rows = []
-            
+
             # Add primary and foreign keys (without sequence info)
             for row in key_rows:
                 # Replace None with "" so the Treeview never shows "None"
                 clean_row = tuple("" if v is None else v for v in row)
                 # Pad with empty strings for sequence columns
                 rows.append(clean_row + ("", "", ""))
-            
+
             # Add auto-increment columns with sequence info
             for col_row in auto_inc_cols:
                 column_name = col_row[0]  # First column is always column_name
-                
+
                 # Get current value
                 cursor = self.query_manager.cursor_execute(
                     queries.get_key_column_current_value(schema, table, column_name), cursor
                 )
                 val_row = cursor.fetchone()
                 current_value = val_row[0] if val_row else ""
-                
+
                 # Get sequence state
                 cursor = self.query_manager.cursor_execute(
                     queries.get_sequence_current_state(schema, table, column_name), cursor
                 )
                 seq_row = cursor.fetchone()
                 sequence_state = seq_row[0] if seq_row else ""
-                
+
                 # Get is_up_to_date status
                 try:
                     cursor = self.query_manager.cursor_execute(
@@ -799,7 +802,7 @@ class PanelSQLQueryEditor:
                 except Exception:
                     # Some databases may not support this query
                     is_up_to_date = "N/A"
-                
+
                 # Format as key row: empty key name, "AUTO_INCREMENT" type, column name, etc.
                 rows.append(("", "AUTO_INCREMENT", column_name, "", "", "",
                            str(current_value), str(sequence_state), str(is_up_to_date)))
@@ -815,7 +818,7 @@ class PanelSQLQueryEditor:
             # Create context menu with sequence update option
             def update_sequence():
                 self._update_sequence_for_selected(tree, schema, table, queries)
-            
+
             context_menu = self._create_context_menu(
                 tree,
                 lambda: self._copy_selected_rows(tree),
@@ -824,11 +827,11 @@ class PanelSQLQueryEditor:
                 export_excel_command=lambda: self._export_to_excel(tree, f"{table}_keys"),
                 open_excel_command=lambda: self._open_into_excel(tree, f"{table}_keys")
             )
-            
+
             # Add "Update sequence to last key value" menu item
             context_menu.add_separator()
             context_menu.add_command(label="Update sequence to last key value", command=update_sequence)
-            
+
             tree.bind("<Button-3>", lambda event: context_menu.tk_popup(event.x_root, event.y_root))
 
         except Exception as e:
@@ -839,18 +842,18 @@ class PanelSQLQueryEditor:
         try:
             selected_item = tree.selection()[0]
             values = tree.item(selected_item)['values']
-            
+
             # Check if this is an AUTO_INCREMENT row (column index 1)
             key_type = values[1] if len(values) > 1 else ""
             if key_type != "AUTO_INCREMENT":
                 messagebox.showwarning("Warning", "Please select an auto-increment column row.")
                 return
-            
+
             column_name = values[2] if len(values) > 2 else ""
             if not column_name:
                 messagebox.showwarning("Warning", "Could not determine column name.")
                 return
-            
+
             # Confirm with user
             confirm = messagebox.askyesno(
                 "Confirm Sequence Update",
@@ -859,19 +862,19 @@ class PanelSQLQueryEditor:
             )
             if not confirm:
                 return
-            
+
             # Generate and execute the reset SQL
             cursor = self.db_connection.current_connection.cursor()
             reset_sql = queries.generate_sequence_reset_sql(schema, table, column_name)
             cursor = self.query_manager.cursor_execute(reset_sql, cursor)
             self.db_connection.current_connection.commit()
             cursor.close()
-            
+
             messagebox.showinfo("Success", f"Sequence for column '{column_name}' has been updated.")
-            
+
             # Refresh the display
             self.show_table_keys(schema, table)
-            
+
         except IndexError:
             messagebox.showwarning("Warning", "Please select a row.")
         except Exception as e:
@@ -1040,7 +1043,7 @@ class PanelSQLQueryEditor:
         text_widget.edit_reset()
         text_widget.edit_modified(False)
         text_widget.configure(undo=True)
-        
+
         # Refresh syntax highlighting for SQLText widgets
         if hasattr(text_widget, 'refresh_highlighting'):
             text_widget.refresh_highlighting()
@@ -1163,23 +1166,23 @@ class PanelSQLQueryEditor:
                 f.write(content)
         except Exception as e:
             messagebox.showerror("Error", f"Failed to save file: {str(e)}")
-    
+
     def save_sql_as_for_tab(self, tab_id):
         """Save a specific tab (not necessarily current) with a new filename.
-        
+
         Returns True if saved successfully, False if cancelled.
         """
         if tab_id not in self.sql_files:
             return False
-        
+
         info = self.sql_files[tab_id]
-        
+
         filepath = filedialog.asksaveasfilename(
             title="Save SQL File",
             defaultextension=".sql",
             filetypes=[("SQL Files", "*.sql"), ("All Files", "*.*")]
         )
-        
+
         if filepath:
             content = info["widget"].get('1.0', 'end-1c')
             self.save_sql_to_file(filepath, content)
@@ -1208,7 +1211,7 @@ class PanelSQLQueryEditor:
                 messagebox.showwarning("No Selection", "Please select SQL text to execute")
         else:
             sql = info["widget"].get('1.0', 'end-1c').strip()
-            
+
         if sql:
             self.run_query(sql)
 
@@ -1273,7 +1276,7 @@ class PanelSQLQueryEditor:
         """Close the specified tab with prompt to save unsaved changes"""
         if tab_id in self.sql_files:
             info = self.sql_files[tab_id]
-            
+
             # Check if tab has unsaved changes
             if info["modified"]:
                 # Ask user what to do with unsaved changes
@@ -1283,20 +1286,20 @@ class PanelSQLQueryEditor:
                     "Unsaved Changes",
                     f"The file '{filename}' has unsaved changes.\n\nSave changes before closing?"
                 )
-                
+
                 if response is None:  # Cancel was clicked
                     return
                 elif response is True:  # Yes - save first
                     # Get current tab to make sure we're saving the right one
                     current_tab_id, current_info = self.get_current_sql_tab()
-                    
+
                     # If the tab we're closing is not the current one, switch to it temporarily
                     was_current_tab = (current_tab_id == tab_id)
-                    
+
                     if not was_current_tab:
                         # Switch to the tab we're closing
                         self.sql_notebook.select(info["frame"])
-                    
+
                     # Save the file
                     if info["path"]:
                         # Existing file - save to same path
@@ -1310,12 +1313,12 @@ class PanelSQLQueryEditor:
                                 # Switch back to original tab
                                 self.sql_notebook.select(current_info["frame"])
                             return
-                    
+
                     # Switch back to original tab if we switched away
                     if not was_current_tab and current_info:
                         self.sql_notebook.select(current_info["frame"])
                 # else: response is False - Don't Save, proceed with closing
-            
+
             # Close the tab
             self.sql_notebook.forget(info["frame"])
             del self.sql_files[tab_id]
@@ -1338,7 +1341,7 @@ class PanelSQLQueryEditor:
         _, info = self.get_current_sql_tab()
         if not info or "widget" not in info:
             return
-        
+
         text_widget = info["widget"]
         try:
             # Position cursor at the specified line and column
@@ -1351,4 +1354,3 @@ class PanelSQLQueryEditor:
             text_widget.focus_set()
         except tk.TclError:
             pass
-
