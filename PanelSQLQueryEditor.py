@@ -1009,7 +1009,8 @@ class PanelSQLQueryEditor:
         # Get the tab index that was clicked on
         tab_index = self.sql_notebook.index("@%d,%d" % (event.x, event.y))
 
-        if tab_index == "none":
+        # If click was not on a tab (returns "none" or empty string), do nothing
+        if not tab_index or tab_index == "none":
             return
 
         # Get the tab ID from the index
@@ -1162,6 +1163,31 @@ class PanelSQLQueryEditor:
                 f.write(content)
         except Exception as e:
             messagebox.showerror("Error", f"Failed to save file: {str(e)}")
+    
+    def save_sql_as_for_tab(self, tab_id):
+        """Save a specific tab (not necessarily current) with a new filename.
+        
+        Returns True if saved successfully, False if cancelled.
+        """
+        if tab_id not in self.sql_files:
+            return False
+        
+        info = self.sql_files[tab_id]
+        
+        filepath = filedialog.asksaveasfilename(
+            title="Save SQL File",
+            defaultextension=".sql",
+            filetypes=[("SQL Files", "*.sql"), ("All Files", "*.*")]
+        )
+        
+        if filepath:
+            content = info["widget"].get('1.0', 'end-1c')
+            self.save_sql_to_file(filepath, content)
+            info["path"] = filepath
+            info["modified"] = False
+            self.sql_notebook.tab(info["frame"], text=os.path.basename(filepath))
+            return True
+        return False
 
     def execute(self, selection_only=False):
         """Execute SQL query from current tab"""
@@ -1244,12 +1270,54 @@ class PanelSQLQueryEditor:
             self.panel_query_result.show_query_result_tab()
 
     def close_tab(self, tab_id):
-        """Close the specified tab"""
+        """Close the specified tab with prompt to save unsaved changes"""
         if tab_id in self.sql_files:
-            if self.sql_files[tab_id]["modified"]:
-                if not messagebox.askyesno("Unsaved Changes", "This file has unsaved changes. Close anyway?"):
+            info = self.sql_files[tab_id]
+            
+            # Check if tab has unsaved changes
+            if info["modified"]:
+                # Ask user what to do with unsaved changes
+                path = info.get("path")
+                filename = os.path.basename(path) if path else "Untitled"
+                response = messagebox.askyesnocancel(
+                    "Unsaved Changes",
+                    f"The file '{filename}' has unsaved changes.\n\nSave changes before closing?"
+                )
+                
+                if response is None:  # Cancel was clicked
                     return
-            self.sql_notebook.forget(self.sql_files[tab_id]["frame"])
+                elif response is True:  # Yes - save first
+                    # Get current tab to make sure we're saving the right one
+                    current_tab_id, current_info = self.get_current_sql_tab()
+                    
+                    # If the tab we're closing is not the current one, switch to it temporarily
+                    was_current_tab = (current_tab_id == tab_id)
+                    
+                    if not was_current_tab:
+                        # Switch to the tab we're closing
+                        self.sql_notebook.select(info["frame"])
+                    
+                    # Save the file
+                    if info["path"]:
+                        # Existing file - save to same path
+                        content = info["widget"].get('1.0', 'end-1c')
+                        self.save_sql_to_file(info["path"], content)
+                    else:
+                        # New file - need to ask for filename
+                        if not self.save_sql_as_for_tab(tab_id):
+                            # User cancelled save - abort close
+                            if not was_current_tab:
+                                # Switch back to original tab
+                                self.sql_notebook.select(current_info["frame"])
+                            return
+                    
+                    # Switch back to original tab if we switched away
+                    if not was_current_tab and current_info:
+                        self.sql_notebook.select(current_info["frame"])
+                # else: response is False - Don't Save, proceed with closing
+            
+            # Close the tab
+            self.sql_notebook.forget(info["frame"])
             del self.sql_files[tab_id]
 
             # Remove the result for this tab
