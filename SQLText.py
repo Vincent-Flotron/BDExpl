@@ -7,46 +7,46 @@ from collections import deque
 
 class SearchReplaceDialog(Toplevel):
     """Search and Replace dialog like Notepad++ with CTRL+F - passes results to panel_query_result tab."""
-    
+
     MAX_HISTORY = 30
-    
+
     def __init__(self, parent, sql_text_widget, panel_query_result, use_regex=False, case_sensitive=False, search_history=None, replace_history=None):
         super().__init__(parent)
         self.sql_text = sql_text_widget
         self.panel_query_result = panel_query_result
         self.title("Find and Replace")
-        
+
         # Load settings from parameters (saved from config)
         self.use_regex = use_regex
         self.case_sensitive = case_sensitive
-        
+
         # Load history from parameters
         self.search_history = deque(search_history or [], maxlen=self.MAX_HISTORY)
         self.replace_history = deque(replace_history or [], maxlen=self.MAX_HISTORY)
-        
+
         # Center the dialog on the parent window
         self.transient(parent)
-        
+
         # Allow clicking outside the dialog to interact with other windows (like search results tab)
         # Don't use grab_set() - it blocks interaction with other windows
         self.focus_set()
-        
+
         self.matches = []  # List of (line, col_start, col_end, text) tuples
         self.current_match_index = -1
-        
+
         self.setup_ui()
-        
+
         # Handle window close event (X button)
         self.protocol("WM_DELETE_WINDOW", self.on_close)
-        
+
         # Center the dialog on screen after UI is created
         self.after(100, self.center_dialog)
-    
+
     def open_replace_tab(self):
         """Open the dialog with Replace tab focused."""
         self.notebook.select(1)  # Select Replace tab (index 1)
         self.replace_search_entry.focus_set()
-        
+
     def center_dialog(self):
         """Center the dialog on the parent window."""
         self.update_idletasks()
@@ -59,134 +59,134 @@ class SearchReplaceDialog(Toplevel):
         x = parent_x + (parent_width - dialog_width) // 2
         y = parent_y + (parent_height - dialog_height) // 2
         self.geometry(f"+{x}+{y}")
-        
+
     def setup_ui(self):
         """Setup the tabbed search/replace dialog UI."""
         # Initialize search tags list on the SQLText widget
         self.sql_text._search_tags = []
-        
+
         # Create notebook for tabs
         self.notebook = ttk.Notebook(self)
         self.notebook.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-        
+
         # Create Search tab
         self.search_tab = Frame(self.notebook)
         self.notebook.add(self.search_tab, text="Search")
         self.setup_search_tab()
-        
+
         # Create Replace tab
         self.replace_tab = Frame(self.notebook)
         self.notebook.add(self.replace_tab, text="Replace")
         self.setup_replace_tab()
-        
+
         # Bind tab change event
         self.notebook.bind("<<NotebookTabChanged>>", self.on_tab_changed)
-    
+
     def setup_search_tab(self):
         """Setup the Search tab UI."""
         # Search bar frame
         search_frame = Frame(self.search_tab)
         search_frame.pack(fill=tk.X, padx=5, pady=10)
-        
+
         Label(search_frame, text="Find:").pack(side=tk.LEFT, padx=2)
-        
+
         self.search_var = StringVar()
         # Use Combobox for history dropdown
         self.search_entry = ttk.Combobox(search_frame, textvariable=self.search_var, width=50, values=list(self.search_history))
         self.search_entry.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
-        
+
         # Bind Enter key to search
         self.search_entry.bind("<Return>", lambda e: self.search())
-        
+
         # Options frame
         options_frame = Frame(self.search_tab)
         options_frame.pack(fill=tk.X, padx=5, pady=5)
-        
+
         self.case_sensitive_var = BooleanVar(value=self.case_sensitive)
         case_check = tk.Checkbutton(options_frame, text="Match Case", variable=self.case_sensitive_var)
         case_check.pack(side=tk.LEFT, padx=2)
-        
+
         self.regex_var = BooleanVar(value=self.use_regex)
         regex_check = tk.Checkbutton(options_frame, text="Regex", variable=self.regex_var)
         regex_check.pack(side=tk.LEFT, padx=2)
-        
+
         # Bind checkbox changes to save settings
         self.case_sensitive_var.trace_add("write", self.on_setting_changed)
         self.regex_var.trace_add("write", self.on_setting_changed)
-        
+
         # Buttons frame
         button_frame = Frame(self.search_tab)
         button_frame.pack(fill=tk.X, padx=5, pady=5)
-        
+
         Button(button_frame, text="Find All", command=self.search).pack(side=tk.LEFT, padx=2)
         Button(button_frame, text="Find Next", command=self.find_next).pack(side=tk.LEFT, padx=2)
         Button(button_frame, text="Clear", command=self.clear_results).pack(side=tk.LEFT, padx=2)
         Button(button_frame, text="Close", command=self.close).pack(side=tk.LEFT, padx=2)
-        
+
         # Results count label
         self.results_label = Label(self.search_tab, text="")
         self.results_label.pack(fill=tk.X, padx=5, pady=5)
-    
+
     def setup_replace_tab(self):
         """Setup the Replace tab UI."""
         # Search bar frame
         search_frame = Frame(self.replace_tab)
         search_frame.pack(fill=tk.X, padx=5, pady=10)
-        
+
         Label(search_frame, text="Find:").pack(side=tk.LEFT, padx=2)
-        
+
         self.replace_search_var = StringVar()
         # Use Combobox for history dropdown
         self.replace_search_entry = ttk.Combobox(search_frame, textvariable=self.replace_search_var, width=50, values=list(self.search_history))
         self.replace_search_entry.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
-        
+
         # Replace bar frame
         replace_frame = Frame(self.replace_tab)
         replace_frame.pack(fill=tk.X, padx=5, pady=5)
-        
+
         Label(replace_frame, text="Replace:").pack(side=tk.LEFT, padx=2)
-        
+
         self.replace_var = StringVar()
         # Use Combobox for history dropdown
         self.replace_entry = ttk.Combobox(replace_frame, textvariable=self.replace_var, width=50, values=list(self.replace_history))
         self.replace_entry.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
-        
+
         # Options frame
         options_frame = Frame(self.replace_tab)
         options_frame.pack(fill=tk.X, padx=5, pady=5)
-        
+
         self.replace_case_sensitive_var = BooleanVar(value=self.case_sensitive)
         case_check = tk.Checkbutton(options_frame, text="Match Case", variable=self.replace_case_sensitive_var)
         case_check.pack(side=tk.LEFT, padx=2)
-        
+
         self.replace_regex_var = BooleanVar(value=self.use_regex)
         regex_check = tk.Checkbutton(options_frame, text="Regex", variable=self.replace_regex_var)
         regex_check.pack(side=tk.LEFT, padx=2)
-        
+
         # Bind checkbox changes to save settings
         self.replace_case_sensitive_var.trace_add("write", self.on_setting_changed)
         self.replace_regex_var.trace_add("write", self.on_setting_changed)
-        
+
         # Buttons frame row 1
         button_frame = Frame(self.replace_tab)
         button_frame.pack(fill=tk.X, padx=5, pady=5)
-        
+
         Button(button_frame, text="Find All", command=self.replace_find_all).pack(side=tk.LEFT, padx=2)
         Button(button_frame, text="Find Next", command=self.replace_find_next).pack(side=tk.LEFT, padx=2)
         Button(button_frame, text="Clear", command=self.replace_clear).pack(side=tk.LEFT, padx=2)
         Button(button_frame, text="Close", command=self.close).pack(side=tk.LEFT, padx=2)
-        
+
         # Buttons frame row 2
         replace_button_frame = Frame(self.replace_tab)
         replace_button_frame.pack(fill=tk.X, padx=5, pady=5)
-        
+
         Button(replace_button_frame, text="Replace", command=self.replace_one).pack(side=tk.LEFT, padx=2)
         Button(replace_button_frame, text="Replace All", command=self.replace_all).pack(side=tk.LEFT, padx=2)
-        
+
         # Results count label
         self.replace_results_label = Label(self.replace_tab, text="")
         self.replace_results_label.pack(fill=tk.X, padx=5, pady=5)
-    
+
     def on_tab_changed(self, event):
         """Handle tab change event."""
         selected_tab = self.notebook.index(self.notebook.select())
@@ -194,7 +194,7 @@ class SearchReplaceDialog(Toplevel):
             self.search_entry.focus_set()
         else:  # Replace tab
             self.replace_search_entry.focus_set()
-    
+
     def on_setting_changed(self, *args):
         """Save search settings when checkboxes are toggled."""
         # Update parent window's search settings through sql_text widget
@@ -204,41 +204,41 @@ class SearchReplaceDialog(Toplevel):
                 db_exp = root.db_exp
                 db_exp.search_use_regex = self.regex_var.get()
                 db_exp.search_case_sensitive = self.case_sensitive_var.get()
-    
+
     def get_search_flags(self, use_regex_var, case_sensitive_var):
         """Get regex flags based on settings."""
         flags = re.MULTILINE
         if not case_sensitive_var.get():
             flags |= re.IGNORECASE
         return flags
-    
+
     def search(self, event=None):
         """Perform search and send results to panel_query_result tab."""
         search_text = self.search_var.get()
         use_regex = self.regex_var.get()
         case_sensitive = self.case_sensitive_var.get()
-        
+
         if not search_text:
             return
-        
+
         # Add to search history
         if search_text not in self.search_history:
             self.search_history.appendleft(search_text)
             # Update combobox values
             self.search_entry.config(values=list(self.search_history))
             self.replace_search_entry.config(values=list(self.search_history))
-        
+
         self.clear_highlights()
         self.matches = []
-        
+
         # Get all text
         full_text = self.sql_text.get("1.0", "end-1c")
-        
+
         # Determine flags for regex
         flags = re.MULTILINE
         if not case_sensitive:
             flags |= re.IGNORECASE
-        
+
         # Use regex or literal search based on checkbox
         if use_regex:
             # Use regex directly (user provides valid regex)
@@ -251,7 +251,7 @@ class SearchReplaceDialog(Toplevel):
         else:
             # Escape special regex characters for literal search
             pattern = re.escape(search_text)
-        
+
         # Find all matches
         for line_num, line in enumerate(full_text.split('\n'), 1):
             for match in re.finditer(pattern, line, flags):
@@ -261,24 +261,24 @@ class SearchReplaceDialog(Toplevel):
                 if col_start < 20:
                     preview = line[:min(len(line), col_end+20)]
                 self.matches.append((line_num, col_start, col_end, match.group(), preview))
-        
+
         # Reset current match index
         self.current_match_index = -1
-        
+
         # Update results label
         self.results_label.config(text=f"Found {len(self.matches)} match(es)")
-        
+
         # Highlight all matches in editor
         self.highlight_all_matches()
-        
+
         # Send results to panel_query_result tab
         if self.panel_query_result:
             self.panel_query_result.display_search_results(self.matches, search_text)
-    
+
     def highlight_all_matches(self):
         """Highlight all found matches in the editor."""
         self.clear_highlights()
-        
+
         for i, (line_num, col_start, col_end, matched_text, preview) in enumerate(self.matches):
             tag_name = f"search_match_{i}"
             start_pos = f"{line_num}.{col_start}"
@@ -286,7 +286,7 @@ class SearchReplaceDialog(Toplevel):
             self.sql_text.tag_config(tag_name, background="#ffff00", foreground="black")
             self.sql_text.tag_add(tag_name, start_pos, end_pos)
             self.sql_text._search_tags.append(tag_name)
-    
+
     def clear_highlights(self):
         """Clear search highlights from editor."""
         if hasattr(self.sql_text, '_search_tags'):
@@ -296,7 +296,7 @@ class SearchReplaceDialog(Toplevel):
                 except tk.TclError:
                     pass
             self.sql_text._search_tags = []
-    
+
     def clear_results(self):
         """Clear search results and highlights without erasing search field."""
         self.results_label.config(text="")
@@ -306,7 +306,7 @@ class SearchReplaceDialog(Toplevel):
         # Also clear the tab results
         if self.panel_query_result:
             self.panel_query_result.clear_search_results()
-    
+
     def close(self):
         """Close the dialog and save history."""
         # Save history back to the root window before closing
@@ -320,30 +320,30 @@ class SearchReplaceDialog(Toplevel):
                 # Save config to persist history
                 db_exp.save_config()
         self.destroy()
-    
+
     def on_close(self):
         """Handle window close event (X button)."""
         self.close()
-    
+
     def find_next(self):
         """Navigate to the next match in the editor."""
         if not self.matches:
             return
-        
+
         # Increment match index
         self.current_match_index = (self.current_match_index + 1) % len(self.matches)
-        
+
         # Get the match
         line_num, col_start, col_end, matched_text, preview = self.matches[self.current_match_index]
-        
+
         # Navigate to the match
         self.sql_text.mark_set("insert", f"{line_num}.{col_start}")
         self.sql_text.see(f"{line_num}.{col_start}")
         self.sql_text.focus_set()
-        
+
         # Update status label
         self.results_label.config(text=f"Match {self.current_match_index + 1} of {len(self.matches)}")
-    
+
     # Replace tab methods
     def replace_find_all(self, event=None):
         """Perform search from Replace tab."""
@@ -354,7 +354,7 @@ class SearchReplaceDialog(Toplevel):
         self.search()
         # Update the replace tab label
         self.replace_results_label.config(text=self.results_label.cget("text"))
-    
+
     def replace_find_next(self, event=None):
         """Find next match from Replace tab."""
         # If no matches yet, do a search first
@@ -363,7 +363,7 @@ class SearchReplaceDialog(Toplevel):
         else:
             self.find_next()
             self.replace_results_label.config(text=self.results_label.cget("text"))
-    
+
     def replace_clear(self):
         """Clear replace tab results without erasing search/replace fields."""
         self.replace_results_label.config(text="")
@@ -372,19 +372,19 @@ class SearchReplaceDialog(Toplevel):
         self.clear_highlights()
         if self.panel_query_result:
             self.panel_query_result.clear_search_results()
-    
+
     def _do_replace(self, match_text, replace_text, use_regex):
         """Perform a single replacement at the current match location."""
         if not self.matches:
             return False
-        
+
         # Get current match
         line_num, col_start, col_end, matched_text, preview = self.matches[self.current_match_index]
-        
+
         # Get the text widget content
         full_text = self.sql_text.get("1.0", "end-1c")
         lines = full_text.split('\n')
-        
+
         if use_regex:
             # For regex, use re.sub with the replacement
             # Support for capture groups $1, $2, etc. - convert to \1, \2
@@ -396,39 +396,39 @@ class SearchReplaceDialog(Toplevel):
         else:
             # Literal replacement
             new_text = lines[line_num - 1].replace(matched_text, replace_text, 1)
-        
+
         # Update the line
         lines[line_num - 1] = new_text
         new_full_text = '\n'.join(lines)
-        
+
         # Save undo state before modification
         if hasattr(self.sql_text, 'panel_sql_query_editor'):
             self.sql_text.panel_sql_query_editor.add_undo_cyclic_separator()
-        
+
         # Update the text widget
         self.sql_text.delete("1.0", "end")
         self.sql_text.insert("1.0", new_full_text)
-        
+
         # Trigger syntax highlighting refresh
         if hasattr(self.sql_text, 'highlight_visible'):
             self.sql_text.highlight_visible()
-        
+
         # Re-run search to update matches
         self.search()
         self.replace_results_label.config(text=self.results_label.cget("text"))
-        
+
         return True
-    
+
     def replace_one(self, event=None):
         """Replace the current match."""
         search_text = self.replace_search_var.get()
         replace_text = self.replace_var.get()
         use_regex = self.replace_regex_var.get()
         case_sensitive = self.replace_case_sensitive_var.get()
-        
+
         if not search_text:
             return
-        
+
         # Add to history
         if search_text not in self.search_history:
             self.search_history.appendleft(search_text)
@@ -437,19 +437,19 @@ class SearchReplaceDialog(Toplevel):
         if replace_text not in self.replace_history:
             self.replace_history.appendleft(replace_text)
             self.replace_entry.config(values=list(self.replace_history))
-        
+
         # Sync search tab vars from replace tab vars
         self.search_var.set(search_text)
         self.regex_var.set(use_regex)
         self.case_sensitive_var.set(case_sensitive)
-        
+
         # If no matches yet, do a search first
         if not self.matches:
             self.search()
             self.replace_results_label.config(text=self.results_label.cget("text"))
             if not self.matches:
                 return
-        
+
         # Navigate to first match if not yet positioned
         if self.current_match_index == -1:
             self.current_match_index = 0
@@ -459,7 +459,7 @@ class SearchReplaceDialog(Toplevel):
             self.sql_text.focus_set()
             self.replace_results_label.config(text=f"Match {self.current_match_index + 1} of {len(self.matches)}")
             return
-        
+
         # Perform replacement
         if self._do_replace(search_text, replace_text, use_regex):
             # Move to next match
@@ -470,17 +470,17 @@ class SearchReplaceDialog(Toplevel):
                 self.sql_text.see(f"{line_num}.{col_start}")
                 self.sql_text.focus_set()
                 self.replace_results_label.config(text=f"Match {self.current_match_index + 1} of {len(self.matches)}")
-    
+
     def replace_all(self, event=None):
         """Replace all matches in the document."""
         search_text = self.replace_search_var.get()
         replace_text = self.replace_var.get()
         use_regex = self.replace_regex_var.get()
         case_sensitive = self.replace_case_sensitive_var.get()
-        
+
         if not search_text:
             return
-        
+
         # Add to history
         if search_text not in self.search_history:
             self.search_history.appendleft(search_text)
@@ -489,26 +489,26 @@ class SearchReplaceDialog(Toplevel):
         if replace_text not in self.replace_history:
             self.replace_history.appendleft(replace_text)
             self.replace_entry.config(values=list(self.replace_history))
-        
+
         # Sync search tab vars from replace tab vars
         self.search_var.set(search_text)
         self.regex_var.set(use_regex)
         self.case_sensitive_var.set(case_sensitive)
-        
+
         # Do initial search
         self.search()
-        
+
         if not self.matches:
             self.replace_results_label.config(text="No matches found")
             return
-        
+
         flags = re.MULTILINE
         if not case_sensitive:
             flags |= re.IGNORECASE
-        
+
         # Get the text widget content
         full_text = self.sql_text.get("1.0", "end-1c")
-        
+
         if use_regex:
             # For regex, use re.sub with the replacement
             # Support for capture groups $1, $2, etc. - convert to \1, \2
@@ -521,30 +521,30 @@ class SearchReplaceDialog(Toplevel):
         else:
             # Literal replacement
             new_text = full_text.replace(search_text, replace_text)
-        
+
         # Save undo state before modification
         if hasattr(self.sql_text, 'panel_sql_query_editor'):
             self.sql_text.panel_sql_query_editor.add_undo_cyclic_separator()
-        
+
         # Update the text widget
         self.sql_text.delete("1.0", "end")
         self.sql_text.insert("1.0", new_text)
-        
+
         # Trigger syntax highlighting refresh
         if hasattr(self.sql_text, 'highlight_visible'):
             self.sql_text.highlight_visible()
-        
+
         # Clear highlights and re-search
         self.clear_highlights()
         self.matches = []
         self.current_match_index = -1
-        
+
         # Search again in the modified text to show updated results
         self.search()
-        
+
         count = len(self.matches)
         self.replace_results_label.config(text=f"Replaced all occurrences. Found {count} remaining match(es).")
-        
+
         # Clear the tab results
         if self.panel_query_result:
             self.panel_query_result.clear_search_results()
@@ -614,7 +614,7 @@ class SQLText(Text):
         self.column_selection_anchor = None # (line, col) tuple - cursor position when SHIFT+ALT pressed
         self._column_selection_tags = []    # Track selection tags
         self._column_mode_enabled = False   # SHIFT+ALT is currently held
-        
+
         # Bind SHIFT+ALT for column selection mode
         self.bind("<Shift-Alt_L>",     self.on_alt_shift_press)
         self.bind("<Shift-Alt_R>",     self.on_alt_shift_press)
@@ -624,10 +624,10 @@ class SQLText(Text):
         self.bind("<KeyRelease-Alt_R>", self.on_modifier_release)
         self.bind("<KeyRelease-Shift_L>", self.on_modifier_release)
         self.bind("<KeyRelease-Shift_R>", self.on_modifier_release)
-        
+
         # Bind mouse click for column selection (when SHIFT+ALT is held)
         self.bind("<Alt-Button-1>", self.on_alt_click)
-        
+
         # Bind key/mouse events to clear column selection
         self.bind("<Button-1>", self.on_mouse_click_clear_column)
         self.bind("<Left>",     self.on_cursor_movement_clear_column)
@@ -638,7 +638,7 @@ class SQLText(Text):
         self.bind("<End>",      self.on_cursor_movement_clear_column)
         self.bind("<Prior>",    self.on_cursor_movement_clear_column)  # Page Up
         self.bind("<Next>",     self.on_cursor_movement_clear_column)  # Page Down
-        
+
         # Bind key events for column selection mode (using add="+" to not overwrite existing bindings)
         self.bind("<Key>",             self.handle_column_selection_key, add="+")
         self.bind("<BackSpace>",       self.handle_column_selection_backspace, add="+")
@@ -648,14 +648,14 @@ class SQLText(Text):
         self.bind("<Control-v>",       self.handle_column_selection_paste, add="+")
         self.bind("<Control-V>",       self.handle_column_selection_paste, add="+")
         self.bind("<Escape>",          self.clear_column_selection, add="+")
-        
+
         # VSCode-like line moving: ALT+Up/Down to move lines
         self.bind("<Alt-Up>",          self.move_line_up)
         self.bind("<Alt-Down>",        self.move_line_down)
-        
+
         # VSCode-like line copying: CTRL+D to copy line down
         self.bind("<Control-d>",       self.copy_line_down)
-        
+
         # Override double-click to select word including underscores
         # Bind to our widget - returning "break" will prevent the default Text widget behavior
         self.bind("<Double-Button-1>", self.select_word_under_cursor)
@@ -756,10 +756,10 @@ class SQLText(Text):
         # Cancel any pending highlight
         if self._highlight_timer is not None:
             self.after_cancel(self._highlight_timer)
-        
+
         # Update line numbers immediately (fast operation)
         self.draw_line_numbers()
-        
+
         # Schedule highlighting after delay (instead of immediate)
         self._highlight_timer = self.after(self._HIGHLIGHT_DELAY_MS, self._do_highlight)
 
@@ -785,7 +785,8 @@ class SQLText(Text):
         # Check if Shift key is pressed for horizontal scrolling
         if event.state & 0x1:  # Shift key is pressed
             if event.delta:
-                self.xview_scroll(-1*(event.delta//120), "units")
+                # Match the speed of Query Result horizontal scrolling
+                self.xview_scroll(-1 * event.delta // 5, "units")
             elif event.num == 4:  # Linux scroll left
                 self.xview_scroll(-1, "units")
             elif event.num == 5:  # Linux scroll right
@@ -793,7 +794,7 @@ class SQLText(Text):
         else:
             # Normal vertical scrolling
             if event.delta:
-                self.yview_scroll(-1*(event.delta//120), "units")
+                self.yview_scroll(-1 * (event.delta // 120), "units")
             elif event.num == 4:  # Linux scroll up
                 self.yview_scroll(-1, "units")
             elif event.num == 5:  # Linux scroll down
@@ -882,11 +883,11 @@ class SQLText(Text):
 
                 # Find the first non-whitespace character in the previous line
                 first_char_pos = 0
-                
+
                 # Count spaces for lines containing only spaces
                 if re.search("^( |\t)+$", prev_line_text):
                     first_char_pos = len(prev_line_text)
-                # Count spaces at beginning of line 
+                # Count spaces at beginning of line
                 else:
                     for i, char in enumerate(prev_line_text):
                         if not char.isspace():
@@ -1083,32 +1084,32 @@ class SQLText(Text):
             first_line = int(self.index("@0,0").split('.')[0])
             last_line = int(self.index(f"@0,{self.winfo_height()}").split('.')[0])
             total_lines = int(self.index("end-1c").split('.')[0])
-            
+
             # Add buffer lines above and below viewport for smoother scrolling
             buffer = 5
             start_line = max(1, first_line - buffer)
             end_line = min(total_lines, last_line + buffer)
-            
+
             # Get text for visible range only
             start_pos = f"{start_line}.0"
             end_pos = f"{end_line}.end"
             text = self.get(start_pos, end_pos)
-            
+
             # Remove tags only from visible range
             for tag in self.colors.keys():
                 self.tag_remove(tag, start_pos, end_pos)
-            
+
             if len(text.strip()) < 2:
                 return
-            
+
             # Pre-split text into lines for efficient line-based processing
             lines = text.split('\n')
-            
+
             # Highlight in order of precedence
             for tag_name in self.highlight_order:
                 compiled_pattern = self.compiled_patterns[tag_name]
                 current_line_num = start_line
-                
+
                 for line_content in lines:
                     # Find all matches in this line
                     for match in compiled_pattern.finditer(line_content):
@@ -1116,7 +1117,7 @@ class SQLText(Text):
                         end_col = match.end()
                         self.tag_add(tag_name, f"{current_line_num}.{start_col}", f"{current_line_num}.{end_col}")
                     current_line_num += 1
-                    
+
         except (ValueError, tk.TclError):
             # Fallback to full highlight on error
             self.highlight()
@@ -1133,7 +1134,7 @@ class SQLText(Text):
             # Highlight in order of precedence (strings/comments first to avoid highlighting keywords inside them)
             for tag_name in self.highlight_order:
                 compiled_pattern = self.compiled_patterns[tag_name]
-                
+
                 # Find and highlight all matches using pre-compiled pattern
                 for match in compiled_pattern.finditer(text):
                     start_pos = f"1.0 + {match.start()} chars"
@@ -1207,7 +1208,7 @@ class SQLText(Text):
             pass
         finally:
             self.panel_sql_query_editor.insert_edit_separator_in_actual_tab() # for undo/redo
-    
+
     def indent_selection_right(self, event):
         """Indent selected text to the right (tab)."""
         self.panel_sql_query_editor.insert_edit_separator_in_actual_tab() # for undo/redo
@@ -1241,7 +1242,7 @@ class SQLText(Text):
                 return "break"
             else:
                 self.insert_spaces(event)
-                
+
         except tk.TclError:
             pass
         finally:
@@ -1328,7 +1329,7 @@ class SQLText(Text):
                 # Clamp column positions to line length
                 actual_start_col = min(start_col, line_end)
                 actual_end_col = min(end_col, line_end)
-                
+
                 if actual_start_col < actual_end_col:
                     tag_name = f"column_sel_{tag_index}"
                     self.tag_config(tag_name, background='#3390ff', foreground='white')
@@ -1444,7 +1445,7 @@ class SQLText(Text):
         self.column_selection_anchor = None
         self.column_selection_active = False
         self.update_line_numbers_style()
-    
+
     def on_content_changed(self):
         """Notify that content has changed - for undo/redo tracking."""
         pass
@@ -1485,11 +1486,11 @@ class SQLText(Text):
                 line_end = int(self.index(f"{line}.end").split('.')[1])
                 actual_start_col = min(start_col, line_end)
                 actual_end_col = min(end_col, line_end)
-                
+
                 # Delete the selected portion
                 if actual_start_col < actual_end_col:
                     self.delete(f"{line}.{actual_start_col}", f"{line}.{actual_end_col}")
-                
+
                 # Insert the new text at the start position
                 self.insert(f"{line}.{actual_start_col}", text)
             except tk.TclError:
@@ -1547,22 +1548,22 @@ class SQLText(Text):
                 return None
 
             self.panel_sql_query_editor.insert_edit_separator_in_actual_tab()
-            
+
             # Delete current selection first
             self.delete_column_selection()
-            
+
             # Split clipboard into lines
             lines_to_paste = clipboard_text.split('\n')
-            
+
             # Parse selection positions
             start_line, start_col = map(int, self.column_selection_start.split('.'))
             end_line, end_col = map(int, self.column_selection_end.split('.'))
-            
+
             # Normalize
             if start_line > end_line or (start_line == end_line and start_col > end_col):
                 start_line, end_line = end_line, start_line
                 start_col, end_col = end_col, start_col
-            
+
             # Insert each line at corresponding row
             for i, line in enumerate(range(start_line, end_line + 1)):
                 try:
@@ -1573,7 +1574,7 @@ class SQLText(Text):
                     self.insert(f"{line}.{insert_col}", paste_line)
                 except tk.TclError:
                     break
-            
+
             self.clear_column_selection()
             self.panel_sql_query_editor.insert_edit_separator_in_actual_tab()
             return "break"
@@ -1583,12 +1584,12 @@ class SQLText(Text):
     # =========================================================================
     # VSCode-like Line Moving and Copying
     # =========================================================================
-    
+
     def move_line_up(self, event=None):
         """Move the current line or selected lines up by one line (Alt+Up)."""
         if self._column_mode_enabled or self.column_selection_active:
             return None  # Do nothing in column selection mode
-        
+
         # Get selection range
         try:
             sel_start = self.index("sel.first")
@@ -1598,50 +1599,50 @@ class SQLText(Text):
             has_selection = False
             sel_start = self.index("insert linestart")
             sel_end = self.index("insert lineend")
-        
+
         # Get line numbers
         start_line_num = int(sel_start.split('.')[0])
         end_line_num = int(sel_end.split('.')[0])
-        
+
         # Can't move first line up
         if start_line_num == 1:
             return "break"
-        
+
         # Get the text of the line(s) to move (without trailing newline)
         lines_to_move = []
         for line_num in range(start_line_num, end_line_num + 1):
             line_text = self.get(f"{line_num}.0", f"{line_num}.end")
             lines_to_move.append(line_text)
-        
+
         # Get the text of the line above
         prev_line_num = start_line_num - 1
         prev_line_text = self.get(f"{prev_line_num}.0", f"{prev_line_num}.end")
-        
+
         # Build the new text: lines_to_move + prev_line
         # We'll replace from prev_line_num.0 to end of end_line_num
         end_of_selection = self.index(f"{end_line_num}.end")
-        
+
         # Create replacement text
         new_text = '\n'.join(lines_to_move) + '\n' + prev_line_text
-        
+
         # Delete and replace
         self.delete(f"{prev_line_num}.0", end_of_selection)
         self.insert(f"{prev_line_num}.0", new_text)
-        
+
         # Restore selection on the moved lines (now at prev_line_num)
         new_start_line = prev_line_num
         new_end_line = prev_line_num + len(lines_to_move) - 1
         self.tag_remove("sel", "1.0", "end")
         self.tag_add("sel", f"{new_start_line}.0", f"{new_end_line}.end")
-        
+
         self.panel_sql_query_editor.insert_edit_separator_in_actual_tab()
         return "break"
-    
+
     def move_line_down(self, event=None):
         """Move the current line or selected lines down by one line (Alt+Down)."""
         if self._column_mode_enabled or self.column_selection_active:
             return None  # Do nothing in column selection mode
-        
+
         # Get selection range
         try:
             sel_start = self.index("sel.first")
@@ -1651,57 +1652,57 @@ class SQLText(Text):
             has_selection = False
             sel_start = self.index("insert linestart")
             sel_end = self.index("insert lineend")
-        
+
         # Get line numbers
         start_line_num = int(sel_start.split('.')[0])
         end_line_num = int(sel_end.split('.')[0])
-        
+
         # Get total lines
         last_line = int(self.index("end-1c").split('.')[0])
-        
+
         # Can't move last line down
         if end_line_num >= last_line:
             return "break"
-        
+
         # Get the text of the line(s) to move
         lines_to_move = []
         for line_num in range(start_line_num, end_line_num + 1):
             line_text = self.get(f"{line_num}.0", f"{line_num}.end")
             lines_to_move.append(line_text)
-        
+
         # Get the text of the line below
         next_line_num = end_line_num + 1
         next_line_text = self.get(f"{next_line_num}.0", f"{next_line_num}.end")
-        
+
         # Build the new text: next_line + lines_to_move
         end_of_selection = self.index(f"{end_line_num}.end")
-        
+
         # Create replacement text
         new_text = next_line_text + '\n' + '\n'.join(lines_to_move)
-        
+
         # Delete and replace
         self.delete(f"{start_line_num}.0", f"{next_line_num}.end")
         self.insert(f"{start_line_num}.0", new_text)
-        
+
         # Restore selection on the moved lines (now shifted down by 1)
         new_start_line = start_line_num + 1
         new_end_line = start_line_num + len(lines_to_move)
         self.tag_remove("sel", "1.0", "end")
         self.tag_add("sel", f"{new_start_line}.0", f"{new_end_line}.end")
-        
+
         self.panel_sql_query_editor.insert_edit_separator_in_actual_tab()
         return "break"
-    
+
     def copy_line_up(self, event=None):
         """Copy the current line or selected lines above - DISABLED."""
         # This functionality has been disabled. Use Ctrl+D to copy line down.
         return None
-    
+
     def copy_line_down(self, event=None):
         """Copy the current line or selected lines below (Ctrl+D)."""
         if self._column_mode_enabled or self.column_selection_active:
             return None  # Do nothing in column selection mode
-        
+
         # Get selection range
         try:
             sel_start = self.index("sel.first")
@@ -1709,25 +1710,25 @@ class SQLText(Text):
             has_selection = True
         except tk.TclError:
             has_selection = False
-        
+
         if has_selection:
             # Get the line numbers for the selection
             start_line_num = int(sel_start.split('.')[0])
             end_line_num = int(sel_end.split('.')[0])
-            
+
             # Get the text of the selected lines (without trailing newline)
             lines_to_copy = []
             for line_num in range(start_line_num, end_line_num + 1):
                 line_text = self.get(f"{line_num}.0", f"{line_num}.end")
                 lines_to_copy.append(line_text)
-            
+
             # Position to insert: after the last selected line
             insert_pos = f"{end_line_num}.end"
-            
+
             # Insert the copied lines below
             text_to_insert = '\n' + '\n'.join(lines_to_copy)
             self.insert(insert_pos, text_to_insert)
-            
+
             # Select the copied lines
             new_start_line = end_line_num + 1
             new_end_line = new_start_line + len(lines_to_copy) - 1
@@ -1737,50 +1738,50 @@ class SQLText(Text):
             # No selection - copy current line
             current_line_num = int(self.index("insert").split('.')[0])
             line_text = self.get(f"{current_line_num}.0", f"{current_line_num}.end")
-            
+
             # Insert a copy below
             insert_pos = f"{current_line_num}.end"
             self.insert(insert_pos, '\n' + line_text)
-            
+
             # Select the copied line
             new_line_num = current_line_num + 1
             self.tag_remove("sel", "1.0", "end")
             self.tag_add("sel", f"{new_line_num}.0", f"{new_line_num}.end")
-        
+
         self.panel_sql_query_editor.insert_edit_separator_in_actual_tab()
         return "break"
-    
+
     def select_word_under_cursor(self, event=None):
         """Select the word under the cursor, including underscores but excluding punctuation.
-        
+
         Double-click behavior similar to VSCode: selects identifiers with underscores,
         but stops at punctuation like dots, commas, quotes, etc.
         """
         # Get the click position - format is "@x,y" (with comma, not @x@y)
         click_pos = self.index(f"@{event.x},{event.y}")
-        
+
         # Get the character at the click position
         char = self.get(click_pos)
-        
+
         # If it's whitespace or punctuation, don't select anything
         punctuation = '.,;:()[]{}"\'`@#$%^&*+-=/|<>?\\'
         if char and (char.isspace() or char in punctuation):
             # Allow default behavior (which will deselect or do nothing)
             return None
-        
+
         # Define what characters are part of a "word" (alphanumeric + underscore)
         # This matches VSCode's identifier selection behavior
         def is_word_char(c):
             return c.isalnum() or c == '_'
-        
+
         # Get the line content
         line_start = f"{click_pos} linestart"
         line_end = f"{click_pos} lineend"
         line_text = self.get(line_start, line_end)
-        
+
         # Calculate the column position in the line
         col = int(click_pos.split('.')[1])
-        
+
         # Find the start of the word
         word_start = col
         while word_start > 0:
@@ -1789,7 +1790,7 @@ class SQLText(Text):
                 word_start -= 1
             else:
                 break
-        
+
         # Find the end of the word
         word_end = col
         while word_end < len(line_text):
@@ -1798,15 +1799,15 @@ class SQLText(Text):
                 word_end += 1
             else:
                 break
-        
+
         # Select the word
         start_pos = f"{line_start} + {word_start} chars"
         end_pos = f"{line_start} + {word_end} chars"
-        
+
         self.tag_remove("sel", "1.0", "end")
         self.tag_add("sel", start_pos, end_pos)
         self.see(click_pos)
-        
+
         return "break"
 
     def open_search_dialog(self, event=None):
@@ -1824,13 +1825,13 @@ class SQLText(Text):
                 search_case_sensitive = getattr(db_exp, 'search_case_sensitive', False)
                 search_history = getattr(db_exp, 'search_history', [])
                 replace_history = getattr(db_exp, 'replace_history', [])
-        
+
         search_dialog = SearchReplaceDialog(self.master, self, self.panel_sql_query_editor.panel_query_result,
                                             search_use_regex, search_case_sensitive, search_history, replace_history)
         # Wait for dialog to be closed and then save config
         self.master.wait_window(search_dialog)
         return "break"
-    
+
     def open_replace_dialog(self, event=None):
         """Open the search and replace dialog focused on Replace tab (CTRL+H)."""
         # Get search settings from the DBExp instance if available
@@ -1846,7 +1847,7 @@ class SQLText(Text):
                 search_case_sensitive = getattr(db_exp, 'search_case_sensitive', False)
                 search_history = getattr(db_exp, 'search_history', [])
                 replace_history = getattr(db_exp, 'replace_history', [])
-        
+
         search_dialog = SearchReplaceDialog(self.master, self, self.panel_sql_query_editor.panel_query_result,
                                             search_use_regex, search_case_sensitive, search_history, replace_history)
         # Open with Replace tab focused
