@@ -390,6 +390,10 @@ class SearchReplaceDialog(Toplevel):
         self.sql_text.delete("1.0", "end")
         self.sql_text.insert("1.0", new_full_text)
         
+        # Trigger syntax highlighting refresh
+        if hasattr(self.sql_text, 'highlight_visible'):
+            self.sql_text.highlight_visible()
+        
         # Re-run search to update matches
         self.search()
         self.replace_results_label.config(text=self.results_label.cget("text"))
@@ -506,6 +510,10 @@ class SearchReplaceDialog(Toplevel):
         # Update the text widget
         self.sql_text.delete("1.0", "end")
         self.sql_text.insert("1.0", new_text)
+        
+        # Trigger syntax highlighting refresh
+        if hasattr(self.sql_text, 'highlight_visible'):
+            self.sql_text.highlight_visible()
         
         # Clear highlights and re-search
         self.clear_highlights()
