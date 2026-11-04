@@ -274,6 +274,278 @@ class FillTableFromDialog:
         self.dialog.destroy()
 
 
+class UpdateTableDialog:
+    """Dialog for selecting fields to update and fields to filter for UPDATE query generation."""
+    
+    def __init__(self, parent, db_connection, query_manager, schema, table, title="Update Table"):
+        self.parent = parent
+        self.db_connection = db_connection
+        self.query_manager = query_manager
+        self.schema = schema
+        self.table = table
+        self.title = title
+        self.result = None
+        
+        # Field selection state
+        self.update_fields = []  # Fields to update (SET clause)
+        self.where_fields = []   # Fields to filter (WHERE clause)
+        self.field_values = {}   # Field values from last record
+        self.field_buttons = {}  # Button references for toggling
+        self.field_status = {}   # Button text base (field info)
+        
+    def show(self):
+        """Show the update dialog with field selection interface.
+        
+        Returns:
+            dict: Dictionary with 'update_fields', 'where_fields', 'field_values', and 'sql' keys, or None if cancelled
+        """
+        # Create top-level window
+        self.dialog = tk.Toplevel(self.parent)
+        self.dialog.title(self.title)
+        self.dialog.transient(self.parent)
+        self.dialog.grab_set()
+        
+        # Main frame
+        main_frame = ttk.Frame(self.dialog, padding="15")
+        main_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Header label
+        header_label = ttk.Label(main_frame, text=f"Update Table: {self.schema}.{self.table}", font=('TkDefaultFont', 11, 'bold'))
+        header_label.pack(pady=(0, 10))
+        
+        # Fetch last record and table structure
+        try:
+            cursor = self.db_connection.current_connection.cursor()
+            queries = self.db_connection.get_queries_instance(self.db_connection.current_connection)
+            
+            # Get last record
+            cursor = self.query_manager.cursor_execute(queries.get_last_record(self.schema, self.table), cursor)
+            last_record = cursor.fetchone()
+            
+            # Get column names
+            cursor = self.query_manager.cursor_execute(queries.get_col_names(self.schema, self.table), cursor)
+            col_rows = cursor.fetchall()
+            col_names = queries.extract_col_names(col_rows)
+            
+            # Get column types
+            cursor = self.query_manager.cursor_execute(queries.get_table_structure(self.schema, self.table), cursor)
+            struct_rows = cursor.fetchall()
+            col_types = {row[0]: row[1] if len(row) > 1 else 'UNKNOWN' for row in struct_rows}
+            
+            cursor.close()
+            
+            if not last_record:
+                messagebox.showinfo("No Data", f"No records found in table {self.schema}.{self.table}")
+                self.dialog.destroy()
+                return None
+            
+            # Store field values
+            for i, col_name in enumerate(col_names):
+                self.field_values[col_name] = last_record[i] if i < len(last_record) else None
+            
+            # Horizontal paned window for field selection and query preview
+            paned = ttk.PanedWindow(main_frame, orient=tk.HORIZONTAL)
+            paned.pack(fill=tk.BOTH, expand=True, pady=10)
+            
+            # Left pane: Field selection
+            left_pane = ttk.Frame(paned)
+            paned.add(left_pane, weight=1)
+            
+            fields_container = ttk.LabelFrame(left_pane, text="Fields (click to toggle)", padding="10")
+            fields_container.pack(fill=tk.BOTH, expand=True)
+            
+            # Canvas and scrollbar for scrollable area
+            canvas = tk.Canvas(fields_container, height=250, width=280)
+            scrollbar = ttk.Scrollbar(fields_container, orient="vertical", command=canvas.yview)
+            scrollable_frame = ttk.Frame(canvas)
+            
+            scrollable_frame.bind(
+                "<Configure>",
+                lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+            )
+            
+            canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+            canvas.configure(yscrollcommand=scrollbar.set)
+            
+            # Bind mouse wheel for scrolling
+            def _on_mousewheel(event):
+                canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+            canvas.bind_all("<MouseWheel>", _on_mousewheel)
+            
+            canvas.pack(side="left", fill="both", expand=True)
+            scrollbar.pack(side="right", fill="y")
+            
+            # Create clickable field buttons with inline name and value
+            for col_name in col_names:
+                value = self.field_values.get(col_name, 'NULL')
+                value_str = str(value) if value is not None else 'NULL'
+                # Truncate long values
+                if len(value_str) > 35:
+                    value_str = value_str[:32] + "..."
+                
+                # Frame for each field
+                field_frame = ttk.Frame(scrollable_frame)
+                field_frame.pack(fill=tk.X, pady=2)
+                
+                # Base field info: name (type) = value
+                base_text = f"{col_name} ({col_types.get(col_name, '?')}) = {value_str}"
+                self.field_status[col_name] = base_text
+                
+                # Button that shows field info and is clickable
+                btn = ttk.Button(field_frame, text=base_text, command=lambda c=col_name: self._toggle_field(c))
+                btn.pack(fill=tk.X)
+                self.field_buttons[col_name] = btn
+            
+            # Right pane: Selection controls and preview
+            right_pane = ttk.Frame(paned)
+            paned.add(right_pane, weight=1)
+            
+            # Instructions frame
+            instructions_frame = ttk.LabelFrame(right_pane, text="Instructions", padding="10")
+            instructions_frame.pack(fill=tk.X, pady=5)
+            
+            instructions_text = "Select a mode, then click fields to toggle:\n• Fields can be in SET, WHERE, or both\n• Click to add/remove from selected mode"
+            instructions_label = ttk.Label(instructions_frame, text=instructions_text, justify=tk.LEFT)
+            instructions_label.pack(anchor=tk.W)
+            
+            # Selection mode frame
+            mode_frame = ttk.LabelFrame(right_pane, text="Mode", padding="10")
+            mode_frame.pack(fill=tk.X, pady=5)
+            
+            self.mode_var = tk.StringVar(value="update")
+            ttk.Radiobutton(mode_frame, text="SET clause", variable=self.mode_var, value="update").pack(anchor=tk.W)
+            ttk.Radiobutton(mode_frame, text="WHERE clause", variable=self.mode_var, value="where").pack(anchor=tk.W)
+            
+            # Summary frame
+            summary_frame = ttk.LabelFrame(right_pane, text="Selection", padding="10")
+            summary_frame.pack(fill=tk.X, pady=5)
+            
+            self.summary_var = tk.StringVar(value="SET: 0 | WHERE: 0")
+            summary_label = ttk.Label(summary_frame, textvariable=self.summary_var, font=('TkDefaultFont', 0, 'bold'))
+            summary_label.pack(anchor=tk.W)
+            
+            # Query preview
+            preview_frame = ttk.LabelFrame(right_pane, text="Query Preview", padding="10")
+            preview_frame.pack(fill=tk.BOTH, expand=True, pady=5)
+            
+            self.query_preview = tk.Text(preview_frame, height=12, width=35, wrap=tk.WORD, state=tk.DISABLED, bg='#f5f5f5')
+            preview_scrollbar = ttk.Scrollbar(preview_frame, orient="vertical", command=self.query_preview.yview)
+            self.query_preview.configure(yscrollcommand=preview_scrollbar.set)
+            
+            self.query_preview.pack(side="left", fill="both", expand=True)
+            preview_scrollbar.pack(side="right", fill="y")
+            
+            # Buttons frame
+            button_frame = ttk.Frame(main_frame)
+            button_frame.pack(pady=10)
+            
+            self.prepare_btn = ttk.Button(button_frame, text="Prepare Query", command=self.prepare_query_action)
+            self.prepare_btn.pack(side=tk.LEFT, padx=5)
+            ttk.Button(button_frame, text="Cancel", command=self.cancel_action).pack(side=tk.LEFT, padx=5)
+            
+            # Bind Escape key
+            self.dialog.bind('<Escape>', lambda e: self.cancel_action())
+            
+            # Center dialog on DBExpl main window (root window)
+            self.dialog.update_idletasks()
+            
+            # Get the root window (main application window)
+            root = self.parent.winfo_toplevel()
+            root_x = root.winfo_x()
+            root_y = root.winfo_y()
+            root_width = root.winfo_width()
+            root_height = root.winfo_height()
+            
+            dialog_width = 800
+            dialog_height = 800
+            
+            x = root_x + (root_width - dialog_width) // 2
+            y = root_y + (root_height - dialog_height) // 2
+            
+            self.dialog.geometry(f"{dialog_width}x{dialog_height}+{x}+{y}")
+            
+            # Wait for dialog to close
+            self.parent.wait_window(self.dialog)
+            
+            return self.result
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to load dialog: {str(e)}")
+            self.dialog.destroy()
+            return None
+    
+    def _toggle_field(self, col_name):
+        """Toggle field between update and where lists based on current mode.
+        
+        A field can be in both SET and WHERE clauses simultaneously.
+        """
+        mode = self.mode_var.get()
+        btn = self.field_buttons[col_name]
+        base_text = self.field_status.get(col_name, "")
+        
+        if mode == "update":
+            # Toggle in update_fields (can coexist with where_fields)
+            if col_name in self.update_fields:
+                self.update_fields.remove(col_name)
+            else:
+                self.update_fields.append(col_name)
+        else:
+            # Toggle in where_fields (can coexist with update_fields)
+            if col_name in self.where_fields:
+                self.where_fields.remove(col_name)
+            else:
+                self.where_fields.append(col_name)
+        
+        # Update button text with status prefix
+        in_set = col_name in self.update_fields
+        in_where = col_name in self.where_fields
+        
+        if in_set and in_where:
+            btn.config(text=f"✓SET+WHERE | {base_text}")
+        elif in_set:
+            btn.config(text=f"✓SET | {base_text}")
+        elif in_where:
+            btn.config(text=f"✓WHERE | {base_text}")
+        else:
+            btn.config(text=base_text)
+        
+        # Update summary and preview
+        self.summary_var.set(f"SET: {len(self.update_fields)} | WHERE: {len(self.where_fields)}")
+        self._update_preview()
+    
+    def _update_preview(self):
+        """Update the query preview text."""
+        queries = self.db_connection.get_queries_instance(self.db_connection.current_connection)
+        sql = queries.generate_update_sql(self.schema, self.table, self.update_fields, self.where_fields)
+        
+        self.query_preview.config(state=tk.NORMAL)
+        self.query_preview.delete(1.0, tk.END)
+        self.query_preview.insert(tk.END, sql)
+        self.query_preview.config(state=tk.DISABLED)
+    
+    def prepare_query_action(self):
+        """Generate UPDATE SQL and close dialog."""
+        if not self.update_fields:
+            messagebox.showwarning("No Fields Selected", "Please select at least one field to update.")
+            return
+        
+        queries = self.db_connection.get_queries_instance(self.db_connection.current_connection)
+        sql = queries.generate_update_sql(self.schema, self.table, self.update_fields, self.where_fields)
+        
+        self.result = {
+            'update_fields': self.update_fields,
+            'where_fields': self.where_fields,
+            'field_values': self.field_values,
+            'sql': sql
+        }
+        self.dialog.destroy()
+    
+    def cancel_action(self):
+        """Handle Cancel button click."""
+        self.result = None
+        self.dialog.destroy()
+
+
 class PanelDatabaseTree:
     def __init__(self, parent, db_connection, panel_sql_query_editor, query_manager):
         self.parent = parent
@@ -421,6 +693,7 @@ class PanelDatabaseTree:
             ("Clone Table",          lambda: self.clone_table()),
             ("Copy tables",          lambda: self.copy_tables()),
             ("Fill table from...",   lambda: self.fill_table_from()),
+            ("Update the table...",  lambda: self.update_table()),
             ("-------------------------", None),
             ("Count Records",        lambda: self.count_records()),
             ("-------------------------", None),
@@ -818,13 +1091,41 @@ class PanelDatabaseTree:
                 )
                 self.panel_sql_query_editor.sql_files[tab_id]["modified"] = False
 
-                # Show message to user
-                messagebox.showinfo(
-                    "Query Generated",
-                    f"INSERT query generated in new tab.\n\nExecute it with F5 to fill '{dest_schema}.{dest_table}' from '{source_schema}.{source_table}'."
-                )
+                # Query is now in the new tab, ready to execute
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to generate query: {str(e)}")
+
+    def update_table(self):
+        """Update table fields by generating UPDATE query with user-selected fields."""
+        selected = self.db_tree.selection()
+        if not selected:
+            return
+
+        values = self.db_tree.item(selected[0])['values']
+        if len(values) < 3 or values[1] != 'table':
+            return
+
+        # Target table
+        schema = values[0]
+        table = values[2]
+        queries = self.get_queries_instance()
+
+        # Create dialog for selecting update fields
+        dialog = UpdateTableDialog(self.db_tree, self.db_connection, self.query_manager, schema, table)
+        result = dialog.show()
+
+        if result and result.get('sql'):
+            sql = result['sql']
+
+            # Open a new SQL editor tab with the generated query
+            tab_id = self.panel_sql_query_editor.new_sql_tab()
+            self.panel_sql_query_editor.set_text_without_undo(
+                self.panel_sql_query_editor.sql_files[tab_id]["widget"],
+                sql
+            )
+            self.panel_sql_query_editor.sql_files[tab_id]["modified"] = False
+
+            # Query is now in the new tab, ready to execute
 
     def count_records(self):
         """Count and display records for all selected tables or views, updating their tree nodes."""

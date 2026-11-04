@@ -218,6 +218,26 @@ class Queries(ABC):
     def is_sequence_up_to_date(schema, table, column):
         pass
 
+    @abstractmethod
+    def get_last_record(self, schema, table, order_by_column=None):
+        """Get the last record from a table for update reference."""
+        pass
+
+    @abstractmethod
+    def generate_update_sql(self, schema, table, update_columns, where_columns):
+        """Generate UPDATE SQL template with placeholders for values.
+        
+        Args:
+            schema: Schema name
+            table: Table name
+            update_columns: List of column names to update
+            where_columns: List of column names for WHERE clause
+            
+        Returns:
+            str: UPDATE SQL template with :column_name placeholders
+        """
+        pass
+
 
 # ======================================================================
 # ORACLE QUERIES
@@ -829,6 +849,58 @@ class QueriesOracle(Queries):
             END;
         """
 
+    @staticmethod
+    def get_last_record(schema, table, order_by_column=None):
+        """Get the last record from a table for update reference.
+        
+        Args:
+            schema: Schema name
+            table: Table name
+            order_by_column: Optional column to order by (uses first column if None)
+            
+        Returns:
+            str: SQL query to get the last record
+        """
+        if order_by_column:
+            return f"""
+                SELECT *
+                FROM "{schema}"."{table}"
+                ORDER BY "{order_by_column}" DESC
+                FETCH FIRST 1 ROWS ONLY
+            """
+        else:
+            # Get all columns and order by first column
+            return f"""
+                SELECT *
+                FROM "{schema}"."{table}"
+                WHERE ROWNUM = 1
+                ORDER BY 1 DESC
+            """
+
+    @staticmethod
+    def generate_update_sql(schema, table, update_columns, where_columns):
+        """Generate UPDATE SQL template with placeholders for values.
+        
+        Args:
+            schema: Schema name
+            table: Table name
+            update_columns: List of column names to update
+            where_columns: List of column names for WHERE clause
+            
+        Returns:
+            str: UPDATE SQL template with :column_name placeholders
+        """
+        if not update_columns:
+            return f"-- UPDATE {schema}.{table} SET ... WHERE ...;"
+        
+        set_clause = ",\n  ".join([f'"{col}" = :{col}' for col in update_columns])
+        
+        if where_columns:
+            where_clause = "\n  AND ".join([f'"{col}" = :{col}_old' for col in where_columns])
+            return f'UPDATE "{schema}"."{table}"\nSET\n  {set_clause}\nWHERE\n  {where_clause};'
+        else:
+            return f'UPDATE "{schema}"."{table}"\nSET\n  {set_clause}\nWHERE\n  -- Add your WHERE condition here;'
+
 # ======================================================================
 # SQLITE QUERIES
 # ======================================================================
@@ -1275,6 +1347,47 @@ class QueriesSQLite(Queries):
         """
         # SQLite auto-manages AUTOINCREMENT, so it's always "up-to-date"
         return "SELECT 1 AS is_up_to_date;"
+
+    @staticmethod
+    def get_last_record(schema, table, order_by_column=None):
+        """Get the last record from a table for update reference.
+        
+        Args:
+            schema: Schema name (ignored in SQLite)
+            table: Table name
+            order_by_column: Optional column to order by (uses rowid if None)
+            
+        Returns:
+            str: SQL query to get the last record
+        """
+        if order_by_column:
+            return f'SELECT * FROM "{table}" ORDER BY "{order_by_column}" DESC LIMIT 1;'
+        else:
+            return f'SELECT * FROM "{table}" ORDER BY rowid DESC LIMIT 1;'
+
+    @staticmethod
+    def generate_update_sql(schema, table, update_columns, where_columns):
+        """Generate UPDATE SQL template with placeholders for values.
+        
+        Args:
+            schema: Schema name (ignored in SQLite)
+            table: Table name
+            update_columns: List of column names to update
+            where_columns: List of column names for WHERE clause
+            
+        Returns:
+            str: UPDATE SQL template with placeholders
+        """
+        if not update_columns:
+            return f"-- UPDATE {table} SET ... WHERE ...;"
+        
+        set_clause = ",\n  ".join([f'"{col}" = :{col}' for col in update_columns])
+        
+        if where_columns:
+            where_clause = "\n  AND ".join([f'"{col}" = :{col}_old' for col in where_columns])
+            return f'UPDATE "{table}"\nSET\n  {set_clause}\nWHERE\n  {where_clause};'
+        else:
+            return f'UPDATE "{table}"\nSET\n  {set_clause}\nWHERE\n  -- Add your WHERE condition here;'
 
 # ======================================================================
 # POSTGRESQL QUERIES
@@ -1834,6 +1947,38 @@ class QueriesPostgreSQL(Queries):
                 ELSE FALSE
             END AS is_up_to_date;
         """
+
+    @staticmethod
+    def get_last_record(schema, table, order_by_column=None):
+        """Get the last record from a table for update reference."""
+        if order_by_column:
+            return f"""
+                SELECT *
+                FROM "{schema}"."{table}"
+                ORDER BY "{order_by_column}" DESC
+                FETCH FIRST 1 ROWS ONLY
+            """
+        else:
+            return f"""
+                SELECT *
+                FROM "{schema}"."{table}"
+                ORDER BY 1 DESC
+                FETCH FIRST 1 ROWS ONLY
+            """
+
+    @staticmethod
+    def generate_update_sql(schema, table, update_columns, where_columns):
+        """Generate UPDATE SQL template with placeholders for values."""
+        if not update_columns:
+            return f"-- UPDATE {schema}.{table} SET ... WHERE ...;"
+        
+        set_clause = ",\n  ".join([f'"{col}" = :{col}' for col in update_columns])
+        
+        if where_columns:
+            where_clause = "\n  AND ".join([f'"{col}" = :{col}_old' for col in where_columns])
+            return f'UPDATE "{schema}"."{table}"\nSET\n  {set_clause}\nWHERE\n  {where_clause};'
+        else:
+            return f'UPDATE "{schema}"."{table}"\nSET\n  {set_clause}\nWHERE\n  -- Add your WHERE condition here;'
 
 # ======================================================================
 # MICROSOFT SQL SERVER QUERIES
@@ -2418,6 +2563,36 @@ class QueriesMSSQL(Queries):
                 ELSE 0
             END AS is_up_to_date;
         """
+
+    @staticmethod
+    def get_last_record(schema, table, order_by_column=None):
+        """Get the last record from a table for update reference."""
+        if order_by_column:
+            return f"""
+                SELECT TOP 1 *
+                FROM [{schema}].[{table}]
+                ORDER BY [{order_by_column}] DESC
+            """
+        else:
+            return f"""
+                SELECT TOP 1 *
+                FROM [{schema}].[{table}]
+                ORDER BY 1 DESC
+            """
+
+    @staticmethod
+    def generate_update_sql(schema, table, update_columns, where_columns):
+        """Generate UPDATE SQL template with placeholders for values."""
+        if not update_columns:
+            return f"-- UPDATE {schema}.{table} SET ... WHERE ...;"
+        
+        set_clause = ",\n  ".join([f'[{col}] = @{col}' for col in update_columns])
+        
+        if where_columns:
+            where_clause = "\n  AND ".join([f'[{col}] = @{col}_old' for col in where_columns])
+            return f'UPDATE [{schema}].[{table}]\nSET\n  {set_clause}\nWHERE\n  {where_clause};'
+        else:
+            return f'UPDATE [{schema}].[{table}]\nSET\n  {set_clause}\nWHERE\n  -- Add your WHERE condition here;'
 
 # ======================================================================
 # QUERY MANAGER
